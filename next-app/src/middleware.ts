@@ -70,9 +70,9 @@ export function middleware(request: NextRequest) {
     return withHeaders(NextResponse.redirect(url));
   }
 
-  if (pathname === "/login") {
+  if (pathname === "/login" && hasAccess) {
     const url = request.nextUrl.clone();
-    url.pathname = hasAccess ? "/home" : "/welcome";
+    url.pathname = "/home";
     return withHeaders(NextResponse.redirect(url));
   }
 

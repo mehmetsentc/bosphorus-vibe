@@ -13,18 +13,22 @@ function portInUse(port) {
   }
 }
 
-for (const port of [3000, 3001, 3002, 3003, 3004, 3005]) {
-  if (portInUse(port)) {
-    console.error(
-      `\n[prebuild] Port ${port} is in use (dev server likely running).`,
-    );
-    console.error(
-      "Stop dev first (Ctrl+C or npm run dev:reset), then run npm run build.",
-    );
-    console.error(
-      "Running build while dev is active corrupts .next and causes chunk 404/500 errors.\n",
-    );
-    process.exit(1);
+const skipPortCheck = Boolean(process.env.CI || process.env.VERCEL);
+
+if (!skipPortCheck) {
+  for (const port of [3000, 3001, 3002, 3003, 3004, 3005]) {
+    if (portInUse(port)) {
+      console.error(
+        `\n[prebuild] Port ${port} is in use (dev server likely running).`,
+      );
+      console.error(
+        "Stop dev first (Ctrl+C or npm run dev:reset), then run npm run build.",
+      );
+      console.error(
+        "Running build while dev is active corrupts .next and causes chunk 404/500 errors.\n",
+      );
+      process.exit(1);
+    }
   }
 }
 

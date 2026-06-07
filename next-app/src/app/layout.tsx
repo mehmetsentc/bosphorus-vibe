@@ -17,10 +17,13 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://bosphorusvibe.com",
+  ),
   ...buildPageMetadata({
     title: "Bosphorus Vibe",
     description:
-      "Bosphorus Sorgun Hotel — events, reels, daily activities and entertainment.",
+      "Entertainment & event platform — events, reels, daily activities and hotel entertainment.",
     path: "/",
     keywords: [
       "hotel entertainment",

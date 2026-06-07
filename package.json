@@ -1,0 +1,9 @@
+{
+  "name": "bosphorus-vibe",
+  "private": true,
+  "scripts": {
+    "build": "cd next-app && npm run build",
+    "dev": "cd next-app && npm run dev",
+    "start": "cd next-app && npm start"
+  }
+}
