@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithGoogle } from "@/lib/services/auth";
+import { signInWithGoogle, mapAuthErrorCode } from "@/lib/services/auth";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { BRAND_NAME } from "@/lib/brand";
@@ -19,8 +19,15 @@ export default function LoginPage() {
     try {
       await signInWithGoogle();
       router.replace("/home");
-    } catch {
-      setError(t("loginFailed"));
+    } catch (err: unknown) {
+      const code =
+        err instanceof Error && "code" in err
+          ? String((err as { code?: string }).code)
+          : err instanceof Error
+            ? err.message
+            : "";
+      if (code === "auth/redirect-started") return;
+      setError(t(mapAuthErrorCode(code)));
     } finally {
       setLoading(false);
     }

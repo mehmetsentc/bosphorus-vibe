@@ -1,6 +1,8 @@
 import {
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updateProfile,
   type User,
@@ -17,13 +19,87 @@ import { resetAppStore } from "@/store/appStore";
 import { clearAccessCookie } from "@/lib/session/cookies";
 import { toDate } from "@/lib/utils/firestore-helpers";
 import { COLLECTIONS, type MessagePrivacy, type UserDoc } from "@/types";
+import type { Messages } from "@/i18n/messages/en";
+
+type AuthMessageKey = Extract<
+  keyof Messages,
+  | "loginFailed"
+  | "authErrorDomain"
+  | "authErrorPopup"
+  | "authErrorNetwork"
+  | "authErrorProfile"
+>;
 
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: "select_account" });
 
-export async function signInWithGoogle(): Promise<User> {
-  const result = await signInWithPopup(getFirebaseAuth(), provider);
+function shouldUseRedirect(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent;
+  const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
+  const inAppBrowser = /FBAN|FBAV|Instagram|Line\//i.test(ua);
+  return mobile || inAppBrowser;
+}
+
+export function mapAuthErrorCode(code: string): AuthMessageKey {
+  const normalized = code.includes("auth/") ? code.split("auth/").pop()! : code;
+  const key = normalized.startsWith("auth/") ? normalized : `auth/${normalized}`;
+
+  switch (key) {
+    case "auth/unauthorized-domain":
+      return "authErrorDomain";
+    case "auth/popup-blocked":
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+      return "authErrorPopup";
+    case "auth/network-request-failed":
+      return "authErrorNetwork";
+    case "permission-denied":
+      return "authErrorProfile";
+    default:
+      return "loginFailed";
+  }
+}
+
+export async function completeGoogleRedirectSignIn(): Promise<User | null> {
+  const result = await getRedirectResult(getFirebaseAuth());
+  if (!result?.user) return null;
   await upsertUser(result.user);
   return result.user;
+}
+
+export async function signInWithGoogle(): Promise<User> {
+  const auth = getFirebaseAuth();
+
+  if (shouldUseRedirect()) {
+    await signInWithRedirect(auth, provider);
+    throw new Error("auth/redirect-started");
+  }
+
+  try {
+    const result = await signInWithPopup(auth, provider);
+    try {
+      await upsertUser(result.user);
+    } catch (profileErr) {
+      console.error("Profile upsert failed after Google sign-in:", profileErr);
+    }
+    return result.user;
+  } catch (err: unknown) {
+    const code =
+      err instanceof Error && "code" in err
+        ? String((err as { code?: string }).code)
+        : "";
+
+    if (
+      code === "auth/popup-blocked" ||
+      code === "auth/cancelled-popup-request"
+    ) {
+      await signInWithRedirect(auth, provider);
+      throw new Error("auth/redirect-started");
+    }
+
+    throw err;
+  }
 }
 
 export async function signOutUser(): Promise<void> {

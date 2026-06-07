@@ -13,6 +13,11 @@ const de: Messages = {
   loginWithGoogle: "Mit Google fortfahren",
   loginSigningIn: "Anmeldung…",
   loginFailed: "Anmeldung fehlgeschlagen",
+  authErrorDomain:
+    "Diese Domain ist in Firebase nicht autorisiert. Fügen Sie sie unter Authentication → Authorized domains hinzu.",
+  authErrorPopup: "Anmelde-Popup wurde blockiert. Pop-ups erlauben und erneut versuchen.",
+  authErrorNetwork: "Netzwerkfehler. Verbindung prüfen und erneut versuchen.",
+  authErrorProfile: "Anmeldung erfolgreich, Profil konnte nicht gespeichert werden.",
   welcome: "Willkommen",
   nextActivity: "Nächste Aktivität",
   todaysEvents: "Heutige Events",

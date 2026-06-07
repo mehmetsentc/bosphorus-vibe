@@ -13,6 +13,12 @@ const tr: Messages = {
   loginWithGoogle: "Google ile devam et",
   loginSigningIn: "Giriş yapılıyor…",
   loginFailed: "Giriş başarısız",
+  authErrorDomain:
+    "Bu domain Firebase'de yetkili değil. Firebase → Authentication → Authorized domains'e ekleyin veya bosphorus-vibe.vercel.app kullanın.",
+  authErrorPopup: "Giriş penceresi engellendi. Pop-up izni verip tekrar deneyin.",
+  authErrorNetwork: "Ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.",
+  authErrorProfile:
+    "Giriş yapıldı ancak profil kaydedilemedi. Sorun devam ederse destek ile iletişime geçin.",
   welcome: "Hoş geldiniz",
   nextActivity: "Sonraki Etkinlik",
   todaysEvents: "Bugünün Etkinlikleri",

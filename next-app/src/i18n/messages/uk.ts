@@ -13,6 +13,11 @@ const uk: Messages = {
   loginWithGoogle: "Продовжити з Google",
   loginSigningIn: "Вхід…",
   loginFailed: "Помилка входу",
+  authErrorDomain:
+    "This domain is not authorized in Firebase. Add it under Authentication → Authorized domains.",
+  authErrorPopup: "Sign-in popup was blocked. Allow popups and try again.",
+  authErrorNetwork: "Network error. Check your connection and try again.",
+  authErrorProfile: "Signed in but profile could not be saved.",
   welcome: "Ласкаво просимо",
   nextActivity: "Наступна активність",
   todaysEvents: "Сьогоднішні події",

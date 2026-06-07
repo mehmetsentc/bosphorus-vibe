@@ -11,6 +11,12 @@ const en = {
   loginWithGoogle: "Continue with Google",
   loginSigningIn: "Signing in…",
   loginFailed: "Sign in failed",
+  authErrorDomain:
+    "This domain is not authorized in Firebase. Add it under Authentication → Authorized domains, or use bosphorus-vibe.vercel.app.",
+  authErrorPopup: "Sign-in popup was blocked. Allow popups and try again.",
+  authErrorNetwork: "Network error. Check your connection and try again.",
+  authErrorProfile:
+    "Signed in but profile could not be saved. Contact support if this persists.",
   welcome: "Welcome",
   nextActivity: "Next Activity",
   todaysEvents: "Today's Events",

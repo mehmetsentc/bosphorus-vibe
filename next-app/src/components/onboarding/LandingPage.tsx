@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import { BRAND_NAME } from "@/lib/brand";
-import { signInWithGoogle } from "@/lib/services/auth";
+import { signInWithGoogle, mapAuthErrorCode } from "@/lib/services/auth";
 import { setAccessCookie } from "@/lib/session/cookies";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
@@ -43,8 +43,16 @@ export function LandingPage() {
       await signInWithGoogle();
       setAccessCookie("auth");
       router.replace("/home");
-    } catch {
-      setError(t("loginFailed"));
+    } catch (err: unknown) {
+      const code =
+        err instanceof Error && "code" in err
+          ? String((err as { code?: string }).code)
+          : err instanceof Error
+            ? err.message
+            : "";
+      if (code === "auth/redirect-started") return;
+      const key = mapAuthErrorCode(code);
+      setError(t(key));
     } finally {
       setSigningIn(false);
     }

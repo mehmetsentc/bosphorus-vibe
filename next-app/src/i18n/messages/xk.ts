@@ -14,6 +14,11 @@ const xk: Messages = {
   loginWithGoogle: "Vazhdo me Google",
   loginSigningIn: "Po identifikohesh…",
   loginFailed: "Identifikimi dështoi",
+  authErrorDomain:
+    "This domain is not authorized in Firebase. Add it under Authentication → Authorized domains.",
+  authErrorPopup: "Sign-in popup was blocked. Allow popups and try again.",
+  authErrorNetwork: "Network error. Check your connection and try again.",
+  authErrorProfile: "Signed in but profile could not be saved.",
   welcome: "Mirë se vini",
   nextActivity: "Aktiviteti i ardhshëm",
   todaysEvents: "Eventet e sotme",

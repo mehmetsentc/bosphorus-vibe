@@ -10,7 +10,7 @@ import {
 } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
-import { getUserDoc } from "@/lib/services/auth";
+import { completeGoogleRedirectSignIn, getUserDoc } from "@/lib/services/auth";
 import {
   clearAccessCookie,
   getAccessCookie,
@@ -44,7 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    try {
+    let cancelled = false;
+
+    async function initAuth() {
+      try {
+        await completeGoogleRedirectSignIn();
+      } catch (err) {
+        console.error("Google redirect sign-in failed:", err);
+      }
+
+      if (cancelled) return;
+
       return onAuthStateChanged(getFirebaseAuth(), async (next) => {
         setUser(next);
         if (next) {
@@ -69,11 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setLoading(false);
       });
-    } catch (err) {
-      console.error("Firebase auth init failed:", err);
-      setLoading(false);
-      return undefined;
     }
+
+    const unsubscribePromise = initAuth();
+
+    return () => {
+      cancelled = true;
+      unsubscribePromise.then((unsub) => unsub?.());
+    };
   }, []);
 
   const value = useMemo(

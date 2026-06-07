@@ -13,6 +13,11 @@ const ro: Messages = {
   loginWithGoogle: "Continuă cu Google",
   loginSigningIn: "Conectare…",
   loginFailed: "Conectarea a eșuat",
+  authErrorDomain:
+    "This domain is not authorized in Firebase. Add it under Authentication → Authorized domains.",
+  authErrorPopup: "Sign-in popup was blocked. Allow popups and try again.",
+  authErrorNetwork: "Network error. Check your connection and try again.",
+  authErrorProfile: "Signed in but profile could not be saved.",
   welcome: "Bun venit",
   nextActivity: "Următoarea activitate",
   todaysEvents: "Evenimentele de azi",
