@@ -19,6 +19,10 @@ const tr: Messages = {
   authErrorNetwork: "Ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.",
   authErrorProfile:
     "Giriş yapıldı ancak profil kaydedilemedi. Sorun devam ederse destek ile iletişime geçin.",
+  authErrorConfig:
+    "Firebase bu ortamda yapılandırılmamış. Vercel'e NEXT_PUBLIC_FIREBASE_* değişkenlerini ekleyip yeniden deploy edin.",
+  authErrorGoogleDisabled:
+    "Google girişi Firebase'de kapalı. Authentication → Sign-in method bölümünden etkinleştirin.",
   welcome: "Hoş geldiniz",
   nextActivity: "Sonraki Etkinlik",
   todaysEvents: "Bugünün Etkinlikleri",

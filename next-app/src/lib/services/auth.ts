@@ -5,6 +5,7 @@ import {
   getRedirectResult,
   signOut,
   updateProfile,
+  type AuthError,
   type User,
 } from "firebase/auth";
 import {
@@ -14,7 +15,7 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseAuth, getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
 import { resetAppStore } from "@/store/appStore";
 import { clearAccessCookie } from "@/lib/session/cookies";
 import { toDate } from "@/lib/utils/firestore-helpers";
@@ -28,52 +29,76 @@ type AuthMessageKey = Extract<
   | "authErrorPopup"
   | "authErrorNetwork"
   | "authErrorProfile"
+  | "authErrorConfig"
+  | "authErrorGoogleDisabled"
 >;
 
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
-function shouldUseRedirect(): boolean {
+function prefersRedirect(): boolean {
   if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  if (host.endsWith(".vercel.app")) return true;
   const ua = navigator.userAgent;
   const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
   const inAppBrowser = /FBAN|FBAV|Instagram|Line\//i.test(ua);
   return mobile || inAppBrowser;
 }
 
-export function mapAuthErrorCode(code: string): AuthMessageKey {
-  const normalized = code.includes("auth/") ? code.split("auth/").pop()! : code;
-  const key = normalized.startsWith("auth/") ? normalized : `auth/${normalized}`;
-
-  switch (key) {
-    case "auth/unauthorized-domain":
-      return "authErrorDomain";
-    case "auth/popup-blocked":
-    case "auth/popup-closed-by-user":
-    case "auth/cancelled-popup-request":
-      return "authErrorPopup";
-    case "auth/network-request-failed":
-      return "authErrorNetwork";
-    case "permission-denied":
-      return "authErrorProfile";
-    default:
-      return "loginFailed";
+export function getAuthErrorCode(err: unknown): string {
+  if (err && typeof err === "object" && "code" in err) {
+    return String((err as AuthError).code);
   }
+  if (err instanceof Error) return err.message;
+  return "";
+}
+
+export function mapAuthErrorCode(code: string): AuthMessageKey {
+  const c = code.toLowerCase();
+  if (c.includes("configuration-not-found") || c.includes("env vars missing")) {
+    return "authErrorConfig";
+  }
+  if (c.includes("unauthorized-domain")) return "authErrorDomain";
+  if (c.includes("operation-not-allowed")) return "authErrorGoogleDisabled";
+  if (
+    c.includes("popup-blocked") ||
+    c.includes("popup-closed-by-user") ||
+    c.includes("cancelled-popup-request")
+  ) {
+    return "authErrorPopup";
+  }
+  if (c.includes("network-request-failed")) return "authErrorNetwork";
+  if (c.includes("permission-denied")) return "authErrorProfile";
+  return "loginFailed";
 }
 
 export async function completeGoogleRedirectSignIn(): Promise<User | null> {
+  if (!isFirebaseConfigured()) return null;
   const result = await getRedirectResult(getFirebaseAuth());
   if (!result?.user) return null;
-  await upsertUser(result.user);
+  try {
+    await upsertUser(result.user);
+  } catch (profileErr) {
+    console.error("Profile upsert failed after redirect sign-in:", profileErr);
+  }
   return result.user;
 }
 
 export async function signInWithGoogle(): Promise<User> {
+  if (!isFirebaseConfigured()) {
+    const err = new Error("Firebase env vars missing");
+    (err as Error & { code: string }).code = "auth/configuration-not-found";
+    throw err;
+  }
+
   const auth = getFirebaseAuth();
 
-  if (shouldUseRedirect()) {
+  if (prefersRedirect()) {
     await signInWithRedirect(auth, provider);
-    throw new Error("auth/redirect-started");
+    throw Object.assign(new Error("redirect started"), {
+      code: "auth/redirect-started",
+    });
   }
 
   try {
@@ -85,19 +110,16 @@ export async function signInWithGoogle(): Promise<User> {
     }
     return result.user;
   } catch (err: unknown) {
-    const code =
-      err instanceof Error && "code" in err
-        ? String((err as { code?: string }).code)
-        : "";
-
+    const code = getAuthErrorCode(err);
     if (
       code === "auth/popup-blocked" ||
       code === "auth/cancelled-popup-request"
     ) {
       await signInWithRedirect(auth, provider);
-      throw new Error("auth/redirect-started");
+      throw Object.assign(new Error("redirect started"), {
+        code: "auth/redirect-started",
+      });
     }
-
     throw err;
   }
 }

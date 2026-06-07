@@ -17,6 +17,10 @@ const en = {
   authErrorNetwork: "Network error. Check your connection and try again.",
   authErrorProfile:
     "Signed in but profile could not be saved. Contact support if this persists.",
+  authErrorConfig:
+    "Firebase is not configured on this deployment. Add NEXT_PUBLIC_FIREBASE_* variables in Vercel and redeploy.",
+  authErrorGoogleDisabled:
+    "Google sign-in is disabled in Firebase Console. Enable it under Authentication → Sign-in method.",
   welcome: "Welcome",
   nextActivity: "Next Activity",
   todaysEvents: "Today's Events",

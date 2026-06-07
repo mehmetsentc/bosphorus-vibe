@@ -18,6 +18,10 @@ const de: Messages = {
   authErrorPopup: "Anmelde-Popup wurde blockiert. Pop-ups erlauben und erneut versuchen.",
   authErrorNetwork: "Netzwerkfehler. Verbindung prüfen und erneut versuchen.",
   authErrorProfile: "Anmeldung erfolgreich, Profil konnte nicht gespeichert werden.",
+  authErrorConfig:
+    "Firebase is not configured on this deployment. Add NEXT_PUBLIC_FIREBASE_* in Vercel and redeploy.",
+  authErrorGoogleDisabled:
+    "Google sign-in is disabled in Firebase Console.",
   welcome: "Willkommen",
   nextActivity: "Nächste Aktivität",
   todaysEvents: "Heutige Events",

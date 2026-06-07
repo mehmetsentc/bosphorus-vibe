@@ -17,12 +17,18 @@ let auth: Auth;
 let db: Firestore;
 let storage: FirebaseStorage;
 
+export function isFirebaseConfigured(): boolean {
+  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+}
+
 function getFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {
     throw new Error("Firebase can only be initialized in the browser.");
   }
-  if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-    throw new Error("Firebase env vars missing. Check .env.local");
+  if (!isFirebaseConfigured()) {
+    const err = new Error("Firebase env vars missing");
+    (err as Error & { code: string }).code = "auth/configuration-not-found";
+    throw err;
   }
   if (!app) {
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);

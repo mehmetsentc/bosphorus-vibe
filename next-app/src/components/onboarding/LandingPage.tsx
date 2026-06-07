@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import { BRAND_NAME } from "@/lib/brand";
-import { signInWithGoogle, mapAuthErrorCode } from "@/lib/services/auth";
+import { signInWithGoogle, getAuthErrorCode, mapAuthErrorCode } from "@/lib/services/auth";
+import { isFirebaseConfigured } from "@/lib/firebase";
 import { setAccessCookie } from "@/lib/session/cookies";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
@@ -22,6 +23,12 @@ export function LandingPage() {
   const [error, setError] = useState("");
 
   const reason = searchParams.get("reason");
+
+  useEffect(() => {
+    if (!isFirebaseConfigured()) {
+      setError(t("authErrorConfig"));
+    }
+  }, [t]);
 
   useEffect(() => {
     if (loading) return;
@@ -44,15 +51,10 @@ export function LandingPage() {
       setAccessCookie("auth");
       router.replace("/home");
     } catch (err: unknown) {
-      const code =
-        err instanceof Error && "code" in err
-          ? String((err as { code?: string }).code)
-          : err instanceof Error
-            ? err.message
-            : "";
+      const code = getAuthErrorCode(err);
       if (code === "auth/redirect-started") return;
-      const key = mapAuthErrorCode(code);
-      setError(t(key));
+      console.error("Google sign-in failed:", code, err);
+      setError(t(mapAuthErrorCode(code)));
     } finally {
       setSigningIn(false);
     }

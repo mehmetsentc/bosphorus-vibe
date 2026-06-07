@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithGoogle, mapAuthErrorCode } from "@/lib/services/auth";
+import { signInWithGoogle, getAuthErrorCode, mapAuthErrorCode } from "@/lib/services/auth";
+import { isFirebaseConfigured } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { BRAND_NAME } from "@/lib/brand";
@@ -20,13 +21,9 @@ export default function LoginPage() {
       await signInWithGoogle();
       router.replace("/home");
     } catch (err: unknown) {
-      const code =
-        err instanceof Error && "code" in err
-          ? String((err as { code?: string }).code)
-          : err instanceof Error
-            ? err.message
-            : "";
+      const code = getAuthErrorCode(err);
       if (code === "auth/redirect-started") return;
+      console.error("Google sign-in failed:", code, err);
       setError(t(mapAuthErrorCode(code)));
     } finally {
       setLoading(false);
