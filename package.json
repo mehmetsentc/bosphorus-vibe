@@ -4,6 +4,8 @@
   "scripts": {
     "build": "cd next-app && npm run build",
     "dev": "cd next-app && npm run dev",
+    "dev:clean": "cd next-app && npm run dev:clean",
+    "dev:reset": "cd next-app && npm run dev:reset",
     "start": "cd next-app && npm start"
   }
 }
