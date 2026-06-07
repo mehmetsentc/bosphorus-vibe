@@ -1,0 +1,60 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "userPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "postUser", "order": "ASCENDING" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "eventListPortyApp",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Category", "order": "ASCENDING" },
+        { "fieldPath": "Event_Date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userStories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user", "order": "ASCENDING" },
+        { "fieldPath": "storyPostedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "users", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "last_message_time", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chat_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "chat", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tagged_user_ids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

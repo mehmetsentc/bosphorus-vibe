@@ -1,0 +1,203 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function myUserRef() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userDoc().data.role == 'admin';
+    }
+
+    function roleUnchanged() {
+      return !('role' in request.resource.data)
+        || request.resource.data.role == resource.data.role;
+    }
+
+    function validUserCreate() {
+      return request.resource.data.role == 'user';
+    }
+
+    function isPostOwner() {
+      return isSignedIn() && resource.data.postUser == myUserRef();
+    }
+
+    function isPostOwnerCreate() {
+      return isSignedIn() && request.resource.data.postUser == myUserRef();
+    }
+
+    function allowedPostPatch() {
+      let diff = request.resource.data.diff(resource.data).affectedKeys();
+      return diff.hasOnly(['Post_liked_by']) || diff.hasOnly(['numComments']);
+    }
+
+    function isStoryOwner() {
+      return isSignedIn() && resource.data.user == myUserRef();
+    }
+
+    function isStoryOwnerCreate() {
+      return isSignedIn() && request.resource.data.user == myUserRef();
+    }
+
+    function allowedStoryPatch() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['viewedBy']);
+    }
+
+    function isCommentOwner() {
+      return isSignedIn() && resource.data.user == myUserRef();
+    }
+
+    function isCommentOwnerCreate() {
+      return isSignedIn() && request.resource.data.user == myUserRef();
+    }
+
+    function isMessageOwner() {
+      return isSignedIn() && resource.data.user == myUserRef();
+    }
+
+    function isMessageOwnerCreate() {
+      return isSignedIn() && request.resource.data.user == myUserRef();
+    }
+
+    function isChatMember() {
+      return isSignedIn() && myUserRef() in resource.data.users;
+    }
+
+    function isChatMemberCreate() {
+      return isSignedIn() && myUserRef() in request.resource.data.users;
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId) && validUserCreate();
+      allow update: if isOwner(userId) && roleUnchanged() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- Posts ---
+    match /userPosts/{postId} {
+      allow read: if true;
+      allow create: if isPostOwnerCreate();
+      allow update: if isSignedIn() && (
+        isPostOwner() || isAdmin() || allowedPostPatch()
+      );
+      allow delete: if isPostOwner() || isAdmin();
+    }
+
+    // --- Comments ---
+    match /postComments/{commentId} {
+      allow read: if true;
+      allow create: if isCommentOwnerCreate();
+      allow update, delete: if isCommentOwner() || isAdmin();
+    }
+
+    // --- Stories ---
+    match /userStories/{storyId} {
+      allow read: if true;
+      allow create: if isStoryOwnerCreate();
+      allow update: if isSignedIn() && (
+        isStoryOwner() || isAdmin() || allowedStoryPatch()
+      );
+      allow delete: if isStoryOwner() || isAdmin();
+    }
+
+    match /storyComments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // --- Friends / follows ---
+    match /friends/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // --- Chats ---
+    match /chats/{chatId} {
+      allow read: if isChatMember();
+      allow create: if isChatMemberCreate();
+      allow update: if isChatMember();
+      allow delete: if isAdmin();
+    }
+
+    match /chat_messages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isMessageOwnerCreate();
+      allow update, delete: if isMessageOwner() || isAdmin();
+    }
+
+    // --- Events (admin write) ---
+    match /eventListPortyApp/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /eventPost/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- Notifications ---
+    match /Notification/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn()
+        && resource.data.made_to_id == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // --- Drafts ---
+    match /userDrafts/{draftId} {
+      allow read, update, delete: if isSignedIn()
+        && resource.data.draftUserId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.draftUserId == request.auth.uid;
+    }
+
+    // --- Audit logs (server/admin only via Admin SDK; client deny) ---
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // --- Legacy / read-only collections ---
+    match /Karaoke_Particapition_List/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /notificaton_user/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /storyStatus/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /storyNotifications/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

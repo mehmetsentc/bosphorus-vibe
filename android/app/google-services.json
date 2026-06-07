@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "449625940293",
+    "project_id": "bosphorusvibe-dbd93",
+    "storage_bucket": "bosphorusvibe-dbd93.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:449625940293:android:2cae6d7581d8f361d69e2c",
+        "android_client_info": {
+          "package_name": "com.flutterflow.sniffsocial"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBsyDEkSHtTe3-eGoonDRna0meug4je6k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
