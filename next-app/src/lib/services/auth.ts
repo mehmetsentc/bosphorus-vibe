@@ -65,19 +65,17 @@ provider.setCustomParameters({ prompt: "select_account" });
 
 let redirectResultPromise: Promise<User | null> | null = null;
 
-function isLocalDevHost(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1";
+function isGoogleUser(user: User): boolean {
+  return user.providerData.some((p) => p.providerId === "google.com");
 }
 
-/** Use redirect only on mobile / in-app browsers; popup on desktop (any env). */
-function prefersRedirect(): boolean {
-  if (typeof window === "undefined") return false;
-  const ua = navigator.userAgent;
-  const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
-  const inAppBrowser = /FBAN|FBAV|Instagram|Line\//i.test(ua);
-  return mobile || inAppBrowser;
+function shouldFallbackToRedirect(code: string): boolean {
+  const c = code.toLowerCase();
+  return (
+    c.includes("popup-blocked") ||
+    c.includes("operation-not-supported") ||
+    c.includes("web-storage-unsupported")
+  );
 }
 
 function assertAuthDomain(): void {
@@ -236,23 +234,66 @@ async function resolveGoogleRedirectSignIn(): Promise<User | null> {
 
   const auth = await ensureAuthReady();
   const result = await getRedirectResult(auth, browserPopupRedirectResolver);
-  if (!result?.user) return null;
-
-  try {
-    await upsertUser(result.user);
-  } catch (profileErr) {
-    console.error("Profile upsert failed after redirect sign-in:", profileErr);
+  if (result?.user) {
+    try {
+      await upsertUser(result.user);
+    } catch (profileErr) {
+      console.error("Profile upsert failed after redirect sign-in:", profileErr);
+    }
+    return result.user;
   }
 
-  return result.user;
+  // Mobile Safari sometimes restores the session without a redirect result.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await auth.authStateReady();
+    const current = auth.currentUser;
+    if (current && isGoogleUser(current)) {
+      try {
+        await upsertUser(current);
+      } catch (profileErr) {
+        console.error("Profile upsert failed after redirect sign-in:", profileErr);
+      }
+      return current;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  return null;
 }
 
-function startGoogleRedirect(auth: ReturnType<typeof getFirebaseAuth>): void {
+export async function startGoogleRedirectFlow(): Promise<never> {
+  assertFirebaseConfigured();
+  const auth = await ensureAuthReady();
   void signInWithRedirect(auth, provider, browserPopupRedirectResolver).catch(
     (err) => {
       console.error("signInWithRedirect failed:", err);
     },
   );
+  throwRedirectStarted();
+}
+
+const GOOGLE_REDIRECT_ATTEMPT_KEY = "google_redirect_attempt";
+
+/** Full-page redirect handler for mobile browsers. */
+export function openGoogleRedirectHandler(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
+  window.location.assign("/auth/google");
+}
+
+export function hasGoogleRedirectAttempt(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(sessionStorage.getItem(GOOGLE_REDIRECT_ATTEMPT_KEY));
+}
+
+export function markGoogleRedirectAttempt(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(GOOGLE_REDIRECT_ATTEMPT_KEY, String(Date.now()));
+}
+
+export function clearGoogleRedirectAttempt(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
 }
 
 export async function signInWithEmail(
@@ -340,11 +381,6 @@ export async function signInWithGoogle(): Promise<User> {
 
   const auth = await ensureAuthReady();
 
-  if (prefersRedirect()) {
-    startGoogleRedirect(auth);
-    throwRedirectStarted();
-  }
-
   try {
     const result = await signInWithPopup(
       auth,
@@ -359,9 +395,12 @@ export async function signInWithGoogle(): Promise<User> {
     return result.user;
   } catch (err: unknown) {
     const code = getAuthErrorCode(err);
-    console.error("Google popup sign-in failed, falling back to redirect:", code);
-    startGoogleRedirect(auth);
-    throwRedirectStarted();
+    if (shouldFallbackToRedirect(code)) {
+      openGoogleRedirectHandler();
+      throwRedirectStarted();
+    }
+    console.error("Google popup sign-in failed:", code, err);
+    throw err;
   }
 }
 

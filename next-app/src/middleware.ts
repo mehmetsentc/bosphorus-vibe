@@ -6,6 +6,7 @@ import { SECURITY_HEADERS } from "@/lib/security/headers";
 const PUBLIC_PATHS = [
   "/welcome",
   "/login",
+  "/auth/google",
   "/privacy-policy",
   "/terms-of-service",
   "/cookie-policy",

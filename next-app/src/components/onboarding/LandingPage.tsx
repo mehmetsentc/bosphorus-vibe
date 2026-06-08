@@ -1,20 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { useRouter, useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import type { ConfirmationResult } from "firebase/auth";
 import { Logo } from "@/components/brand/Logo";
 import { BRAND_NAME } from "@/lib/brand";
 import {
   signInWithGoogle,
   signInWithEmail,
   signUpWithEmail,
-  signInAnonymous,
-  startPhoneSignIn,
-  confirmPhoneSignIn,
   sendPasswordReset,
+  openGoogleRedirectHandler,
   getAuthErrorCode,
   formatAuthErrorMessage,
 } from "@/lib/services/auth";
@@ -23,59 +20,57 @@ import { setAccessCookie } from "@/lib/session/cookies";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
 import { LegalFooter } from "@/components/layout/LegalFooter";
-import { LandingBackground } from "@/components/onboarding/LandingBackground";
 
-type AuthMethod = "email" | "phone" | "google" | "anonymous";
-type EmailMode = "signIn" | "signUp" | "reset";
-
-const RECAPTCHA_CONTAINER_ID = "recaptcha-container";
+type AuthView = "onboarding" | "signIn" | "signUp" | "reset";
 
 const inputClass =
-  "w-full rounded-xl border border-border bg-surface-card px-4 py-3 text-left text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-vibe/50 focus:ring-2 focus:ring-vibe/20 dark:bg-surface-card/90";
+  "w-full rounded-2xl border border-border bg-surface-raised/60 px-4 py-3.5 text-sm text-foreground outline-none transition placeholder:text-muted/70 focus:border-vibe/60 focus:ring-2 focus:ring-vibe/15 dark:bg-surface-overlay/40";
 
-const methodTabClass = (active: boolean) =>
-  `rounded-lg px-2 py-2 text-xs font-semibold transition sm:text-sm ${
-    active
-      ? "bg-gold/20 text-foreground"
-      : "text-muted hover:text-foreground"
-  }`;
+const primaryBtnClass =
+  "w-full rounded-2xl py-4 text-sm font-semibold text-white shadow-lg transition active:scale-[0.98] disabled:opacity-60 gold-gradient hover:brightness-110";
+
+const outlineBtnClass =
+  "flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-surface-card px-4 py-3.5 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe/30 hover:bg-surface-raised active:scale-[0.98] disabled:opacity-60 dark:bg-surface-card/80";
 
 export function LandingPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, authError: redirectAuthError } = useAuth();
   const t = useT();
-  const [authMethod, setAuthMethod] = useState<AuthMethod>("email");
-  const [emailMode, setEmailMode] = useState<EmailMode>("signIn");
+
+  const reason = searchParams.get("reason");
+  const [view, setView] = useState<AuthView>(
+    reason ? "signIn" : "onboarding",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [phoneCode, setPhoneCode] = useState("");
-  const [phoneConfirmation, setPhoneConfirmation] =
-    useState<ConfirmationResult | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resetSent, setResetSent] = useState(false);
 
-  const reason = searchParams.get("reason");
-
-  // Show redirect auth errors (e.g. unauthorized-domain after Google redirect)
   useEffect(() => {
     if (redirectAuthError) {
       setError(formatAuthErrorMessage(redirectAuthError, t));
+      setView("signIn");
     }
   }, [redirectAuthError, t]);
 
-  // Firebase config kontrolü
   useEffect(() => {
     if (!isFirebaseConfigured()) {
-      const issues = getFirebaseConfigIssues();
-      console.error("Firebase config issues:", issues);
+      console.error("Firebase config issues:", getFirebaseConfigIssues());
       setError(t("authErrorConfig"));
     }
   }, [t]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (user) {
+      setAccessCookie(user.isAnonymous ? "guest" : "auth");
+      window.location.assign("/home");
+    }
+  }, [user, loading]);
 
   function showAuthError(err: unknown, label: string) {
     const code = getAuthErrorCode(err);
@@ -83,49 +78,15 @@ export function LandingPage() {
     setError(formatAuthErrorMessage(code, t));
   }
 
-  useEffect(() => {
-    if (loading) return;
-    if (user) {
-      setAccessCookie(user.isAnonymous ? "guest" : "auth");
-      router.replace("/home");
-    }
-  }, [user, loading, router]);
-
-  function finishAuth(anonymous = false) {
-    setAccessCookie(anonymous ? "guest" : "auth");
-    router.replace("/home");
-  }
-
-  function switchMethod(method: AuthMethod) {
-    setAuthMethod(method);
+  function switchView(next: AuthView) {
+    setView(next);
     setError("");
     setResetSent(false);
-    if (method !== "phone") {
-      setPhoneConfirmation(null);
-      setPhoneCode("");
-    }
-    if (method === "email") setEmailMode("signIn");
   }
 
-  async function handleResetPassword(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    setResetSent(false);
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setError(t("authErrorInvalidEmail"));
-      setBusy(false);
-      return;
-    }
-    try {
-      await sendPasswordReset(trimmedEmail);
-      setResetSent(true);
-    } catch (err: unknown) {
-      showAuthError(err, "Password reset failed");
-    } finally {
-      setBusy(false);
-    }
+  function finishAuth() {
+    setAccessCookie("auth");
+    window.location.assign("/home");
   }
 
   async function handleEmailSubmit(e: React.FormEvent) {
@@ -140,7 +101,7 @@ export function LandingPage() {
       return;
     }
 
-    if (emailMode === "signUp") {
+    if (view === "signUp") {
       if (password.length < 6) {
         setError(t("authErrorWeakPassword"));
         setBusy(false);
@@ -154,7 +115,7 @@ export function LandingPage() {
     }
 
     try {
-      if (emailMode === "signIn") {
+      if (view === "signIn") {
         await signInWithEmail(trimmedEmail, password);
       } else {
         await signUpWithEmail(trimmedEmail, password, displayName);
@@ -167,45 +128,24 @@ export function LandingPage() {
     }
   }
 
-  async function handlePhoneSend(e: React.FormEvent) {
+  async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
+    setResetSent(false);
 
-    if (!phone.trim()) {
-      setError(t("authErrorInvalidPhone"));
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError(t("authErrorInvalidEmail"));
       setBusy(false);
       return;
     }
 
     try {
-      const confirmation = await startPhoneSignIn(phone, RECAPTCHA_CONTAINER_ID);
-      setPhoneConfirmation(confirmation);
+      await sendPasswordReset(trimmedEmail);
+      setResetSent(true);
     } catch (err: unknown) {
-      showAuthError(err, "Phone send code failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handlePhoneVerify(e: React.FormEvent) {
-    e.preventDefault();
-    if (!phoneConfirmation) return;
-
-    setBusy(true);
-    setError("");
-
-    if (!phoneCode.trim()) {
-      setError(t("authErrorInvalidCode"));
-      setBusy(false);
-      return;
-    }
-
-    try {
-      await confirmPhoneSignIn(phoneConfirmation, phoneCode);
-      finishAuth();
-    } catch (err: unknown) {
-      showAuthError(err, "Phone verify failed");
+      showAuthError(err, "Password reset failed");
     } finally {
       setBusy(false);
     }
@@ -214,18 +154,16 @@ export function LandingPage() {
   async function handleGoogle() {
     setBusy(true);
     setError("");
+
+    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (mobile) {
+      openGoogleRedirectHandler();
+      return;
+    }
+
     let redirecting = false;
     try {
-      await Promise.race([
-        signInWithGoogle(),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            const err = new Error("Sign-in timed out");
-            (err as Error & { code: string }).code = "auth/timeout";
-            reject(err);
-          }, 20_000);
-        }),
-      ]);
+      await signInWithGoogle();
       finishAuth();
     } catch (err: unknown) {
       const code = getAuthErrorCode(err);
@@ -239,24 +177,10 @@ export function LandingPage() {
     }
   }
 
-  async function handleAnonymous() {
-    setBusy(true);
-    setError("");
-    try {
-      await signInAnonymous();
-      finishAuth(true);
-    } catch (err: unknown) {
-      showAuthError(err, "Anonymous sign-in failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (loading) {
     return (
-      <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background">
-        <LandingBackground />
-        <div className="relative z-10 flex flex-col items-center gap-4">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
           <p className="text-sm text-muted">{t("loginSigningIn")}</p>
         </div>
@@ -264,111 +188,156 @@ export function LandingPage() {
     );
   }
 
+  const viewTitle =
+    view === "onboarding"
+      ? t("authGetStarted")
+      : view === "signIn"
+        ? t("authTabSignIn")
+        : view === "signUp"
+          ? t("authTabSignUp")
+          : t("resetPassword");
+
+  const viewSubtitle =
+    view === "onboarding"
+      ? t("authOnboardingSubtitle")
+      : view === "signIn"
+        ? t("authSignInSubtitle")
+        : view === "signUp"
+          ? t("authSignUpSubtitle")
+          : t("authResetSubtitle");
+
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden bg-background">
-      <LandingBackground />
+    <main className="relative flex min-h-[100dvh] flex-col overflow-hidden">
+      {/* Hero */}
+      <div
+        className="relative flex flex-1 flex-col items-center justify-center px-6 pb-6 pt-12 text-center sm:pt-16"
+        style={{
+          background:
+            "linear-gradient(165deg, color-mix(in srgb, var(--gold) 75%, #1a1200) 0%, color-mix(in srgb, var(--vibe-dark) 85%, #001018) 55%, color-mix(in srgb, var(--vibe) 40%, #000810) 100%)",
+        }}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(212,175,55,0.2),transparent_60%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(0,122,153,0.25),transparent_55%)]" />
 
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-16">
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.65, ease: "easeOut" }}
-          className="w-full max-w-md text-center"
+          transition={{ duration: 0.5 }}
+          className="relative z-10"
         >
-          <Logo size="lg" showTagline className="mx-auto mb-8" />
-
-          <p className="text-xs font-medium uppercase tracking-[0.35em] text-gold/90">
+          <Logo size="lg" showTagline className="mx-auto drop-shadow-lg" />
+          <p className="mt-4 text-xs font-medium uppercase tracking-[0.35em] text-white/80">
             {BRAND_NAME}
           </p>
-          <h1 className="mt-4 font-display text-2xl font-semibold leading-snug text-foreground sm:text-3xl">
-            {t("landingIntro")}
-          </h1>
+          {view === "onboarding" && (
+            <h1 className="mx-auto mt-5 max-w-xs font-display text-2xl font-semibold leading-snug text-white sm:max-w-sm sm:text-3xl">
+              {t("landingIntro")}
+            </h1>
+          )}
+        </motion.div>
+      </div>
 
-          {reason === "auth-required" && (
-            <p className="mt-4 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-foreground dark:border-gold/30 dark:bg-black/40 dark:text-gold">
-              {t("authRequiredHint")}
+      {/* Auth card */}
+      <div className="relative z-20 -mt-2 flex shrink-0 flex-col rounded-t-[2rem] bg-surface-card shadow-[0_-12px_48px_rgba(0,0,0,0.12)] dark:bg-surface-card dark:shadow-[0_-12px_48px_rgba(0,0,0,0.45)] sm:mx-auto sm:mb-8 sm:max-w-md sm:rounded-[2rem] sm:shadow-xl">
+        <div className="px-6 pb-6 pt-8 sm:px-8 sm:pb-8">
+          {view !== "onboarding" && (
+            <button
+              type="button"
+              onClick={() => switchView(view === "reset" ? "signIn" : "onboarding")}
+              className="mb-4 flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
+            >
+              <ChevronLeftIcon />
+              {t("authBack")}
+            </button>
+          )}
+
+          {(reason === "auth-required" || reason === "guest-limited") && (
+            <p
+              className={`mb-4 rounded-2xl border px-4 py-3 text-sm ${
+                reason === "guest-limited"
+                  ? "border-vibe/30 bg-vibe/10 text-foreground"
+                  : "border-gold/30 bg-gold/10 text-foreground"
+              }`}
+            >
+              {reason === "guest-limited"
+                ? t("guestLimitedHint")
+                : t("authRequiredHint")}
             </p>
           )}
-          {reason === "guest-limited" && (
-            <p className="mt-4 rounded-xl border border-vibe/40 bg-vibe/10 px-4 py-3 text-sm text-foreground dark:border-vibe/30 dark:bg-black/40 dark:text-vibe">
-              {t("guestLimitedHint")}
-            </p>
-          )}
 
-          <div className="mt-8 grid grid-cols-2 gap-1 rounded-xl border border-border bg-surface-card p-1 shadow-sm dark:bg-surface-card/90 sm:grid-cols-4">
-            {(
-              [
-                ["email", "authMethodEmail"],
-                ["phone", "authMethodPhone"],
-                ["google", "authMethodGoogle"],
-                ["anonymous", "authMethodAnonymous"],
-              ] as const
-            ).map(([method, labelKey]) => (
-              <button
-                key={method}
-                type="button"
-                onClick={() => switchMethod(method)}
-                className={methodTabClass(authMethod === method)}
-              >
-                {t(labelKey)}
-              </button>
-            ))}
-          </div>
-
-          {authMethod === "email" && (
-            <>
-              {emailMode !== "reset" && (
-                <div className="mt-4 flex rounded-xl border border-border bg-surface-card p-1 shadow-sm dark:bg-surface-card/90">
-                  <button
-                    type="button"
-                    onClick={() => { setEmailMode("signIn"); setError(""); setResetSent(false); }}
-                    className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
-                      emailMode === "signIn"
-                        ? "bg-gold/20 text-foreground"
-                        : "text-muted hover:text-foreground"
-                    }`}
-                  >
-                    {t("authTabSignIn")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setEmailMode("signUp"); setError(""); setResetSent(false); }}
-                    className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
-                      emailMode === "signUp"
-                        ? "bg-gold/20 text-foreground"
-                        : "text-muted hover:text-foreground"
-                    }`}
-                  >
-                    {t("authTabSignUp")}
-                  </button>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={view}
+              initial={{ opacity: 0, x: view === "onboarding" ? 0 : 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.25 }}
+            >
+              {view !== "onboarding" && (
+                <div className="mb-6 text-left">
+                  <h2 className="font-display text-2xl font-semibold text-foreground">
+                    {viewTitle}
+                  </h2>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                    {viewSubtitle}
+                  </p>
                 </div>
               )}
 
-              {emailMode === "reset" ? (
-                <div className="mt-4 text-left">
+              {view === "onboarding" && (
+                <div className="text-center">
+                  <h2 className="font-display text-2xl font-semibold text-foreground">
+                    {t("authGetStarted")}
+                  </h2>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                    {t("authOnboardingSubtitle")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => switchView("signIn")}
+                    className={`mt-8 ${primaryBtnClass}`}
+                  >
+                    {t("authGetStarted")}
+                  </button>
+                  <p className="mt-6 text-sm text-muted">
+                    {t("authNoAccount")}{" "}
+                    <button
+                      type="button"
+                      onClick={() => switchView("signUp")}
+                      className="font-semibold text-vibe underline-offset-2 hover:underline"
+                    >
+                      {t("authTabSignUp")}
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              {view === "reset" && (
+                <div>
                   {resetSent ? (
-                    <div className="flex flex-col gap-4">
-                      <p className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-400">
+                    <div className="space-y-4">
+                      <p className="rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-400">
                         {t("resetPasswordSent")}
                       </p>
                       <button
                         type="button"
-                        onClick={() => { setEmailMode("signIn"); setError(""); setResetSent(false); }}
-                        className="text-sm text-vibe underline-offset-2 hover:underline"
+                        onClick={() => switchView("signIn")}
+                        className={`${outlineBtnClass} w-full`}
                       >
                         {t("resetPasswordBack")}
                       </button>
                     </div>
                   ) : (
-                    <form onSubmit={handleResetPassword} className="flex flex-col gap-3">
+                    <form onSubmit={handleResetPassword} className="space-y-4">
                       <label className="block">
                         <span className="mb-1.5 block text-xs font-medium text-muted">
-                          {t("resetPasswordEmailLabel")}
+                          {t("emailLabel")}
                         </span>
                         <input
                           type="email"
                           required
                           autoComplete="email"
+                          placeholder={t("resetPasswordEmailLabel")}
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           className={inputClass}
@@ -377,226 +346,168 @@ export function LandingPage() {
                       <button
                         type="submit"
                         disabled={busy}
-                        className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
+                        className={primaryBtnClass}
                       >
-                        {busy ? t("loginSigningIn") : t("resetPassword")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setEmailMode("signIn"); setError(""); }}
-                        className="text-sm text-muted underline-offset-2 hover:text-foreground hover:underline"
-                      >
-                        {t("resetPasswordBack")}
+                        {busy ? t("loginSigningIn") : t("authSendResetLink")}
                       </button>
                     </form>
                   )}
                 </div>
-              ) : (
-                <form onSubmit={handleEmailSubmit} className="mt-4 flex flex-col gap-3 text-left">
-                  {emailMode === "signUp" && (
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-medium text-muted">
-                        {t("displayNameLabel")}
-                      </span>
-                      <input
-                        type="text"
-                        autoComplete="name"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        className={inputClass}
-                      />
-                    </label>
-                  )}
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-muted">
-                      {t("emailLabel")}
-                    </span>
-                    <input
-                      type="email"
-                      required
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-muted">
-                      {t("passwordLabel")}
-                    </span>
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      autoComplete={emailMode === "signIn" ? "current-password" : "new-password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
-                  {emailMode === "signUp" && (
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-medium text-muted">
-                        {t("confirmPasswordLabel")}
-                      </span>
-                      <input
-                        type="password"
-                        required
-                        minLength={6}
-                        autoComplete="new-password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className={inputClass}
-                      />
-                    </label>
-                  )}
-                  {emailMode === "signIn" && (
-                    <div className="text-right">
-                      <button
-                        type="button"
-                        onClick={() => { setEmailMode("reset"); setError(""); setResetSent(false); }}
-                        className="text-xs text-vibe underline-offset-2 hover:underline"
-                      >
-                        {t("forgotPassword")}
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
-                  >
-                    {busy
-                      ? t("loginSigningIn")
-                      : emailMode === "signIn"
-                        ? t("signInWithEmail")
-                        : t("signUpWithEmail")}
-                  </button>
-                </form>
               )}
-            </>
-          )}
 
-          {authMethod === "phone" && (
-            <div className="mt-4 text-left">
-              {!phoneConfirmation ? (
-                <form onSubmit={handlePhoneSend} className="flex flex-col gap-3">
-                  <div
-                    id={RECAPTCHA_CONTAINER_ID}
-                    className="flex min-h-[78px] items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-card px-2 py-2"
-                  />
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-muted">
-                      {t("phoneLabel")}
-                    </span>
-                    <input
-                      type="tel"
-                      required
-                      autoComplete="tel"
-                      inputMode="tel"
-                      placeholder={t("phoneHint")}
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
-                  >
-                    {busy ? t("loginSigningIn") : t("sendPhoneCode")}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handlePhoneVerify} className="flex flex-col gap-3">
-                  <p className="text-sm text-muted">{phone}</p>
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-muted">
-                      {t("phoneCodeLabel")}
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      value={phoneCode}
-                      onChange={(e) => setPhoneCode(e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
-                  >
-                    {busy ? t("loginSigningIn") : t("verifyPhoneCode")}
-                  </button>
+              {(view === "signIn" || view === "signUp") && (
+                <div className="space-y-4">
+                  <form onSubmit={handleEmailSubmit} className="space-y-3">
+                    {view === "signUp" && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-muted">
+                          {t("displayNameLabel")}
+                        </span>
+                        <input
+                          type="text"
+                          autoComplete="name"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          className={inputClass}
+                        />
+                      </label>
+                    )}
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-medium text-muted">
+                        {t("emailLabel")}
+                      </span>
+                      <input
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-medium text-muted">
+                        {t("passwordLabel")}
+                      </span>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required
+                          minLength={6}
+                          autoComplete={
+                            view === "signIn" ? "current-password" : "new-password"
+                          }
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className={`${inputClass} pr-12`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted transition hover:text-foreground"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                        </button>
+                      </div>
+                    </label>
+                    {view === "signUp" && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-muted">
+                          {t("confirmPasswordLabel")}
+                        </span>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required
+                          minLength={6}
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className={inputClass}
+                        />
+                      </label>
+                    )}
+                    {view === "signIn" && (
+                      <div className="text-right">
+                        <button
+                          type="button"
+                          onClick={() => switchView("reset")}
+                          className="text-xs font-medium text-vibe underline-offset-2 hover:underline"
+                        >
+                          {t("forgotPassword")}
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className={primaryBtnClass}
+                    >
+                      {busy
+                        ? t("loginSigningIn")
+                        : view === "signIn"
+                          ? t("signInWithEmail")
+                          : t("signUpWithEmail")}
+                    </button>
+                  </form>
+
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-xs text-muted">{t("authOrContinueWith")}</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => {
-                      setPhoneConfirmation(null);
-                      setPhoneCode("");
-                      setError("");
-                    }}
-                    className="text-sm text-vibe underline-offset-2 hover:underline disabled:opacity-60"
+                    onClick={handleGoogle}
+                    className={outlineBtnClass}
                   >
-                    {t("phoneChangeNumber")}
+                    <GoogleIcon />
+                    {busy ? t("loginSigningIn") : t("authContinueWithGoogle")}
                   </button>
-                </form>
+
+                  <p className="pt-2 text-center text-sm text-muted">
+                    {view === "signIn" ? t("authNoAccount") : t("authHaveAccount")}{" "}
+                    <button
+                      type="button"
+                      onClick={() => switchView(view === "signIn" ? "signUp" : "signIn")}
+                      className="font-semibold text-vibe underline-offset-2 hover:underline"
+                    >
+                      {view === "signIn" ? t("authTabSignUp") : t("authTabSignIn")}
+                    </button>
+                  </p>
+                </div>
               )}
-            </div>
-          )}
 
-          {authMethod === "google" && (
-            <div className="mt-4">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handleGoogle}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-surface-card px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe/40 hover:shadow-vibe-sm active:scale-[0.98] disabled:opacity-60 dark:bg-surface-card/90 dark:shadow-none dark:backdrop-blur-sm"
-              >
-                <GoogleIcon />
-                {busy ? t("loginSigningIn") : t("loginWithGoogle")}
-              </button>
-            </div>
-          )}
+              {error && (
+                <p className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                  {error}
+                </p>
+              )}
+            </motion.div>
+          </AnimatePresence>
 
-          {authMethod === "anonymous" && (
-            <div className="mt-4 flex flex-col gap-3">
-              <p className="text-sm leading-relaxed text-muted">
-                {t("anonymousHint")}
-              </p>
-              <button
-                type="button"
-                onClick={handleAnonymous}
-                disabled={busy}
-                className="rounded-2xl border border-gold/50 bg-gold/15 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-gold hover:bg-gold/25 active:scale-[0.98] disabled:opacity-60 dark:border-gold/40 dark:bg-gold/10 dark:shadow-none dark:backdrop-blur-sm dark:hover:bg-gold/20"
-              >
-                {busy ? t("loginSigningIn") : t("signInAnonymous")}
-              </button>
-            </div>
-          )}
-
-          {error && (
-            <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
-
-          <p className="mt-8 text-xs leading-relaxed text-muted">
+          <p className="mt-8 text-center text-xs leading-relaxed text-muted">
             {t("landingLegalHint")}{" "}
-            <Link href="/privacy-policy" className="text-vibe underline-offset-2 hover:underline">
+            <Link
+              href="/privacy-policy"
+              className="text-vibe underline-offset-2 hover:underline"
+            >
               {t("privacyPolicy")}
             </Link>
             {" · "}
-            <Link href="/terms-of-service" className="text-vibe underline-offset-2 hover:underline">
+            <Link
+              href="/terms-of-service"
+              className="text-vibe underline-offset-2 hover:underline"
+            >
               {t("termsOfService")}
             </Link>
           </p>
-        </motion.div>
-      </div>
+        </div>
 
-      <LegalFooter className="relative z-10 border-t border-border bg-surface/90 backdrop-blur-md dark:border-white/10 dark:bg-black/40" />
+        <LegalFooter className="rounded-b-[2rem] border-t border-border bg-surface-raised/50 px-6 py-4 dark:bg-surface-overlay/30 sm:rounded-b-[2rem]" />
+      </div>
     </main>
   );
 }
@@ -619,6 +530,39 @@ function GoogleIcon() {
       <path
         fill="#EA4335"
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+      />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
       />
     </svg>
   );
