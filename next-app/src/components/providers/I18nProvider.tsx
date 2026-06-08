@@ -70,6 +70,12 @@ export function useI18n() {
   return ctx;
 }
 
+/** Safe during static prerender when ClientProviders is client-only. */
 export function useT() {
-  return useI18n().t;
+  const ctx = useContext(I18nContext);
+  if (!ctx) {
+    return (key: MessageKey, vars?: Record<string, string>) =>
+      getMessage("en", key, vars);
+  }
+  return ctx.t;
 }
