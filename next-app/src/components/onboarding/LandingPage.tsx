@@ -12,6 +12,7 @@ import {
   signUpWithEmail,
   getAuthErrorCode,
   mapAuthErrorCode,
+  completeGoogleRedirectSignIn,
 } from "@/lib/services/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { setAccessCookie } from "@/lib/session/cookies";
@@ -40,12 +41,30 @@ export function LandingPage() {
 
   const reason = searchParams.get("reason");
 
+  // 1. Firebase config kontrolü
   useEffect(() => {
     if (!isFirebaseConfigured()) {
       setError(t("authErrorConfig"));
     }
   }, [t]);
 
+  // 2. Mobil redirect sonrası Google sign-in tamamla
+  useEffect(() => {
+    completeGoogleRedirectSignIn()
+      .then((user) => {
+        if (user) {
+          finishAuth();
+        }
+      })
+      .catch((err) => {
+        const code = getAuthErrorCode(err);
+        if (code !== "auth/redirect-started") {
+          setError(t(mapAuthErrorCode(code)));
+        }
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 3. Kullanıcı zaten giriş yaptıysa yönlendir
   useEffect(() => {
     if (loading) return;
     if (user) {
