@@ -4,7 +4,15 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   experimental: {
-    serverComponentsExternalPackages: ["firebase-admin", "firebase"],
+    serverComponentsExternalPackages: [
+      "firebase-admin",
+      "firebase",
+      "@google-cloud/firestore",
+      "google-gax",
+      "@grpc/grpc-js",
+      "@grpc/proto-loader",
+      "protobufjs",
+    ],
     turbo: {
       resolveAlias: {
         fs: "./src/lib/empty-module.js",

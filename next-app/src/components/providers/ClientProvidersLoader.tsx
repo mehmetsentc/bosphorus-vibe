@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { FirebaseAuthBootstrap } from "@/components/providers/FirebaseAuthBootstrap";
 
 const ClientProviders = dynamic(
   () =>
@@ -23,10 +22,5 @@ export function ClientProvidersLoader({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <>
-      <FirebaseAuthBootstrap />
-      <ClientProviders>{children}</ClientProviders>
-    </>
-  );
+  return <ClientProviders>{children}</ClientProviders>;
 }
