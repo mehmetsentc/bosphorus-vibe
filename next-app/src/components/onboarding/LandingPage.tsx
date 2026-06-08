@@ -75,6 +75,7 @@ export function LandingPage() {
     setError(formatAuthErrorMessage(code, t));
   }
 
+  // 2. Mobil redirect sonrası Google sign-in tamamla
   useEffect(() => {
     completeGoogleRedirectSignIn()
       .then((redirectUser) => {
@@ -90,17 +91,22 @@ export function LandingPage() {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 3. Kullanıcı zaten giriş yaptıysa yönlendir
   useEffect(() => {
     if (loading) return;
     if (user) {
       setAccessCookie(user.isAnonymous ? "guest" : "auth");
-      router.replace("/home");
+      setTimeout(() => {
+        router.replace("/home");
+      }, 100);
     }
   }, [user, loading, router]);
 
   function finishAuth(anonymous = false) {
     setAccessCookie(anonymous ? "guest" : "auth");
-    router.replace("/home");
+    setTimeout(() => {
+      router.replace("/home");
+    }, 100);
   }
 
   function switchMethod(method: AuthMethod) {
@@ -163,10 +169,7 @@ export function LandingPage() {
     }
 
     try {
-      const confirmation = await startPhoneSignIn(
-        phone,
-        RECAPTCHA_CONTAINER_ID,
-      );
+      const confirmation = await startPhoneSignIn(phone, RECAPTCHA_CONTAINER_ID);
       setPhoneConfirmation(confirmation);
     } catch (err: unknown) {
       showAuthError(err, "Phone send code failed");
@@ -296,10 +299,7 @@ export function LandingPage() {
               <div className="mt-4 flex rounded-xl border border-border bg-surface-card p-1 shadow-sm dark:bg-surface-card/90">
                 <button
                   type="button"
-                  onClick={() => {
-                    setEmailMode("signIn");
-                    setError("");
-                  }}
+                  onClick={() => { setEmailMode("signIn"); setError(""); }}
                   className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
                     emailMode === "signIn"
                       ? "bg-gold/20 text-foreground"
@@ -310,10 +310,7 @@ export function LandingPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setEmailMode("signUp");
-                    setError("");
-                  }}
+                  onClick={() => { setEmailMode("signUp"); setError(""); }}
                   className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
                     emailMode === "signUp"
                       ? "bg-gold/20 text-foreground"
@@ -324,10 +321,7 @@ export function LandingPage() {
                 </button>
               </div>
 
-              <form
-                onSubmit={handleEmailSubmit}
-                className="mt-4 flex flex-col gap-3 text-left"
-              >
+              <form onSubmit={handleEmailSubmit} className="mt-4 flex flex-col gap-3 text-left">
                 {emailMode === "signUp" && (
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-muted">
@@ -363,9 +357,7 @@ export function LandingPage() {
                     type="password"
                     required
                     minLength={6}
-                    autoComplete={
-                      emailMode === "signIn" ? "current-password" : "new-password"
-                    }
+                    autoComplete={emailMode === "signIn" ? "current-password" : "new-password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className={inputClass}
@@ -430,10 +422,7 @@ export function LandingPage() {
                   </button>
                 </form>
               ) : (
-                <form
-                  onSubmit={handlePhoneVerify}
-                  className="flex flex-col gap-3"
-                >
+                <form onSubmit={handlePhoneVerify} className="flex flex-col gap-3">
                   <p className="text-sm text-muted">{phone}</p>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-muted">
@@ -509,17 +498,11 @@ export function LandingPage() {
 
           <p className="mt-8 text-xs leading-relaxed text-muted">
             {t("landingLegalHint")}{" "}
-            <Link
-              href="/privacy-policy"
-              className="text-vibe underline-offset-2 hover:underline"
-            >
+            <Link href="/privacy-policy" className="text-vibe underline-offset-2 hover:underline">
               {t("privacyPolicy")}
             </Link>
             {" · "}
-            <Link
-              href="/terms-of-service"
-              className="text-vibe underline-offset-2 hover:underline"
-            >
+            <Link href="/terms-of-service" className="text-vibe underline-offset-2 hover:underline">
               {t("termsOfService")}
             </Link>
           </p>
