@@ -96,17 +96,13 @@ export function LandingPage() {
     if (loading) return;
     if (user) {
       setAccessCookie(user.isAnonymous ? "guest" : "auth");
-      setTimeout(() => {
-        router.replace("/home");
-      }, 100);
+      router.replace("/home");
     }
   }, [user, loading, router]);
 
   function finishAuth(anonymous = false) {
     setAccessCookie(anonymous ? "guest" : "auth");
-    setTimeout(() => {
-      router.replace("/home");
-    }, 100);
+    router.replace("/home");
   }
 
   function switchMethod(method: AuthMethod) {
