@@ -1,5 +1,7 @@
 import {
   GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
@@ -31,6 +33,12 @@ type AuthMessageKey = Extract<
   | "authErrorProfile"
   | "authErrorConfig"
   | "authErrorGoogleDisabled"
+  | "authErrorInvalidEmail"
+  | "authErrorWrongPassword"
+  | "authErrorUserNotFound"
+  | "authErrorEmailInUse"
+  | "authErrorWeakPassword"
+  | "authErrorEmailDisabled"
 >;
 
 const provider = new GoogleAuthProvider();
@@ -61,7 +69,7 @@ export function mapAuthErrorCode(code: string): AuthMessageKey {
     return "authErrorConfig";
   }
   if (c.includes("unauthorized-domain")) return "authErrorDomain";
-  if (c.includes("operation-not-allowed")) return "authErrorGoogleDisabled";
+  if (c.includes("operation-not-allowed")) return "authErrorEmailDisabled";
   if (
     c.includes("popup-blocked") ||
     c.includes("popup-closed-by-user") ||
@@ -73,7 +81,26 @@ export function mapAuthErrorCode(code: string): AuthMessageKey {
     return "authErrorNetwork";
   }
   if (c.includes("permission-denied")) return "authErrorProfile";
+  if (c.includes("invalid-email")) return "authErrorInvalidEmail";
+  if (
+    c.includes("wrong-password") ||
+    c.includes("invalid-credential") ||
+    c.includes("invalid-login-credentials")
+  ) {
+    return "authErrorWrongPassword";
+  }
+  if (c.includes("user-not-found")) return "authErrorUserNotFound";
+  if (c.includes("email-already-in-use")) return "authErrorEmailInUse";
+  if (c.includes("weak-password")) return "authErrorWeakPassword";
   return "loginFailed";
+}
+
+function assertFirebaseConfigured(): void {
+  if (!isFirebaseConfigured()) {
+    const err = new Error("Firebase env vars missing");
+    (err as Error & { code: string }).code = "auth/configuration-not-found";
+    throw err;
+  }
 }
 
 export async function completeGoogleRedirectSignIn(): Promise<User | null> {
@@ -99,12 +126,46 @@ function startGoogleRedirect(auth: ReturnType<typeof getFirebaseAuth>): void {
   });
 }
 
-export async function signInWithGoogle(): Promise<User> {
-  if (!isFirebaseConfigured()) {
-    const err = new Error("Firebase env vars missing");
-    (err as Error & { code: string }).code = "auth/configuration-not-found";
-    throw err;
+export async function signInWithEmail(
+  email: string,
+  password: string,
+): Promise<User> {
+  assertFirebaseConfigured();
+  const trimmedEmail = email.trim();
+  const result = await signInWithEmailAndPassword(
+    getFirebaseAuth(),
+    trimmedEmail,
+    password,
+  );
+  return result.user;
+}
+
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  displayName?: string,
+): Promise<User> {
+  assertFirebaseConfigured();
+  const trimmedEmail = email.trim();
+  const name = displayName?.trim() ?? "";
+  const result = await createUserWithEmailAndPassword(
+    getFirebaseAuth(),
+    trimmedEmail,
+    password,
+  );
+  if (name) {
+    await updateProfile(result.user, { displayName: name });
   }
+  try {
+    await upsertUser(result.user, name);
+  } catch (profileErr) {
+    console.error("Profile upsert failed after email sign-up:", profileErr);
+  }
+  return result.user;
+}
+
+export async function signInWithGoogle(): Promise<User> {
+  assertFirebaseConfigured();
 
   const auth = getFirebaseAuth();
 
@@ -149,15 +210,21 @@ export async function signOutUser(): Promise<void> {
   await signOut(getFirebaseAuth());
 }
 
-async function upsertUser(user: User): Promise<void> {
+async function upsertUser(user: User, displayNameOverride?: string): Promise<void> {
   const ref = doc(getFirebaseDb(), COLLECTIONS.users, user.uid);
   const existing = await getDoc(ref);
   if (existing.exists()) return;
 
+  const displayName =
+    displayNameOverride?.trim() ||
+    user.displayName?.trim() ||
+    user.email?.split("@")[0] ||
+    "";
+
   await setDoc(ref, {
     uid: user.uid,
-    display_name: user.displayName ?? "",
-    userName: user.displayName ?? "",
+    display_name: displayName,
+    userName: displayName,
     email: user.email ?? "",
     photo_url: user.photoURL ?? "",
     created_time: serverTimestamp(),

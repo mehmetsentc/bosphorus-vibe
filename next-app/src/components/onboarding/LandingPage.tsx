@@ -6,7 +6,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import { BRAND_NAME } from "@/lib/brand";
-import { signInWithGoogle, getAuthErrorCode, mapAuthErrorCode } from "@/lib/services/auth";
+import {
+  signInWithGoogle,
+  signInWithEmail,
+  signUpWithEmail,
+  getAuthErrorCode,
+  mapAuthErrorCode,
+} from "@/lib/services/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { setAccessCookie } from "@/lib/session/cookies";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -14,12 +20,22 @@ import { useT } from "@/components/providers/I18nProvider";
 import { LegalFooter } from "@/components/layout/LegalFooter";
 import { LandingBackground } from "@/components/onboarding/LandingBackground";
 
+type AuthMode = "signIn" | "signUp";
+
+const inputClass =
+  "w-full rounded-xl border border-border bg-surface-card px-4 py-3 text-left text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-vibe/50 focus:ring-2 focus:ring-vibe/20 dark:bg-surface-card/90";
+
 export function LandingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   const t = useT();
-  const [signingIn, setSigningIn] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("signIn");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const reason = searchParams.get("reason");
@@ -38,13 +54,59 @@ export function LandingPage() {
     }
   }, [user, loading, router]);
 
+  function finishAuth() {
+    setAccessCookie("auth");
+    router.replace("/home");
+  }
+
   async function handleGuest() {
     setAccessCookie("guest");
     router.push("/home");
   }
 
+  async function handleEmailSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError(t("authErrorInvalidEmail"));
+      setBusy(false);
+      return;
+    }
+
+    if (authMode === "signUp") {
+      if (password.length < 6) {
+        setError(t("authErrorWeakPassword"));
+        setBusy(false);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError(t("authPasswordMismatch"));
+        setBusy(false);
+        return;
+      }
+    }
+
+    try {
+      if (authMode === "signIn") {
+        await signInWithEmail(trimmedEmail, password);
+      } else {
+        await signUpWithEmail(trimmedEmail, password, displayName);
+      }
+      finishAuth();
+    } catch (err: unknown) {
+      const code = getAuthErrorCode(err);
+      console.error("Email auth failed:", code, err);
+      setError(t(mapAuthErrorCode(code)));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleGoogle() {
-    setSigningIn(true);
+    setBusy(true);
     setError("");
     let redirecting = false;
     try {
@@ -58,8 +120,7 @@ export function LandingPage() {
           }, 20_000);
         }),
       ]);
-      setAccessCookie("auth");
-      router.replace("/home");
+      finishAuth();
     } catch (err: unknown) {
       const code = getAuthErrorCode(err);
       if (code === "auth/redirect-started") {
@@ -69,7 +130,7 @@ export function LandingPage() {
       console.error("Google sign-in failed:", code, err);
       setError(t(mapAuthErrorCode(code)));
     } finally {
-      if (!redirecting) setSigningIn(false);
+      if (!redirecting) setBusy(false);
     }
   }
 
@@ -104,22 +165,131 @@ export function LandingPage() {
             </p>
           )}
 
-          <div className="mt-10 flex flex-col gap-3">
+          <div className="mt-8 flex rounded-xl border border-border bg-surface-card p-1 shadow-sm dark:bg-surface-card/90">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("signIn");
+                setError("");
+              }}
+              className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
+                authMode === "signIn"
+                  ? "bg-gold/20 text-foreground"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t("authTabSignIn")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("signUp");
+                setError("");
+              }}
+              className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
+                authMode === "signUp"
+                  ? "bg-gold/20 text-foreground"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {t("authTabSignUp")}
+            </button>
+          </div>
+
+          <form onSubmit={handleEmailSubmit} className="mt-4 flex flex-col gap-3 text-left">
+            {authMode === "signUp" && (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-muted">
+                  {t("displayNameLabel")}
+                </span>
+                <input
+                  type="text"
+                  autoComplete="name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className={inputClass}
+                />
+              </label>
+            )}
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-muted">
+                {t("emailLabel")}
+              </span>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-muted">
+                {t("passwordLabel")}
+              </span>
+              <input
+                type="password"
+                required
+                minLength={6}
+                autoComplete={
+                  authMode === "signIn" ? "current-password" : "new-password"
+                }
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            {authMode === "signUp" && (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-muted">
+                  {t("confirmPasswordLabel")}
+                </span>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={inputClass}
+                />
+              </label>
+            )}
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
+            >
+              {busy
+                ? t("loginSigningIn")
+                : authMode === "signIn"
+                  ? t("signInWithEmail")
+                  : t("signUpWithEmail")}
+            </button>
+          </form>
+
+          <p className="my-4 text-xs uppercase tracking-widest text-muted">
+            {t("authOrDivider")}
+          </p>
+
+          <div className="flex flex-col gap-3">
             <button
               type="button"
               onClick={handleGuest}
-              className="rounded-2xl border border-gold/50 bg-gold/15 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-gold hover:bg-gold/25 active:scale-[0.98] dark:border-gold/40 dark:bg-gold/10 dark:shadow-none dark:backdrop-blur-sm dark:hover:bg-gold/20"
+              disabled={busy}
+              className="rounded-2xl border border-gold/50 bg-gold/15 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-gold hover:bg-gold/25 active:scale-[0.98] disabled:opacity-60 dark:border-gold/40 dark:bg-gold/10 dark:shadow-none dark:backdrop-blur-sm dark:hover:bg-gold/20"
             >
               {t("continueAsGuest")}
             </button>
             <button
               type="button"
-              disabled={signingIn}
+              disabled={busy}
               onClick={handleGoogle}
               className="flex items-center justify-center gap-3 rounded-2xl border border-border bg-surface-card px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe/40 hover:shadow-vibe-sm active:scale-[0.98] disabled:opacity-60 dark:bg-surface-card/90 dark:shadow-none dark:backdrop-blur-sm"
             >
               <GoogleIcon />
-              {signingIn ? t("loginSigningIn") : t("loginWithGoogle")}
+              {busy ? t("loginSigningIn") : t("loginWithGoogle")}
             </button>
           </div>
 
