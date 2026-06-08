@@ -1,6 +1,8 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { ensureAuthReady } from "@/lib/firebase";
 import {
   clearGoogleRedirectAttempt,
   completeGoogleRedirectSignIn,
@@ -11,29 +13,51 @@ import {
   markGoogleRedirectAttempt,
   startGoogleRedirectFlow,
 } from "@/lib/services/auth";
-import { ensureAuthReady } from "@/lib/firebase";
 import { useT } from "@/components/providers/I18nProvider";
+
+function isGoogleUser(user: { providerData: { providerId: string }[] }): boolean {
+  return user.providerData.some((p) => p.providerId === "google.com");
+}
 
 function GoogleAuthCallback() {
   const t = useT();
   const [error, setError] = useState("");
   const started = useRef(false);
+  const finished = useRef(false);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
 
     let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    const timeout = window.setTimeout(() => {
+      if (!active || finished.current) return;
+      clearGoogleRedirectAttempt();
+      setError(t("loginFailed"));
+    }, 20000);
+
+    function complete(user: Parameters<typeof finalizeGoogleSignIn>[0]) {
+      if (finished.current) return;
+      finished.current = true;
+      finalizeGoogleSignIn(user);
+    }
 
     void (async () => {
       try {
-        await ensureAuthReady();
-        const user = await completeGoogleRedirectSignIn();
+        const auth = await ensureAuthReady();
 
-        if (!active) return;
+        unsubscribe = onAuthStateChanged(auth, (current) => {
+          if (!active || !current || !isGoogleUser(current)) return;
+          complete(current);
+        });
+
+        const user = await completeGoogleRedirectSignIn();
+        if (!active || finished.current) return;
 
         if (user) {
-          await finalizeGoogleSignIn(user);
+          complete(user);
           return;
         }
 
@@ -52,7 +76,7 @@ function GoogleAuthCallback() {
         clearGoogleRedirectAttempt();
         setError(t("loginFailed"));
       } catch (err: unknown) {
-        if (!active) return;
+        if (!active || finished.current) return;
         clearGoogleRedirectAttempt();
         const code = getAuthErrorCode(err);
         console.error("Google auth callback failed:", code, err);
@@ -62,6 +86,8 @@ function GoogleAuthCallback() {
 
     return () => {
       active = false;
+      window.clearTimeout(timeout);
+      unsubscribe?.();
     };
   }, [t]);
 

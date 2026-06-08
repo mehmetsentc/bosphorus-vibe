@@ -297,7 +297,7 @@ export function openGoogleRedirectHandler(): void {
   if (typeof window === "undefined") return;
   resetGoogleRedirectResult();
   localStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
-  window.location.assign("/auth/google");
+  window.location.assign(`${window.location.origin}/auth/google`);
 }
 
 export function hasGoogleRedirectAttempt(): boolean {
@@ -315,19 +315,19 @@ export function clearGoogleRedirectAttempt(): void {
   localStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
 }
 
-export async function finalizeGoogleSignIn(user: User): Promise<void> {
+export function finalizeGoogleSignIn(user: User): void {
   setAccessCookie(user.isAnonymous ? "guest" : "auth");
-  try {
-    const idToken = await user.getIdToken();
-    await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
-    });
-  } catch {
-    // Session cookie optional until Admin credentials configured
-  }
   clearGoogleRedirectAttempt();
+  void user
+    .getIdToken()
+    .then((idToken) =>
+      fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      }),
+    )
+    .catch(() => undefined);
   window.location.replace("/home");
 }
 
