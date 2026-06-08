@@ -252,6 +252,18 @@ export function LandingPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background">
+        <LandingBackground />
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+          <p className="text-sm text-muted">{t("loginSigningIn")}</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       <LandingBackground />

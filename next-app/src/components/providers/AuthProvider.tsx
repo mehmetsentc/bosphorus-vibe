@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase";
+import { ensureAuthReady } from "@/lib/firebase";
 import { completeGoogleRedirectSignIn, getAuthErrorCode, getUserDoc } from "@/lib/services/auth";
 import {
   clearAccessCookie,
@@ -49,45 +49,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    const auth = getFirebaseAuth();
+    let unsubscribe: (() => void) | undefined;
 
-    const unsubscribe = onAuthStateChanged(auth, async (next) => {
-      if (!active) return;
-      setUser(next);
-      if (next) {
+    async function bootstrap() {
+      try {
+        const auth = await ensureAuthReady();
+
+        // Finish Google redirect handshake before treating auth as settled.
         try {
-          const idToken = await next.getIdToken();
-          await fetch("/api/auth/session", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken }),
-          });
-        } catch {
-          // Session cookie optional until Admin credentials configured
+          await completeGoogleRedirectSignIn();
+        } catch (err) {
+          const code = getAuthErrorCode(err);
+          console.error("Google redirect sign-in failed:", code, err);
+          if (active && code && code !== "auth/redirect-started") {
+            setAuthError(code);
+          }
         }
-        setAccessCookie(next.isAnonymous ? "guest" : "auth");
-        const doc = await getUserDoc(next.uid);
-        if (active) setProfile(doc);
-      } else {
-        if (getAccessCookie() === "auth") {
-          clearAccessCookie();
-        }
-        if (active) setProfile(null);
-      }
-      if (active) setLoading(false);
-    });
 
-    void completeGoogleRedirectSignIn().catch((err) => {
-      const code = getAuthErrorCode(err);
-      console.error("Google redirect sign-in failed:", code, err);
-      if (active && code && code !== "auth/redirect-started") {
-        setAuthError(code);
+        if (!active) return;
+
+        unsubscribe = onAuthStateChanged(auth, async (next) => {
+          if (!active) return;
+          setUser(next);
+          if (next) {
+            try {
+              const idToken = await next.getIdToken();
+              await fetch("/api/auth/session", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idToken }),
+              });
+            } catch {
+              // Session cookie optional until Admin credentials configured
+            }
+            setAccessCookie(next.isAnonymous ? "guest" : "auth");
+            const doc = await getUserDoc(next.uid);
+            if (active) setProfile(doc);
+          } else {
+            if (getAccessCookie() === "auth") {
+              clearAccessCookie();
+            }
+            if (active) setProfile(null);
+          }
+          if (active) setLoading(false);
+        });
+      } catch (err) {
+        console.error("Auth bootstrap failed:", err);
+        if (active) setLoading(false);
       }
-    });
+    }
+
+    void bootstrap();
 
     return () => {
       active = false;
-      unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 

@@ -1,8 +1,11 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import {
   browserLocalPersistence,
+  browserPopupRedirectResolver,
+  browserSessionPersistence,
   getAuth,
-  setPersistence,
+  initializeAuth,
+  indexedDBLocalPersistence,
   type Auth,
 } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
@@ -29,6 +32,7 @@ let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 let storage: FirebaseStorage;
+let authReadyPromise: Promise<Auth> | null = null;
 
 function getFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {
@@ -45,15 +49,45 @@ function getFirebaseApp(): FirebaseApp {
   return app;
 }
 
-export function getFirebaseAuth(): Auth {
-  if (!auth) {
-    auth = getAuth(getFirebaseApp());
-    if (typeof window !== "undefined") {
-      void setPersistence(auth, browserLocalPersistence).catch((err) => {
-        console.warn("Firebase auth persistence failed:", err);
-      });
+function initAuth(): Auth {
+  const firebaseApp = getFirebaseApp();
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+      ],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code: string }).code)
+        : "";
+    if (code === "auth/already-initialized") {
+      return getAuth(firebaseApp);
     }
+    throw err;
   }
+}
+
+/** Await before redirect/popup auth — persistence + resolver must be ready. */
+export function ensureAuthReady(): Promise<Auth> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Firebase auth is browser-only."));
+  }
+  if (!authReadyPromise) {
+    authReadyPromise = Promise.resolve().then(() => {
+      if (!auth) auth = initAuth();
+      return auth;
+    });
+  }
+  return authReadyPromise;
+}
+
+export function getFirebaseAuth(): Auth {
+  if (!auth) auth = initAuth();
   return auth;
 }
 

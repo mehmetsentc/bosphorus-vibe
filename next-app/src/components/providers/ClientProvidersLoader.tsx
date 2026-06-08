@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/auth/redirect-bootstrap";
 import dynamic from "next/dynamic";
 
 const ClientProviders = dynamic(

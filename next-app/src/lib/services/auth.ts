@@ -23,7 +23,12 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { getFirebaseAuth, getFirebaseDb, isFirebaseConfigured } from "@/lib/firebase";
+import {
+  ensureAuthReady,
+  getFirebaseAuth,
+  getFirebaseDb,
+  isFirebaseConfigured,
+} from "@/lib/firebase";
 import { resetAppStore } from "@/store/appStore";
 import { clearAccessCookie } from "@/lib/session/cookies";
 import { toDate } from "@/lib/utils/firestore-helpers";
@@ -229,7 +234,7 @@ export function completeGoogleRedirectSignIn(): Promise<User | null> {
 async function resolveGoogleRedirectSignIn(): Promise<User | null> {
   if (!isFirebaseConfigured()) return null;
 
-  const auth = getFirebaseAuth();
+  const auth = await ensureAuthReady();
   const result = await getRedirectResult(auth, browserPopupRedirectResolver);
   if (!result?.user) return null;
 
@@ -243,9 +248,11 @@ async function resolveGoogleRedirectSignIn(): Promise<User | null> {
 }
 
 function startGoogleRedirect(auth: ReturnType<typeof getFirebaseAuth>): void {
-  void signInWithRedirect(auth, provider).catch((err) => {
-    console.error("signInWithRedirect failed:", err);
-  });
+  void signInWithRedirect(auth, provider, browserPopupRedirectResolver).catch(
+    (err) => {
+      console.error("signInWithRedirect failed:", err);
+    },
+  );
 }
 
 export async function signInWithEmail(
@@ -331,7 +338,7 @@ export async function signInWithGoogle(): Promise<User> {
   assertFirebaseConfigured();
   assertAuthDomain();
 
-  const auth = getFirebaseAuth();
+  const auth = await ensureAuthReady();
 
   if (prefersRedirect()) {
     startGoogleRedirect(auth);
