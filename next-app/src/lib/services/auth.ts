@@ -69,47 +69,17 @@ function isGoogleUser(user: User): boolean {
   return user.providerData.some((p) => p.providerId === "google.com");
 }
 
-function isMobileBrowser(): boolean {
-  if (typeof window === "undefined") return false;
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-}
-
-function isUserCancelledSignIn(code: string): boolean {
-  const c = code.toLowerCase();
-  return (
-    c.includes("popup-closed-by-user") || c.includes("cancelled-popup-request")
-  );
-}
-
 function shouldFallbackToRedirect(code: string): boolean {
   const c = code.toLowerCase();
   return (
     c.includes("popup-blocked") ||
     c.includes("operation-not-supported") ||
-    c.includes("web-storage-unsupported") ||
-    (isMobileBrowser() && !isUserCancelledSignIn(code))
+    c.includes("web-storage-unsupported")
   );
 }
 
 function assertAuthDomain(): void {
-  const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!authDomain || !siteUrl) return;
-  try {
-    const siteHost = new URL(siteUrl).hostname;
-    if (
-      siteHost &&
-      !siteHost.includes("localhost") &&
-      authDomain.endsWith(".firebaseapp.com") &&
-      siteHost !== authDomain
-    ) {
-      console.warn(
-        `[auth] For mobile Google sign-in on ${siteHost}, set NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${siteHost} and keep the /__/auth proxy enabled.`,
-      );
-    }
-  } catch {
-    // ignore invalid site url
-  }
+  // OAuth uses {projectId}.firebaseapp.com via resolveFirebaseAuthDomain().
 }
 
 export function getAuthErrorCode(err: unknown): string {

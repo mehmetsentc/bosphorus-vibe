@@ -1,7 +1,4 @@
 /** @type {import('next').NextConfig} */
-const firebaseProjectId =
-  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "bosphorusvibe-dbd93";
-
 const nextConfig = {
   reactStrictMode: true,
   compress: true,
@@ -31,14 +28,6 @@ const nextConfig = {
       { protocol: "https", hostname: "storage.googleapis.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
-  },
-  async rewrites() {
-    return [
-      {
-        source: "/__/auth/:path*",
-        destination: `https://${firebaseProjectId}.firebaseapp.com/__/auth/:path*`,
-      },
-    ];
   },
   async headers() {
     return [

@@ -11,6 +11,7 @@ import {
   signInWithEmail,
   signUpWithEmail,
   sendPasswordReset,
+  openGoogleRedirectHandler,
   getAuthErrorCode,
   formatAuthErrorMessage,
 } from "@/lib/services/auth";
@@ -153,6 +154,13 @@ export function LandingPage() {
   async function handleGoogle() {
     setBusy(true);
     setError("");
+
+    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (mobile) {
+      openGoogleRedirectHandler();
+      return;
+    }
+
     let redirecting = false;
     try {
       await signInWithGoogle();
@@ -168,6 +176,17 @@ export function LandingPage() {
       if (!redirecting) setBusy(false);
     }
   }
+
+  // Reset stuck loading state when user returns from a cancelled OAuth flow.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        setBusy(false);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   if (loading) {
     return (

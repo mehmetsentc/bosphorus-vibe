@@ -29,40 +29,14 @@ export function getFirebaseEnv(): Record<(typeof ENV_KEYS)[number], string> {
   };
 }
 
-function isLocalHost(hostname: string): boolean {
-  return hostname === "localhost" || hostname.startsWith("127.");
-}
-
-/**
- * Auth domain must match the hostname users actually browse on.
- * Vercel redirects bosphorusvibe.com → www.bosphorusvibe.com; a mismatch breaks mobile OAuth.
- */
+/** Firebase OAuth must use {projectId}.firebaseapp.com — custom domain proxy breaks the handler. */
 export function resolveFirebaseAuthDomain(): string {
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host && !isLocalHost(host)) {
-      return host;
-    }
-  }
-
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (siteUrl) {
-    try {
-      const host = new URL(siteUrl).hostname;
-      if (host && !isLocalHost(host)) return host;
-    } catch {
-      // ignore invalid site url
-    }
-  }
-
   const env = getFirebaseEnv();
-  if (env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) {
-    return env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  const projectId = env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (projectId) {
+    return `${projectId}.firebaseapp.com`;
   }
-  if (env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
-    return `${env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.firebaseapp.com`;
-  }
-  return "";
+  return env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
 }
 
 export function getFirebaseConfigIssues(): FirebaseConfigIssue[] {
