@@ -45,45 +45,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    let unsubscribe: (() => void) | undefined;
+    const auth = getFirebaseAuth();
 
-    void (async () => {
-      try {
-        await completeGoogleRedirectSignIn();
-      } catch (err) {
-        console.error("Google redirect sign-in failed:", err);
-      }
-
-      unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (next) => {
-        if (!active) return;
-        setUser(next);
-        if (next) {
-          try {
-            const idToken = await next.getIdToken();
-            await fetch("/api/auth/session", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idToken }),
-            });
-          } catch {
-            // Session cookie optional until Admin credentials configured
-          }
-          setAccessCookie(next.isAnonymous ? "guest" : "auth");
-          const doc = await getUserDoc(next.uid);
-          if (active) setProfile(doc);
-        } else {
-          if (getAccessCookie() === "auth") {
-            clearAccessCookie();
-          }
-          if (active) setProfile(null);
+    const unsubscribe = onAuthStateChanged(auth, async (next) => {
+      if (!active) return;
+      setUser(next);
+      if (next) {
+        try {
+          const idToken = await next.getIdToken();
+          await fetch("/api/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken }),
+          });
+        } catch {
+          // Session cookie optional until Admin credentials configured
         }
-        if (active) setLoading(false);
-      });
-    })();
+        setAccessCookie(next.isAnonymous ? "guest" : "auth");
+        const doc = await getUserDoc(next.uid);
+        if (active) setProfile(doc);
+      } else {
+        if (getAccessCookie() === "auth") {
+          clearAccessCookie();
+        }
+        if (active) setProfile(null);
+      }
+      if (active) setLoading(false);
+    });
+
+    void completeGoogleRedirectSignIn().catch((err) => {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code: string }).code)
+          : "";
+      console.error("Google redirect sign-in failed:", code, err);
+    });
 
     return () => {
       active = false;
-      unsubscribe?.();
+      unsubscribe();
     };
   }, []);
 

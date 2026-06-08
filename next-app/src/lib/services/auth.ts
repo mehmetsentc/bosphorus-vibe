@@ -200,29 +200,35 @@ function assertFirebaseConfigured(): void {
   }
 }
 
-export async function completeGoogleRedirectSignIn(): Promise<User | null> {
+export function completeGoogleRedirectSignIn(): Promise<User | null> {
   if (!redirectResultPromise) {
-    redirectResultPromise = (async () => {
-      try {
-        if (!isFirebaseConfigured()) return null;
-        const result = await getRedirectResult(getFirebaseAuth());
-        if (!result?.user) return null;
-        try {
-          await upsertUser(result.user);
-        } catch (profileErr) {
-          console.error("Profile upsert failed after redirect sign-in:", profileErr);
-        }
-        return result.user;
-      } catch (err) {
-        const code = getAuthErrorCode(err);
-        console.error("Google redirect sign-in failed:", code, err);
-        return null;
-      } finally {
-        redirectResultPromise = null;
-      }
-    })();
+    redirectResultPromise = resolveGoogleRedirectSignIn();
   }
   return redirectResultPromise;
+}
+
+async function resolveGoogleRedirectSignIn(): Promise<User | null> {
+  try {
+    if (!isFirebaseConfigured()) return null;
+
+    const auth = getFirebaseAuth();
+    await auth.authStateReady();
+
+    const result = await getRedirectResult(auth);
+    if (!result?.user) return null;
+
+    try {
+      await upsertUser(result.user);
+    } catch (profileErr) {
+      console.error("Profile upsert failed after redirect sign-in:", profileErr);
+    }
+
+    return result.user;
+  } catch (err) {
+    const code = getAuthErrorCode(err);
+    console.error("Google redirect sign-in failed:", code, err);
+    return null;
+  }
 }
 
 function startGoogleRedirect(auth: ReturnType<typeof getFirebaseAuth>): void {

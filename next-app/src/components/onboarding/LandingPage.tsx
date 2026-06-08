@@ -16,7 +16,6 @@ import {
   confirmPhoneSignIn,
   getAuthErrorCode,
   formatAuthErrorMessage,
-  completeGoogleRedirectSignIn,
 } from "@/lib/services/auth";
 import { getFirebaseConfigIssues, isFirebaseConfigured } from "@/lib/firebase";
 import { setAccessCookie } from "@/lib/session/cookies";
@@ -75,23 +74,6 @@ export function LandingPage() {
     setError(formatAuthErrorMessage(code, t));
   }
 
-  // 2. Mobil redirect sonrası Google sign-in tamamla
-  useEffect(() => {
-    completeGoogleRedirectSignIn()
-      .then((redirectUser) => {
-        if (redirectUser) {
-          finishAuth();
-        }
-      })
-      .catch((err) => {
-        const code = getAuthErrorCode(err);
-        if (code !== "auth/redirect-started") {
-          showAuthError(err, "Google redirect sign-in failed");
-        }
-      });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 3. Kullanıcı zaten giriş yaptıysa yönlendir
   useEffect(() => {
     if (loading) return;
     if (user) {
