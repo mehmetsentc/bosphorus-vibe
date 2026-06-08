@@ -29,6 +29,18 @@ export function getFirebaseEnv(): Record<(typeof ENV_KEYS)[number], string> {
   };
 }
 
+/** Prefer explicit auth domain; fall back to project.firebaseapp.com */
+export function resolveFirebaseAuthDomain(): string {
+  const env = getFirebaseEnv();
+  if (env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) {
+    return env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  }
+  if (env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+    return `${env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.firebaseapp.com`;
+  }
+  return "";
+}
+
 export function getFirebaseConfigIssues(): FirebaseConfigIssue[] {
   const env = getFirebaseEnv();
   const issues: FirebaseConfigIssue[] = [];
@@ -39,24 +51,13 @@ export function getFirebaseConfigIssues(): FirebaseConfigIssue[] {
     }
   }
 
-  const { NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID } =
-    env;
+  const { NEXT_PUBLIC_FIREBASE_API_KEY } = env;
 
   if (NEXT_PUBLIC_FIREBASE_API_KEY && !NEXT_PUBLIC_FIREBASE_API_KEY.startsWith("AIza")) {
     issues.push({
       key: "invalid_api_key_format",
       message: "NEXT_PUBLIC_FIREBASE_API_KEY format looks invalid",
     });
-  }
-
-  if (NEXT_PUBLIC_FIREBASE_PROJECT_ID && NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) {
-    const expected = `${NEXT_PUBLIC_FIREBASE_PROJECT_ID}.firebaseapp.com`;
-    if (NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN !== expected) {
-      issues.push({
-        key: "auth_domain_mismatch",
-        message: `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN must be ${expected}`,
-      });
-    }
   }
 
   return issues;

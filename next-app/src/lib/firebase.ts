@@ -13,6 +13,7 @@ import { getStorage, type FirebaseStorage } from "firebase/storage";
 import {
   getFirebaseEnv,
   isFirebaseConfigured as checkFirebaseConfigured,
+  resolveFirebaseAuthDomain,
 } from "@/lib/firebase/config";
 
 export { getFirebaseConfigIssues, isFirebaseConfigured } from "@/lib/firebase/config";
@@ -21,7 +22,7 @@ const firebaseEnv = getFirebaseEnv();
 
 const firebaseConfig = {
   apiKey: firebaseEnv.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: firebaseEnv.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  authDomain: resolveFirebaseAuthDomain(),
   projectId: firebaseEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: firebaseEnv.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: firebaseEnv.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,

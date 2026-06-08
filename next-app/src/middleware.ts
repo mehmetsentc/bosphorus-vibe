@@ -53,6 +53,7 @@ export function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
+    pathname.startsWith("/__/auth") ||
     pathname.includes(".") ||
     pathname === "/manifest.json" ||
     pathname === "/robots.txt" ||

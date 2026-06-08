@@ -30,7 +30,7 @@ import {
   isFirebaseConfigured,
 } from "@/lib/firebase";
 import { resetAppStore } from "@/store/appStore";
-import { clearAccessCookie } from "@/lib/session/cookies";
+import { clearAccessCookie, setAccessCookie } from "@/lib/session/cookies";
 import { toDate } from "@/lib/utils/firestore-helpers";
 import { COLLECTIONS, type MessagePrivacy, type UserDoc } from "@/types";
 import type { Messages } from "@/i18n/messages/en";
@@ -69,24 +69,46 @@ function isGoogleUser(user: User): boolean {
   return user.providerData.some((p) => p.providerId === "google.com");
 }
 
+function isMobileBrowser(): boolean {
+  if (typeof window === "undefined") return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+function isUserCancelledSignIn(code: string): boolean {
+  const c = code.toLowerCase();
+  return (
+    c.includes("popup-closed-by-user") || c.includes("cancelled-popup-request")
+  );
+}
+
 function shouldFallbackToRedirect(code: string): boolean {
   const c = code.toLowerCase();
   return (
     c.includes("popup-blocked") ||
     c.includes("operation-not-supported") ||
-    c.includes("web-storage-unsupported")
+    c.includes("web-storage-unsupported") ||
+    (isMobileBrowser() && !isUserCancelledSignIn(code))
   );
 }
 
 function assertAuthDomain(): void {
   const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim();
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim();
-  if (!authDomain || !projectId) return;
-  const expected = `${projectId}.firebaseapp.com`;
-  if (authDomain !== expected) {
-    console.warn(
-      `[auth] NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN should be "${expected}" (got "${authDomain}"). Google sign-in may fail.`,
-    );
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!authDomain || !siteUrl) return;
+  try {
+    const siteHost = new URL(siteUrl).hostname;
+    if (
+      siteHost &&
+      !siteHost.includes("localhost") &&
+      authDomain.endsWith(".firebaseapp.com") &&
+      siteHost !== authDomain
+    ) {
+      console.warn(
+        `[auth] For mobile Google sign-in on ${siteHost}, set NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${siteHost} and keep the /__/auth proxy enabled.`,
+      );
+    }
+  } catch {
+    // ignore invalid site url
   }
 }
 
@@ -222,42 +244,68 @@ function assertFirebaseConfigured(): void {
   }
 }
 
+export function resetGoogleRedirectResult(): void {
+  redirectResultPromise = null;
+}
+
 export function completeGoogleRedirectSignIn(): Promise<User | null> {
   if (!redirectResultPromise) {
-    redirectResultPromise = resolveGoogleRedirectSignIn();
+    redirectResultPromise = resolveGoogleRedirectSignIn().then((user) => {
+      if (!user) resetGoogleRedirectResult();
+      return user;
+    });
   }
   return redirectResultPromise;
+}
+
+async function waitForGoogleUser(
+  auth: Awaited<ReturnType<typeof ensureAuthReady>>,
+  attempts = 24,
+  delayMs = 500,
+): Promise<User | null> {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    await auth.authStateReady();
+    const current = auth.currentUser;
+    if (current && isGoogleUser(current)) {
+      return current;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
 }
 
 async function resolveGoogleRedirectSignIn(): Promise<User | null> {
   if (!isFirebaseConfigured()) return null;
 
   const auth = await ensureAuthReady();
-  const result = await getRedirectResult(auth, browserPopupRedirectResolver);
-  if (result?.user) {
-    try {
-      await upsertUser(result.user);
-    } catch (profileErr) {
-      console.error("Profile upsert failed after redirect sign-in:", profileErr);
-    }
-    return result.user;
-  }
+  let redirectError: unknown = null;
 
-  // Mobile Safari sometimes restores the session without a redirect result.
-  for (let attempt = 0; attempt < 6; attempt++) {
-    await auth.authStateReady();
-    const current = auth.currentUser;
-    if (current && isGoogleUser(current)) {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result?.user) {
       try {
-        await upsertUser(current);
+        await upsertUser(result.user);
       } catch (profileErr) {
         console.error("Profile upsert failed after redirect sign-in:", profileErr);
       }
-      return current;
+      return result.user;
     }
-    await new Promise((resolve) => setTimeout(resolve, 250));
+  } catch (err) {
+    redirectError = err;
+    console.error("getRedirectResult failed:", getAuthErrorCode(err), err);
   }
 
+  const restored = await waitForGoogleUser(auth);
+  if (restored) {
+    try {
+      await upsertUser(restored);
+    } catch (profileErr) {
+      console.error("Profile upsert failed after redirect sign-in:", profileErr);
+    }
+    return restored;
+  }
+
+  if (redirectError) throw redirectError;
   return null;
 }
 
@@ -274,26 +322,43 @@ export async function startGoogleRedirectFlow(): Promise<never> {
 
 const GOOGLE_REDIRECT_ATTEMPT_KEY = "google_redirect_attempt";
 
-/** Full-page redirect handler for mobile browsers. */
+/** Full-page redirect handler when popup is blocked. */
 export function openGoogleRedirectHandler(): void {
   if (typeof window === "undefined") return;
-  sessionStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
+  resetGoogleRedirectResult();
+  localStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
   window.location.assign("/auth/google");
 }
 
 export function hasGoogleRedirectAttempt(): boolean {
   if (typeof window === "undefined") return false;
-  return Boolean(sessionStorage.getItem(GOOGLE_REDIRECT_ATTEMPT_KEY));
+  return Boolean(localStorage.getItem(GOOGLE_REDIRECT_ATTEMPT_KEY));
 }
 
 export function markGoogleRedirectAttempt(): void {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(GOOGLE_REDIRECT_ATTEMPT_KEY, String(Date.now()));
+  localStorage.setItem(GOOGLE_REDIRECT_ATTEMPT_KEY, String(Date.now()));
 }
 
 export function clearGoogleRedirectAttempt(): void {
   if (typeof window === "undefined") return;
-  sessionStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
+  localStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
+}
+
+export async function finalizeGoogleSignIn(user: User): Promise<void> {
+  setAccessCookie(user.isAnonymous ? "guest" : "auth");
+  try {
+    const idToken = await user.getIdToken();
+    await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+  } catch {
+    // Session cookie optional until Admin credentials configured
+  }
+  clearGoogleRedirectAttempt();
+  window.location.replace("/home");
 }
 
 export async function signInWithEmail(

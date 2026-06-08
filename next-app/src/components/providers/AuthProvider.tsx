@@ -54,15 +54,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function bootstrap() {
       try {
         const auth = await ensureAuthReady();
+        const isAuthCallback =
+          typeof window !== "undefined" &&
+          window.location.pathname.startsWith("/auth/");
 
-        // Finish Google redirect handshake before treating auth as settled.
-        try {
-          await completeGoogleRedirectSignIn();
-        } catch (err) {
-          const code = getAuthErrorCode(err);
-          console.error("Google redirect sign-in failed:", code, err);
-          if (active && code && code !== "auth/redirect-started") {
-            setAuthError(code);
+        // Dedicated /auth/* routes own the redirect handshake.
+        if (!isAuthCallback) {
+          try {
+            await completeGoogleRedirectSignIn();
+          } catch (err) {
+            const code = getAuthErrorCode(err);
+            console.error("Google redirect sign-in failed:", code, err);
+            if (active && code && code !== "auth/redirect-started") {
+              setAuthError(code);
+            }
           }
         }
 

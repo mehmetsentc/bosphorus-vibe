@@ -11,7 +11,6 @@ import {
   signInWithEmail,
   signUpWithEmail,
   sendPasswordReset,
-  openGoogleRedirectHandler,
   getAuthErrorCode,
   formatAuthErrorMessage,
 } from "@/lib/services/auth";
@@ -154,13 +153,6 @@ export function LandingPage() {
   async function handleGoogle() {
     setBusy(true);
     setError("");
-
-    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (mobile) {
-      openGoogleRedirectHandler();
-      return;
-    }
-
     let redirecting = false;
     try {
       await signInWithGoogle();

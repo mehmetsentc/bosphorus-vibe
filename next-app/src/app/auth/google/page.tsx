@@ -4,13 +4,14 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import {
   clearGoogleRedirectAttempt,
   completeGoogleRedirectSignIn,
+  finalizeGoogleSignIn,
   getAuthErrorCode,
+  formatAuthErrorMessage,
   hasGoogleRedirectAttempt,
   markGoogleRedirectAttempt,
   startGoogleRedirectFlow,
 } from "@/lib/services/auth";
 import { ensureAuthReady } from "@/lib/firebase";
-import { setAccessCookie } from "@/lib/session/cookies";
 import { useT } from "@/components/providers/I18nProvider";
 
 function GoogleAuthCallback() {
@@ -26,24 +27,13 @@ function GoogleAuthCallback() {
 
     void (async () => {
       try {
-        const auth = await ensureAuthReady();
+        await ensureAuthReady();
         const user = await completeGoogleRedirectSignIn();
 
         if (!active) return;
 
         if (user) {
-          clearGoogleRedirectAttempt();
-          setAccessCookie(user.isAnonymous ? "guest" : "auth");
-          window.location.replace("/home");
-          return;
-        }
-
-        await auth.authStateReady();
-        const current = auth.currentUser;
-        if (current?.providerData.some((p) => p.providerId === "google.com")) {
-          clearGoogleRedirectAttempt();
-          setAccessCookie("auth");
-          window.location.replace("/home");
+          await finalizeGoogleSignIn(user);
           return;
         }
 
@@ -60,23 +50,23 @@ function GoogleAuthCallback() {
         }
 
         clearGoogleRedirectAttempt();
-        window.location.replace("/welcome?reason=auth-required");
+        setError(t("loginFailed"));
       } catch (err: unknown) {
         if (!active) return;
         clearGoogleRedirectAttempt();
         const code = getAuthErrorCode(err);
         console.error("Google auth callback failed:", code, err);
-        setError(code || "auth/unknown");
+        setError(formatAuthErrorMessage(code || "loginFailed", t));
       }
     })();
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6">
+    <main className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6">
       {!error ? (
         <>
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
@@ -84,9 +74,7 @@ function GoogleAuthCallback() {
         </>
       ) : (
         <div className="max-w-sm text-center">
-          <p className="text-sm text-red-600 dark:text-red-400">
-            {t("loginFailed")} ({error})
-          </p>
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           <a
             href="/welcome"
             className="mt-4 inline-block text-sm text-vibe underline-offset-2 hover:underline"
@@ -103,7 +91,7 @@ export default function GoogleAuthPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-background">
+        <main className="flex min-h-[100dvh] items-center justify-center bg-background">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
         </main>
       }
