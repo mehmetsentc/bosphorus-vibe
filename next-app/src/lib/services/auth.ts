@@ -36,10 +36,11 @@ type AuthMessageKey = Extract<
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
+let redirectResultPromise: Promise<User | null> | null = null;
+
+/** Mobile / in-app browsers only — desktop uses popup (more reliable on Vercel). */
 function prefersRedirect(): boolean {
   if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  if (host.endsWith(".vercel.app")) return true;
   const ua = navigator.userAgent;
   const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
   const inAppBrowser = /FBAN|FBAV|Instagram|Line\//i.test(ua);
@@ -68,21 +69,34 @@ export function mapAuthErrorCode(code: string): AuthMessageKey {
   ) {
     return "authErrorPopup";
   }
-  if (c.includes("network-request-failed")) return "authErrorNetwork";
+  if (c.includes("network-request-failed") || c.includes("timeout")) {
+    return "authErrorNetwork";
+  }
   if (c.includes("permission-denied")) return "authErrorProfile";
   return "loginFailed";
 }
 
 export async function completeGoogleRedirectSignIn(): Promise<User | null> {
-  if (!isFirebaseConfigured()) return null;
-  const result = await getRedirectResult(getFirebaseAuth());
-  if (!result?.user) return null;
-  try {
-    await upsertUser(result.user);
-  } catch (profileErr) {
-    console.error("Profile upsert failed after redirect sign-in:", profileErr);
+  if (!redirectResultPromise) {
+    redirectResultPromise = (async () => {
+      if (!isFirebaseConfigured()) return null;
+      const result = await getRedirectResult(getFirebaseAuth());
+      if (!result?.user) return null;
+      try {
+        await upsertUser(result.user);
+      } catch (profileErr) {
+        console.error("Profile upsert failed after redirect sign-in:", profileErr);
+      }
+      return result.user;
+    })();
   }
-  return result.user;
+  return redirectResultPromise;
+}
+
+function startGoogleRedirect(auth: ReturnType<typeof getFirebaseAuth>): void {
+  void signInWithRedirect(auth, provider).catch((err) => {
+    console.error("signInWithRedirect failed:", err);
+  });
 }
 
 export async function signInWithGoogle(): Promise<User> {
@@ -95,10 +109,10 @@ export async function signInWithGoogle(): Promise<User> {
   const auth = getFirebaseAuth();
 
   if (prefersRedirect()) {
-    await signInWithRedirect(auth, provider);
-    throw Object.assign(new Error("redirect started"), {
-      code: "auth/redirect-started",
-    });
+    startGoogleRedirect(auth);
+    const err = new Error("redirect started");
+    (err as Error & { code: string }).code = "auth/redirect-started";
+    throw err;
   }
 
   try {
@@ -115,10 +129,10 @@ export async function signInWithGoogle(): Promise<User> {
       code === "auth/popup-blocked" ||
       code === "auth/cancelled-popup-request"
     ) {
-      await signInWithRedirect(auth, provider);
-      throw Object.assign(new Error("redirect started"), {
-        code: "auth/redirect-started",
-      });
+      startGoogleRedirect(auth);
+      const redirectErr = new Error("redirect started");
+      (redirectErr as Error & { code: string }).code = "auth/redirect-started";
+      throw redirectErr;
     }
     throw err;
   }

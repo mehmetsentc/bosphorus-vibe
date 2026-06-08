@@ -44,18 +44,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let cancelled = false;
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
 
-    async function initAuth() {
+    void (async () => {
       try {
         await completeGoogleRedirectSignIn();
       } catch (err) {
         console.error("Google redirect sign-in failed:", err);
       }
 
-      if (cancelled) return;
-
-      return onAuthStateChanged(getFirebaseAuth(), async (next) => {
+      unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (next) => {
+        if (!active) return;
         setUser(next);
         if (next) {
           try {
@@ -70,22 +70,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           setAccessCookie("auth");
           const doc = await getUserDoc(next.uid);
-          setProfile(doc);
+          if (active) setProfile(doc);
         } else {
           if (getAccessCookie() === "auth") {
             clearAccessCookie();
           }
-          setProfile(null);
+          if (active) setProfile(null);
         }
-        setLoading(false);
+        if (active) setLoading(false);
       });
-    }
-
-    const unsubscribePromise = initAuth();
+    })();
 
     return () => {
-      cancelled = true;
-      unsubscribePromise.then((unsub) => unsub?.());
+      active = false;
+      unsubscribe?.();
     };
   }, []);
 

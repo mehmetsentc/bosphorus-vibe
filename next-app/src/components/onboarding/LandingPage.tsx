@@ -46,17 +46,30 @@ export function LandingPage() {
   async function handleGoogle() {
     setSigningIn(true);
     setError("");
+    let redirecting = false;
     try {
-      await signInWithGoogle();
+      await Promise.race([
+        signInWithGoogle(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            const err = new Error("Sign-in timed out");
+            (err as Error & { code: string }).code = "auth/timeout";
+            reject(err);
+          }, 20_000);
+        }),
+      ]);
       setAccessCookie("auth");
       router.replace("/home");
     } catch (err: unknown) {
       const code = getAuthErrorCode(err);
-      if (code === "auth/redirect-started") return;
+      if (code === "auth/redirect-started") {
+        redirecting = true;
+        return;
+      }
       console.error("Google sign-in failed:", code, err);
       setError(t(mapAuthErrorCode(code)));
     } finally {
-      setSigningIn(false);
+      if (!redirecting) setSigningIn(false);
     }
   }
 
