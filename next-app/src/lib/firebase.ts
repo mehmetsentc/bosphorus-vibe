@@ -18,16 +18,17 @@ import {
 
 export { getFirebaseConfigIssues, isFirebaseConfigured } from "@/lib/firebase/config";
 
-const firebaseEnv = getFirebaseEnv();
-
-const firebaseConfig = {
-  apiKey: firebaseEnv.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: resolveFirebaseAuthDomain(),
-  projectId: firebaseEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: firebaseEnv.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: firebaseEnv.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: firebaseEnv.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
+function buildFirebaseConfig() {
+  const firebaseEnv = getFirebaseEnv();
+  return {
+    apiKey: firebaseEnv.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: resolveFirebaseAuthDomain(),
+    projectId: firebaseEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: firebaseEnv.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: firebaseEnv.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: firebaseEnv.NEXT_PUBLIC_FIREBASE_APP_ID,
+  };
+}
 
 let app: FirebaseApp;
 let auth: Auth;
@@ -45,7 +46,7 @@ function getFirebaseApp(): FirebaseApp {
     throw err;
   }
   if (!app) {
-    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    app = getApps().length ? getApp() : initializeApp(buildFirebaseConfig());
   }
   return app;
 }

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getFirebaseConfigIssues, getFirebaseEnv } from "@/lib/firebase/config";
+import {
+  getFirebaseConfigIssues,
+  getFirebaseEnv,
+  resolveFirebaseAuthDomain,
+} from "@/lib/firebase/config";
 
 /** Public build-time config check — helps verify Vercel env vars without exposing secrets. */
 export async function GET() {
@@ -11,6 +15,8 @@ export async function GET() {
     ok: issues.length === 0,
     projectId: env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || null,
     authDomain: env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || null,
+    resolvedAuthDomain: resolveFirebaseAuthDomain() || null,
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL?.trim() || null,
     appIdSuffix: env.NEXT_PUBLIC_FIREBASE_APP_ID
       ? env.NEXT_PUBLIC_FIREBASE_APP_ID.slice(-8)
       : null,
