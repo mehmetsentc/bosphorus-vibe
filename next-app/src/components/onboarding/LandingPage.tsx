@@ -74,7 +74,7 @@ export function LandingPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden">
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       <LandingBackground />
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-16">
@@ -94,12 +94,12 @@ export function LandingPage() {
           </h1>
 
           {reason === "auth-required" && (
-            <p className="mt-4 rounded-xl border border-gold/30 bg-black/40 px-4 py-3 text-sm text-gold">
+            <p className="mt-4 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-foreground dark:border-gold/30 dark:bg-black/40 dark:text-gold">
               {t("authRequiredHint")}
             </p>
           )}
           {reason === "guest-limited" && (
-            <p className="mt-4 rounded-xl border border-vibe/30 bg-black/40 px-4 py-3 text-sm text-vibe">
+            <p className="mt-4 rounded-xl border border-vibe/40 bg-vibe/10 px-4 py-3 text-sm text-foreground dark:border-vibe/30 dark:bg-black/40 dark:text-vibe">
               {t("guestLimitedHint")}
             </p>
           )}
@@ -108,7 +108,7 @@ export function LandingPage() {
             <button
               type="button"
               onClick={handleGuest}
-              className="rounded-2xl border border-gold/40 bg-gold/10 px-6 py-4 text-sm font-semibold text-foreground backdrop-blur-sm transition hover:border-gold hover:bg-gold/20 active:scale-[0.98]"
+              className="rounded-2xl border border-gold/50 bg-gold/15 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-gold hover:bg-gold/25 active:scale-[0.98] dark:border-gold/40 dark:bg-gold/10 dark:shadow-none dark:backdrop-blur-sm dark:hover:bg-gold/20"
             >
               {t("continueAsGuest")}
             </button>
@@ -116,14 +116,16 @@ export function LandingPage() {
               type="button"
               disabled={signingIn}
               onClick={handleGoogle}
-              className="flex items-center justify-center gap-3 rounded-2xl border border-border bg-surface-card/90 px-6 py-4 text-sm font-semibold text-foreground backdrop-blur-sm transition hover:border-vibe/40 hover:shadow-vibe-sm active:scale-[0.98] disabled:opacity-60"
+              className="flex items-center justify-center gap-3 rounded-2xl border border-border bg-surface-card px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe/40 hover:shadow-vibe-sm active:scale-[0.98] disabled:opacity-60 dark:bg-surface-card/90 dark:shadow-none dark:backdrop-blur-sm"
             >
               <GoogleIcon />
               {signingIn ? t("loginSigningIn") : t("loginWithGoogle")}
             </button>
           </div>
 
-          {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+          {error && (
+            <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
 
           <p className="mt-8 text-xs leading-relaxed text-muted">
             {t("landingLegalHint")}{" "}
@@ -138,7 +140,7 @@ export function LandingPage() {
         </motion.div>
       </div>
 
-      <LegalFooter className="relative z-10 border-t border-white/10 bg-black/40 backdrop-blur-md" />
+      <LegalFooter className="relative z-10 border-t border-border bg-surface/90 backdrop-blur-md dark:border-white/10 dark:bg-black/40" />
     </main>
   );
 }
