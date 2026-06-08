@@ -14,6 +14,7 @@ import {
   signInAnonymous,
   startPhoneSignIn,
   confirmPhoneSignIn,
+  sendPasswordReset,
   getAuthErrorCode,
   formatAuthErrorMessage,
 } from "@/lib/services/auth";
@@ -25,7 +26,7 @@ import { LegalFooter } from "@/components/layout/LegalFooter";
 import { LandingBackground } from "@/components/onboarding/LandingBackground";
 
 type AuthMethod = "email" | "phone" | "google" | "anonymous";
-type EmailMode = "signIn" | "signUp";
+type EmailMode = "signIn" | "signUp" | "reset";
 
 const RECAPTCHA_CONTAINER_ID = "recaptcha-container";
 
@@ -42,7 +43,7 @@ const methodTabClass = (active: boolean) =>
 export function LandingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading } = useAuth();
+  const { user, loading, authError: redirectAuthError } = useAuth();
   const t = useT();
   const [authMethod, setAuthMethod] = useState<AuthMethod>("email");
   const [emailMode, setEmailMode] = useState<EmailMode>("signIn");
@@ -56,10 +57,18 @@ export function LandingPage() {
     useState<ConfirmationResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [resetSent, setResetSent] = useState(false);
 
   const reason = searchParams.get("reason");
 
-  // 1. Firebase config kontrolü
+  // Show redirect auth errors (e.g. unauthorized-domain after Google redirect)
+  useEffect(() => {
+    if (redirectAuthError) {
+      setError(formatAuthErrorMessage(redirectAuthError, t));
+    }
+  }, [redirectAuthError, t]);
+
+  // Firebase config kontrolü
   useEffect(() => {
     if (!isFirebaseConfigured()) {
       const issues = getFirebaseConfigIssues();
@@ -90,9 +99,32 @@ export function LandingPage() {
   function switchMethod(method: AuthMethod) {
     setAuthMethod(method);
     setError("");
+    setResetSent(false);
     if (method !== "phone") {
       setPhoneConfirmation(null);
       setPhoneCode("");
+    }
+    if (method === "email") setEmailMode("signIn");
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setResetSent(false);
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError(t("authErrorInvalidEmail"));
+      setBusy(false);
+      return;
+    }
+    try {
+      await sendPasswordReset(trimmedEmail);
+      setResetSent(true);
+    } catch (err: unknown) {
+      showAuthError(err, "Password reset failed");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -273,101 +305,163 @@ export function LandingPage() {
 
           {authMethod === "email" && (
             <>
-              <div className="mt-4 flex rounded-xl border border-border bg-surface-card p-1 shadow-sm dark:bg-surface-card/90">
-                <button
-                  type="button"
-                  onClick={() => { setEmailMode("signIn"); setError(""); }}
-                  className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
-                    emailMode === "signIn"
-                      ? "bg-gold/20 text-foreground"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  {t("authTabSignIn")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setEmailMode("signUp"); setError(""); }}
-                  className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
-                    emailMode === "signUp"
-                      ? "bg-gold/20 text-foreground"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  {t("authTabSignUp")}
-                </button>
-              </div>
+              {emailMode !== "reset" && (
+                <div className="mt-4 flex rounded-xl border border-border bg-surface-card p-1 shadow-sm dark:bg-surface-card/90">
+                  <button
+                    type="button"
+                    onClick={() => { setEmailMode("signIn"); setError(""); setResetSent(false); }}
+                    className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
+                      emailMode === "signIn"
+                        ? "bg-gold/20 text-foreground"
+                        : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {t("authTabSignIn")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEmailMode("signUp"); setError(""); setResetSent(false); }}
+                    className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition ${
+                      emailMode === "signUp"
+                        ? "bg-gold/20 text-foreground"
+                        : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {t("authTabSignUp")}
+                  </button>
+                </div>
+              )}
 
-              <form onSubmit={handleEmailSubmit} className="mt-4 flex flex-col gap-3 text-left">
-                {emailMode === "signUp" && (
+              {emailMode === "reset" ? (
+                <div className="mt-4 text-left">
+                  {resetSent ? (
+                    <div className="flex flex-col gap-4">
+                      <p className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-400">
+                        {t("resetPasswordSent")}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { setEmailMode("signIn"); setError(""); setResetSent(false); }}
+                        className="text-sm text-vibe underline-offset-2 hover:underline"
+                      >
+                        {t("resetPasswordBack")}
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleResetPassword} className="flex flex-col gap-3">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-muted">
+                          {t("resetPasswordEmailLabel")}
+                        </span>
+                        <input
+                          type="email"
+                          required
+                          autoComplete="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className={inputClass}
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={busy}
+                        className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
+                      >
+                        {busy ? t("loginSigningIn") : t("resetPassword")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setEmailMode("signIn"); setError(""); }}
+                        className="text-sm text-muted underline-offset-2 hover:text-foreground hover:underline"
+                      >
+                        {t("resetPasswordBack")}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <form onSubmit={handleEmailSubmit} className="mt-4 flex flex-col gap-3 text-left">
+                  {emailMode === "signUp" && (
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-medium text-muted">
+                        {t("displayNameLabel")}
+                      </span>
+                      <input
+                        type="text"
+                        autoComplete="name"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        className={inputClass}
+                      />
+                    </label>
+                  )}
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-muted">
-                      {t("displayNameLabel")}
+                      {t("emailLabel")}
                     </span>
                     <input
-                      type="text"
-                      autoComplete="name"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className={inputClass}
                     />
                   </label>
-                )}
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-muted">
-                    {t("emailLabel")}
-                  </span>
-                  <input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={inputClass}
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-muted">
-                    {t("passwordLabel")}
-                  </span>
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    autoComplete={emailMode === "signIn" ? "current-password" : "new-password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={inputClass}
-                  />
-                </label>
-                {emailMode === "signUp" && (
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-muted">
-                      {t("confirmPasswordLabel")}
+                      {t("passwordLabel")}
                     </span>
                     <input
                       type="password"
                       required
                       minLength={6}
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete={emailMode === "signIn" ? "current-password" : "new-password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       className={inputClass}
                     />
                   </label>
-                )}
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
-                >
-                  {busy
-                    ? t("loginSigningIn")
-                    : emailMode === "signIn"
-                      ? t("signInWithEmail")
-                      : t("signUpWithEmail")}
-                </button>
-              </form>
+                  {emailMode === "signUp" && (
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-medium text-muted">
+                        {t("confirmPasswordLabel")}
+                      </span>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className={inputClass}
+                      />
+                    </label>
+                  )}
+                  {emailMode === "signIn" && (
+                    <div className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => { setEmailMode("reset"); setError(""); setResetSent(false); }}
+                        className="text-xs text-vibe underline-offset-2 hover:underline"
+                      >
+                        {t("forgotPassword")}
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="rounded-2xl border border-vibe/40 bg-vibe/10 px-6 py-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-vibe hover:bg-vibe/20 active:scale-[0.98] disabled:opacity-60"
+                  >
+                    {busy
+                      ? t("loginSigningIn")
+                      : emailMode === "signIn"
+                        ? t("signInWithEmail")
+                        : t("signUpWithEmail")}
+                  </button>
+                </form>
+              )}
             </>
           )}
 

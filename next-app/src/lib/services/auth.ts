@@ -3,6 +3,7 @@ import {
   RecaptchaVerifier,
   browserPopupRedirectResolver,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
@@ -49,6 +50,7 @@ type AuthMessageKey = Extract<
   | "authErrorTooManyRequests"
   | "authErrorApiKey"
   | "authErrorRecaptcha"
+  | "authErrorUserDisabled"
 >;
 
 export type { ConfirmationResult };
@@ -64,10 +66,9 @@ function isLocalDevHost(): boolean {
   return host === "localhost" || host === "127.0.0.1";
 }
 
-/** Popup on localhost only; redirect everywhere else (avoids firebaseapp.com handler errors). */
+/** Use redirect only on mobile / in-app browsers; popup on desktop (any env). */
 function prefersRedirect(): boolean {
   if (typeof window === "undefined") return false;
-  if (!isLocalDevHost()) return true;
   const ua = navigator.userAgent;
   const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
   const inAppBrowser = /FBAN|FBAV|Instagram|Line\//i.test(ua);
@@ -138,6 +139,7 @@ export function mapAuthErrorCode(code: string): AuthMessageKey {
     return "authErrorWrongPassword";
   }
   if (c.includes("user-not-found")) return "authErrorUserNotFound";
+  if (c.includes("user-disabled")) return "authErrorUserDisabled";
   if (c.includes("email-already-in-use")) return "authErrorEmailInUse";
   if (c.includes("weak-password")) return "authErrorWeakPassword";
   if (c.includes("invalid-phone-number")) return "authErrorInvalidPhone";
@@ -225,27 +227,19 @@ export function completeGoogleRedirectSignIn(): Promise<User | null> {
 }
 
 async function resolveGoogleRedirectSignIn(): Promise<User | null> {
+  if (!isFirebaseConfigured()) return null;
+
+  const auth = getFirebaseAuth();
+  const result = await getRedirectResult(auth, browserPopupRedirectResolver);
+  if (!result?.user) return null;
+
   try {
-    if (!isFirebaseConfigured()) return null;
-
-    const auth = getFirebaseAuth();
-    await auth.authStateReady();
-
-    const result = await getRedirectResult(auth);
-    if (!result?.user) return null;
-
-    try {
-      await upsertUser(result.user);
-    } catch (profileErr) {
-      console.error("Profile upsert failed after redirect sign-in:", profileErr);
-    }
-
-    return result.user;
-  } catch (err) {
-    const code = getAuthErrorCode(err);
-    console.error("Google redirect sign-in failed:", code, err);
-    return null;
+    await upsertUser(result.user);
+  } catch (profileErr) {
+    console.error("Profile upsert failed after redirect sign-in:", profileErr);
   }
+
+  return result.user;
 }
 
 function startGoogleRedirect(auth: ReturnType<typeof getFirebaseAuth>): void {
@@ -476,6 +470,11 @@ export async function getUserDoc(uid: string): Promise<UserDoc | null> {
         ? data.allow_messages
         : undefined,
   };
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  assertFirebaseConfigured();
+  await sendPasswordResetEmail(getFirebaseAuth(), email.trim());
 }
 
 export async function updateUserMessagePrivacy(

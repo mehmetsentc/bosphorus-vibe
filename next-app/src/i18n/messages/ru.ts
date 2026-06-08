@@ -57,6 +57,12 @@ const ru: Messages = {
     "Firebase API key or domain restriction error. Check Google Cloud Credentials and redeploy.",
   authErrorRecaptcha:
     "Phone verification could not start. Complete the security check below and try again.",
+  authErrorUserDisabled: "Этот аккаунт отключён. Обратитесь в службу поддержки.",
+  forgotPassword: "Забыли пароль?",
+  resetPassword: "Сбросить пароль",
+  resetPasswordEmailLabel: "Введите e-mail для получения ссылки сброса",
+  resetPasswordSent: "Ссылка отправлена! Проверьте почту (и папку «Спам»).",
+  resetPasswordBack: "Вернуться к входу",
   welcome: "Добро пожаловать",
   nextActivity: "Следующее мероприятие",
   todaysEvents: "События сегодня",

@@ -57,6 +57,12 @@ const ro: Messages = {
     "Firebase API key or domain restriction error. Check Google Cloud Credentials and redeploy.",
   authErrorRecaptcha:
     "Phone verification could not start. Complete the security check below and try again.",
+  authErrorUserDisabled: "Acest cont a fost dezactivat. Contactați suportul.",
+  forgotPassword: "Am uitat parola",
+  resetPassword: "Resetează parola",
+  resetPasswordEmailLabel: "Introduceți e-mailul pentru link de resetare",
+  resetPasswordSent: "Link trimis! Verificați căsuța de e-mail (și spam).",
+  resetPasswordBack: "Înapoi la autentificare",
   welcome: "Bun venit",
   nextActivity: "Următoarea activitate",
   todaysEvents: "Evenimentele de azi",

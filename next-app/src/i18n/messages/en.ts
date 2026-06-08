@@ -57,6 +57,12 @@ const en = {
     "Firebase API key or domain restriction error. In Google Cloud → Credentials, allow bosphorus-vibe.vercel.app and bosphorusvibe-dbd93.firebaseapp.com, then redeploy.",
   authErrorRecaptcha:
     "Phone verification could not start. Complete the security check below and try again.",
+  authErrorUserDisabled: "This account has been disabled. Contact support.",
+  forgotPassword: "Forgot password?",
+  resetPassword: "Reset password",
+  resetPasswordEmailLabel: "Enter your email to receive a reset link",
+  resetPasswordSent: "Reset link sent! Check your inbox (and spam folder).",
+  resetPasswordBack: "Back to sign in",
   welcome: "Welcome",
   nextActivity: "Next Activity",
   todaysEvents: "Today's Events",

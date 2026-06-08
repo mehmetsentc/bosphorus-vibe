@@ -60,6 +60,12 @@ const tr: Messages = {
     "Firebase API anahtarı veya domain kısıtlaması hatası. Google Cloud → Credentials bölümünde bosphorus-vibe.vercel.app ve bosphorusvibe-dbd93.firebaseapp.com adreslerine izin verin, ardından yeniden deploy edin.",
   authErrorRecaptcha:
     "Telefon doğrulaması başlatılamadı. Aşağıdaki güvenlik doğrulamasını tamamlayıp tekrar deneyin.",
+  authErrorUserDisabled: "Bu hesap devre dışı bırakılmış. Destek ile iletişime geçin.",
+  forgotPassword: "Şifremi unuttum",
+  resetPassword: "Şifreyi sıfırla",
+  resetPasswordEmailLabel: "Sıfırlama bağlantısı için e-posta adresinizi girin",
+  resetPasswordSent: "Sıfırlama bağlantısı gönderildi! Gelen kutunuzu kontrol edin (spam klasörüne de bakın).",
+  resetPasswordBack: "Girişe dön",
   welcome: "Hoş geldiniz",
   nextActivity: "Sonraki Etkinlik",
   todaysEvents: "Bugünün Etkinlikleri",

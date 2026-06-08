@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -10,7 +11,7 @@ import {
 } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase";
-import { completeGoogleRedirectSignIn, getUserDoc } from "@/lib/services/auth";
+import { completeGoogleRedirectSignIn, getAuthErrorCode, getUserDoc } from "@/lib/services/auth";
 import {
   clearAccessCookie,
   getAccessCookie,
@@ -22,6 +23,7 @@ type AuthState = {
   user: User | null;
   profile: UserDoc | null;
   loading: boolean;
+  authError: string | null;
   refreshProfile: () => Promise<void>;
 };
 
@@ -29,6 +31,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   profile: null,
   loading: true,
+  authError: null,
   refreshProfile: async () => {},
 });
 
@@ -36,12 +39,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserDoc | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (!user) return;
     const doc = await getUserDoc(user.uid);
     setProfile(doc);
-  };
+  }, [user]);
 
   useEffect(() => {
     let active = true;
@@ -74,11 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     void completeGoogleRedirectSignIn().catch((err) => {
-      const code =
-        err && typeof err === "object" && "code" in err
-          ? String((err as { code: string }).code)
-          : "";
+      const code = getAuthErrorCode(err);
       console.error("Google redirect sign-in failed:", code, err);
+      if (active && code && code !== "auth/redirect-started") {
+        setAuthError(code);
+      }
     });
 
     return () => {
@@ -88,8 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, profile, loading, refreshProfile }),
-    [user, profile, loading],
+    () => ({ user, profile, loading, authError, refreshProfile }),
+    [user, profile, loading, authError, refreshProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -57,6 +57,12 @@ const uk: Messages = {
     "Firebase API key or domain restriction error. Check Google Cloud Credentials and redeploy.",
   authErrorRecaptcha:
     "Phone verification could not start. Complete the security check below and try again.",
+  authErrorUserDisabled: "Цей обліковий запис деактивовано. Зверніться до підтримки.",
+  forgotPassword: "Забули пароль?",
+  resetPassword: "Скинути пароль",
+  resetPasswordEmailLabel: "Введіть e-mail для отримання посилання скидання",
+  resetPasswordSent: "Посилання надіслано! Перевірте пошту (і папку «Спам»).",
+  resetPasswordBack: "Повернутися до входу",
   welcome: "Ласкаво просимо",
   nextActivity: "Наступна активність",
   todaysEvents: "Сьогоднішні події",

@@ -58,6 +58,12 @@ const xk: Messages = {
     "Firebase API key or domain restriction error. Check Google Cloud Credentials and redeploy.",
   authErrorRecaptcha:
     "Phone verification could not start. Complete the security check below and try again.",
+  authErrorUserDisabled: "Ky llogari është çaktivizuar. Kontaktoni mbështetjen.",
+  forgotPassword: "Harrova fjalëkalimin",
+  resetPassword: "Rivendos fjalëkalimin",
+  resetPasswordEmailLabel: "Shkruani e-mailin tuaj për lidhjen e rivendosjes",
+  resetPasswordSent: "Lidhja u dërgua! Kontrolloni kutinë hyrëse (dhe spam).",
+  resetPasswordBack: "Kthehu te hyrja",
   welcome: "Mirë se vini",
   nextActivity: "Aktiviteti i ardhshëm",
   todaysEvents: "Eventet e sotme",
