@@ -55,6 +55,8 @@ const ro: Messages = {
   authErrorTooManyRequests: "Too many attempts. Please wait and try again.",
   authErrorApiKey:
     "Firebase API key or domain restriction error. Check Google Cloud Credentials and redeploy.",
+  authErrorRecaptcha:
+    "Phone verification could not start. Complete the security check below and try again.",
   welcome: "Bun venit",
   nextActivity: "Următoarea activitate",
   todaysEvents: "Evenimentele de azi",

@@ -48,6 +48,7 @@ type AuthMessageKey = Extract<
   | "authErrorInvalidCode"
   | "authErrorTooManyRequests"
   | "authErrorApiKey"
+  | "authErrorRecaptcha"
 >;
 
 export type { ConfirmationResult };
@@ -158,6 +159,13 @@ export function mapAuthErrorCode(code: string): AuthMessageKey {
   ) {
     return "authErrorApiKey";
   }
+  if (
+    c.includes("internal-error") ||
+    c.includes("captcha-check-failed") ||
+    c.includes("missing-recaptcha")
+  ) {
+    return "authErrorRecaptcha";
+  }
   return "loginFailed";
 }
 
@@ -178,18 +186,27 @@ function normalizePhoneNumber(phone: string): string {
 
 let recaptchaVerifier: RecaptchaVerifier | null = null;
 
-function getRecaptchaVerifier(containerId: string): RecaptchaVerifier {
+async function getRecaptchaVerifier(containerId: string): Promise<RecaptchaVerifier> {
   if (recaptchaVerifier) {
     try {
       recaptchaVerifier.clear();
     } catch {
       // ignore stale verifier cleanup errors
     }
+    recaptchaVerifier = null;
   }
-  recaptchaVerifier = new RecaptchaVerifier(getFirebaseAuth(), containerId, {
-    size: "invisible",
+
+  const verifier = new RecaptchaVerifier(getFirebaseAuth(), containerId, {
+    size: "normal",
+    callback: () => undefined,
+    "expired-callback": () => {
+      recaptchaVerifier = null;
+    },
   });
-  return recaptchaVerifier;
+
+  await verifier.render();
+  recaptchaVerifier = verifier;
+  return verifier;
 }
 
 function assertFirebaseConfigured(): void {
@@ -281,7 +298,7 @@ export async function startPhoneSignIn(
 ): Promise<ConfirmationResult> {
   assertFirebaseConfigured();
   const normalized = normalizePhoneNumber(phone);
-  const verifier = getRecaptchaVerifier(recaptchaContainerId);
+  const verifier = await getRecaptchaVerifier(recaptchaContainerId);
   return signInWithPhoneNumber(getFirebaseAuth(), normalized, verifier);
 }
 

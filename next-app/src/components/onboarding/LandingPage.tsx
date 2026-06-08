@@ -223,7 +223,6 @@ export function LandingPage() {
   return (
     <main className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       <LandingBackground />
-      <div id={RECAPTCHA_CONTAINER_ID} className="sr-only" aria-hidden />
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-16">
         <motion.div
@@ -376,6 +375,10 @@ export function LandingPage() {
             <div className="mt-4 text-left">
               {!phoneConfirmation ? (
                 <form onSubmit={handlePhoneSend} className="flex flex-col gap-3">
+                  <div
+                    id={RECAPTCHA_CONTAINER_ID}
+                    className="flex min-h-[78px] items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-card px-2 py-2"
+                  />
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-muted">
                       {t("phoneLabel")}

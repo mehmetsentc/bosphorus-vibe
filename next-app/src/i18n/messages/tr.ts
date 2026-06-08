@@ -58,6 +58,8 @@ const tr: Messages = {
   authErrorTooManyRequests: "Çok fazla deneme. Lütfen bekleyip tekrar deneyin.",
   authErrorApiKey:
     "Firebase API anahtarı veya domain kısıtlaması hatası. Google Cloud → Credentials bölümünde bosphorus-vibe.vercel.app ve bosphorusvibe-dbd93.firebaseapp.com adreslerine izin verin, ardından yeniden deploy edin.",
+  authErrorRecaptcha:
+    "Telefon doğrulaması başlatılamadı. Aşağıdaki güvenlik doğrulamasını tamamlayıp tekrar deneyin.",
   welcome: "Hoş geldiniz",
   nextActivity: "Sonraki Etkinlik",
   todaysEvents: "Bugünün Etkinlikleri",

@@ -55,6 +55,8 @@ const sq: Messages = {
   authErrorTooManyRequests: "Too many attempts. Please wait and try again.",
   authErrorApiKey:
     "Firebase API key or domain restriction error. Check Google Cloud Credentials and redeploy.",
+  authErrorRecaptcha:
+    "Phone verification could not start. Complete the security check below and try again.",
   welcome: "Mirë se vini",
   nextActivity: "Aktiviteti i ardhshëm",
   todaysEvents: "Eventet e sotme",

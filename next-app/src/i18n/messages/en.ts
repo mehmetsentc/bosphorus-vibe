@@ -55,6 +55,8 @@ const en = {
   authErrorTooManyRequests: "Too many attempts. Please wait and try again.",
   authErrorApiKey:
     "Firebase API key or domain restriction error. In Google Cloud → Credentials, allow bosphorus-vibe.vercel.app and bosphorusvibe-dbd93.firebaseapp.com, then redeploy.",
+  authErrorRecaptcha:
+    "Phone verification could not start. Complete the security check below and try again.",
   welcome: "Welcome",
   nextActivity: "Next Activity",
   todaysEvents: "Today's Events",
