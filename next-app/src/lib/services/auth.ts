@@ -65,6 +65,34 @@ provider.setCustomParameters({ prompt: "select_account" });
 
 let redirectResultPromise: Promise<User | null> | null = null;
 
+const CANONICAL_HOST = "www.bosphorusvibe.com";
+
+/** Vercel redirects bare domain → www; starting OAuth on bare domain loses redirect state on iOS. */
+export function ensureCanonicalOrigin(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.hostname === "bosphorusvibe.com") {
+    const target = `https://${CANONICAL_HOST}${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.location.replace(target);
+    return true;
+  }
+  return false;
+}
+
+export function getCanonicalOrigin(): string {
+  if (typeof window === "undefined") return "";
+  if (window.location.hostname === "bosphorusvibe.com") {
+    return `https://${CANONICAL_HOST}`;
+  }
+  return window.location.origin;
+}
+
+function isUserCancelledSignIn(code: string): boolean {
+  const c = code.toLowerCase();
+  return (
+    c.includes("popup-closed-by-user") || c.includes("cancelled-popup-request")
+  );
+}
+
 function isGoogleUser(user: User): boolean {
   return user.providerData.some((p) => p.providerId === "google.com");
 }
@@ -295,9 +323,10 @@ const GOOGLE_REDIRECT_ATTEMPT_KEY = "google_redirect_attempt";
 /** Full-page redirect handler when popup is blocked. */
 export function openGoogleRedirectHandler(): void {
   if (typeof window === "undefined") return;
+  if (ensureCanonicalOrigin()) return;
   resetGoogleRedirectResult();
   localStorage.removeItem(GOOGLE_REDIRECT_ATTEMPT_KEY);
-  window.location.assign(`${window.location.origin}/auth/google`);
+  window.location.assign(`${getCanonicalOrigin()}/auth/google`);
 }
 
 export function hasGoogleRedirectAttempt(): boolean {
@@ -410,6 +439,42 @@ function throwRedirectStarted(): never {
   throw err;
 }
 
+async function signInWithGooglePopup(auth: Awaited<ReturnType<typeof ensureAuthReady>>): Promise<User> {
+  const result = await signInWithPopup(
+    auth,
+    provider,
+    browserPopupRedirectResolver,
+  );
+  try {
+    await upsertUser(result.user);
+  } catch (profileErr) {
+    console.error("Profile upsert failed after Google sign-in:", profileErr);
+  }
+  return result.user;
+}
+
+/** Mobile: popup from user tap first; redirect from same page if popup fails. */
+export async function signInWithGoogleMobile(): Promise<User> {
+  assertFirebaseConfigured();
+  if (ensureCanonicalOrigin()) throwRedirectStarted();
+
+  const auth = await ensureAuthReady();
+
+  try {
+    return await signInWithGooglePopup(auth);
+  } catch (err: unknown) {
+    const code = getAuthErrorCode(err);
+    if (isUserCancelledSignIn(code)) throw err;
+
+    void signInWithRedirect(auth, provider, browserPopupRedirectResolver).catch(
+      (redirectErr) => {
+        console.error("signInWithRedirect failed:", redirectErr);
+      },
+    );
+    throwRedirectStarted();
+  }
+}
+
 export async function signInWithGoogle(): Promise<User> {
   assertFirebaseConfigured();
   assertAuthDomain();
@@ -417,17 +482,7 @@ export async function signInWithGoogle(): Promise<User> {
   const auth = await ensureAuthReady();
 
   try {
-    const result = await signInWithPopup(
-      auth,
-      provider,
-      browserPopupRedirectResolver,
-    );
-    try {
-      await upsertUser(result.user);
-    } catch (profileErr) {
-      console.error("Profile upsert failed after Google sign-in:", profileErr);
-    }
-    return result.user;
+    return await signInWithGooglePopup(auth);
   } catch (err: unknown) {
     const code = getAuthErrorCode(err);
     if (shouldFallbackToRedirect(code)) {

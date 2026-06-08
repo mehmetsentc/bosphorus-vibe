@@ -8,10 +8,11 @@ import { Logo } from "@/components/brand/Logo";
 import { BRAND_NAME } from "@/lib/brand";
 import {
   signInWithGoogle,
+  signInWithGoogleMobile,
   signInWithEmail,
   signUpWithEmail,
   sendPasswordReset,
-  openGoogleRedirectHandler,
+  ensureCanonicalOrigin,
   getAuthErrorCode,
   formatAuthErrorMessage,
 } from "@/lib/services/auth";
@@ -34,7 +35,7 @@ const outlineBtnClass =
 
 export function LandingPage() {
   const searchParams = useSearchParams();
-  const { user, loading, authError: redirectAuthError } = useAuth();
+  const { user, authError: redirectAuthError } = useAuth();
   const t = useT();
 
   const reason = searchParams.get("reason");
@@ -51,6 +52,10 @@ export function LandingPage() {
   const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
+    ensureCanonicalOrigin();
+  }, []);
+
+  useEffect(() => {
     if (redirectAuthError) {
       setError(formatAuthErrorMessage(redirectAuthError, t));
       setView("signIn");
@@ -65,12 +70,11 @@ export function LandingPage() {
   }, [t]);
 
   useEffect(() => {
-    if (loading) return;
     if (user) {
       setAccessCookie(user.isAnonymous ? "guest" : "auth");
       window.location.assign("/home");
     }
-  }, [user, loading]);
+  }, [user]);
 
   function showAuthError(err: unknown, label: string) {
     const code = getAuthErrorCode(err);
@@ -152,18 +156,19 @@ export function LandingPage() {
   }
 
   async function handleGoogle() {
+    if (ensureCanonicalOrigin()) return;
+
     setBusy(true);
     setError("");
 
     const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (mobile) {
-      openGoogleRedirectHandler();
-      return;
-    }
-
     let redirecting = false;
     try {
-      await signInWithGoogle();
+      if (mobile) {
+        await signInWithGoogleMobile();
+      } else {
+        await signInWithGoogle();
+      }
       finishAuth();
     } catch (err: unknown) {
       const code = getAuthErrorCode(err);
@@ -187,17 +192,6 @@ export function LandingPage() {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
-
-  if (loading) {
-    return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent" />
-          <p className="text-sm text-muted">{t("loginSigningIn")}</p>
-        </div>
-      </main>
-    );
-  }
 
   const viewTitle =
     view === "onboarding"

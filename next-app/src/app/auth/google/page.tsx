@@ -6,6 +6,7 @@ import { ensureAuthReady } from "@/lib/firebase";
 import {
   clearGoogleRedirectAttempt,
   completeGoogleRedirectSignIn,
+  ensureCanonicalOrigin,
   finalizeGoogleSignIn,
   getAuthErrorCode,
   formatAuthErrorMessage,
@@ -46,6 +47,8 @@ function GoogleAuthCallback() {
 
     void (async () => {
       try {
+        if (ensureCanonicalOrigin()) return;
+
         const auth = await ensureAuthReady();
 
         unsubscribe = onAuthStateChanged(auth, (current) => {
