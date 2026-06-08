@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch {
             // Session cookie optional until Admin credentials configured
           }
-          setAccessCookie("auth");
+          setAccessCookie(next.isAnonymous ? "guest" : "auth");
           const doc = await getUserDoc(next.uid);
           if (active) setProfile(doc);
         } else {

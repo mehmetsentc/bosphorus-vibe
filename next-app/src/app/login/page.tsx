@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithGoogle, getAuthErrorCode, mapAuthErrorCode } from "@/lib/services/auth";
+import {
+  signInWithGoogle,
+  getAuthErrorCode,
+  formatAuthErrorMessage,
+} from "@/lib/services/auth";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
@@ -37,7 +41,7 @@ export default function LoginPage() {
         return;
       }
       console.error("Google sign-in failed:", code, err);
-      setError(t(mapAuthErrorCode(code)));
+      setError(formatAuthErrorMessage(code, t));
     } finally {
       if (!redirecting) setLoading(false);
     }

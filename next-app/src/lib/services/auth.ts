@@ -1,13 +1,18 @@
 import {
   GoogleAuthProvider,
+  RecaptchaVerifier,
+  browserPopupRedirectResolver,
   createUserWithEmailAndPassword,
+  signInAnonymously,
   signInWithEmailAndPassword,
+  signInWithPhoneNumber,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signOut,
   updateProfile,
   type AuthError,
+  type ConfirmationResult,
   type User,
 } from "firebase/auth";
 import {
@@ -39,28 +44,70 @@ type AuthMessageKey = Extract<
   | "authErrorEmailInUse"
   | "authErrorWeakPassword"
   | "authErrorEmailDisabled"
+  | "authErrorInvalidPhone"
+  | "authErrorInvalidCode"
+  | "authErrorTooManyRequests"
+  | "authErrorApiKey"
 >;
+
+export type { ConfirmationResult };
 
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
 let redirectResultPromise: Promise<User | null> | null = null;
 
-/** Mobile / in-app browsers only — desktop uses popup (more reliable on Vercel). */
+function isLocalDevHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+/** Popup on localhost only; redirect everywhere else (avoids firebaseapp.com handler errors). */
 function prefersRedirect(): boolean {
   if (typeof window === "undefined") return false;
+  if (!isLocalDevHost()) return true;
   const ua = navigator.userAgent;
   const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
   const inAppBrowser = /FBAN|FBAV|Instagram|Line\//i.test(ua);
   return mobile || inAppBrowser;
 }
 
+function assertAuthDomain(): void {
+  const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim();
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim();
+  if (!authDomain || !projectId) return;
+  const expected = `${projectId}.firebaseapp.com`;
+  if (authDomain !== expected) {
+    console.warn(
+      `[auth] NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN should be "${expected}" (got "${authDomain}"). Google sign-in may fail.`,
+    );
+  }
+}
+
 export function getAuthErrorCode(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
-    return String((err as AuthError).code);
+    const code = String((err as AuthError).code);
+    if (code && code !== "undefined") return code;
   }
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    const match = err.message.match(/\(auth\/[^)]+\)/);
+    if (match) return match[0].slice(1, -1);
+    return err.message;
+  }
   return "";
+}
+
+export function formatAuthErrorMessage(
+  code: string,
+  translate: (key: AuthMessageKey) => string,
+): string {
+  const key = mapAuthErrorCode(code);
+  const message = translate(key);
+  if (key === "loginFailed" && code) {
+    return `${message} (${code})`;
+  }
+  return message;
 }
 
 export function mapAuthErrorCode(code: string): AuthMessageKey {
@@ -92,7 +139,57 @@ export function mapAuthErrorCode(code: string): AuthMessageKey {
   if (c.includes("user-not-found")) return "authErrorUserNotFound";
   if (c.includes("email-already-in-use")) return "authErrorEmailInUse";
   if (c.includes("weak-password")) return "authErrorWeakPassword";
+  if (c.includes("invalid-phone-number")) return "authErrorInvalidPhone";
+  if (
+    c.includes("invalid-verification-code") ||
+    c.includes("code-expired")
+  ) {
+    return "authErrorInvalidCode";
+  }
+  if (c.includes("too-many-requests") || c.includes("quota-exceeded")) {
+    return "authErrorTooManyRequests";
+  }
+  if (
+    c.includes("invalid-api-key") ||
+    c.includes("api-key-not-valid") ||
+    c.includes("referer") ||
+    c.includes("referrer") ||
+    c.includes("app-not-authorized")
+  ) {
+    return "authErrorApiKey";
+  }
   return "loginFailed";
+}
+
+function normalizePhoneNumber(phone: string): string {
+  const trimmed = phone.trim();
+  if (trimmed.startsWith("+")) {
+    return `+${trimmed.slice(1).replace(/\D/g, "")}`;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.startsWith("0") && digits.length === 11) {
+    return `+9${digits}`;
+  }
+  if (digits.length === 10 && digits.startsWith("5")) {
+    return `+90${digits}`;
+  }
+  return `+${digits}`;
+}
+
+let recaptchaVerifier: RecaptchaVerifier | null = null;
+
+function getRecaptchaVerifier(containerId: string): RecaptchaVerifier {
+  if (recaptchaVerifier) {
+    try {
+      recaptchaVerifier.clear();
+    } catch {
+      // ignore stale verifier cleanup errors
+    }
+  }
+  recaptchaVerifier = new RecaptchaVerifier(getFirebaseAuth(), containerId, {
+    size: "invisible",
+  });
+  return recaptchaVerifier;
 }
 
 function assertFirebaseConfigured(): void {
@@ -106,15 +203,23 @@ function assertFirebaseConfigured(): void {
 export async function completeGoogleRedirectSignIn(): Promise<User | null> {
   if (!redirectResultPromise) {
     redirectResultPromise = (async () => {
-      if (!isFirebaseConfigured()) return null;
-      const result = await getRedirectResult(getFirebaseAuth());
-      if (!result?.user) return null;
       try {
-        await upsertUser(result.user);
-      } catch (profileErr) {
-        console.error("Profile upsert failed after redirect sign-in:", profileErr);
+        if (!isFirebaseConfigured()) return null;
+        const result = await getRedirectResult(getFirebaseAuth());
+        if (!result?.user) return null;
+        try {
+          await upsertUser(result.user);
+        } catch (profileErr) {
+          console.error("Profile upsert failed after redirect sign-in:", profileErr);
+        }
+        return result.user;
+      } catch (err) {
+        const code = getAuthErrorCode(err);
+        console.error("Google redirect sign-in failed:", code, err);
+        return null;
+      } finally {
+        redirectResultPromise = null;
       }
-      return result.user;
     })();
   }
   return redirectResultPromise;
@@ -164,20 +269,64 @@ export async function signUpWithEmail(
   return result.user;
 }
 
+export async function startPhoneSignIn(
+  phone: string,
+  recaptchaContainerId: string,
+): Promise<ConfirmationResult> {
+  assertFirebaseConfigured();
+  const normalized = normalizePhoneNumber(phone);
+  const verifier = getRecaptchaVerifier(recaptchaContainerId);
+  return signInWithPhoneNumber(getFirebaseAuth(), normalized, verifier);
+}
+
+export async function confirmPhoneSignIn(
+  confirmation: ConfirmationResult,
+  code: string,
+): Promise<User> {
+  assertFirebaseConfigured();
+  const result = await confirmation.confirm(code.trim());
+  try {
+    await upsertUser(result.user);
+  } catch (profileErr) {
+    console.error("Profile upsert failed after phone sign-in:", profileErr);
+  }
+  return result.user;
+}
+
+export async function signInAnonymous(): Promise<User> {
+  assertFirebaseConfigured();
+  const result = await signInAnonymously(getFirebaseAuth());
+  try {
+    await upsertUser(result.user);
+  } catch (profileErr) {
+    console.error("Profile upsert failed after anonymous sign-in:", profileErr);
+  }
+  return result.user;
+}
+
+function throwRedirectStarted(): never {
+  const err = new Error("redirect started");
+  (err as Error & { code: string }).code = "auth/redirect-started";
+  throw err;
+}
+
 export async function signInWithGoogle(): Promise<User> {
   assertFirebaseConfigured();
+  assertAuthDomain();
 
   const auth = getFirebaseAuth();
 
   if (prefersRedirect()) {
     startGoogleRedirect(auth);
-    const err = new Error("redirect started");
-    (err as Error & { code: string }).code = "auth/redirect-started";
-    throw err;
+    throwRedirectStarted();
   }
 
   try {
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(
+      auth,
+      provider,
+      browserPopupRedirectResolver,
+    );
     try {
       await upsertUser(result.user);
     } catch (profileErr) {
@@ -186,16 +335,9 @@ export async function signInWithGoogle(): Promise<User> {
     return result.user;
   } catch (err: unknown) {
     const code = getAuthErrorCode(err);
-    if (
-      code === "auth/popup-blocked" ||
-      code === "auth/cancelled-popup-request"
-    ) {
-      startGoogleRedirect(auth);
-      const redirectErr = new Error("redirect started");
-      (redirectErr as Error & { code: string }).code = "auth/redirect-started";
-      throw redirectErr;
-    }
-    throw err;
+    console.error("Google popup sign-in failed, falling back to redirect:", code);
+    startGoogleRedirect(auth);
+    throwRedirectStarted();
   }
 }
 
@@ -215,11 +357,18 @@ async function upsertUser(user: User, displayNameOverride?: string): Promise<voi
   const existing = await getDoc(ref);
   if (existing.exists()) return;
 
-  const displayName =
+  let displayName =
     displayNameOverride?.trim() ||
     user.displayName?.trim() ||
     user.email?.split("@")[0] ||
     "";
+
+  if (!displayName && user.isAnonymous) {
+    displayName = "Misafir";
+  }
+  if (!displayName && user.phoneNumber) {
+    displayName = user.phoneNumber;
+  }
 
   await setDoc(ref, {
     uid: user.uid,

@@ -12,15 +12,17 @@ export function useAccess() {
     setGuestMode(getAccessCookie() === "guest" && !user);
   }, [user]);
 
-  const isAuthenticated = Boolean(user);
-  const isGuest = guestMode && !isAuthenticated;
-  const hasAppAccess = isAuthenticated || isGuest;
+  const isAnonymous = Boolean(user?.isAnonymous);
+  const isAuthenticated = Boolean(user) && !isAnonymous;
+  const isGuest = (guestMode && !user) || isAnonymous;
+  const hasAppAccess = Boolean(user) || isGuest;
 
   return {
     user,
     loading,
     isAuthenticated,
     isGuest,
+    isAnonymous,
     hasAppAccess,
     canLike: isAuthenticated,
     canComment: isAuthenticated,
