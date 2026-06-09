@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { toggleLike, toggleSavePost } from "@/lib/services/firestore";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -14,10 +15,15 @@ import {
 } from "@/components/icons/Icons";
 import { useHideLikeCounts } from "@/lib/hooks/useSettingsEffects";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { ShareSheet } from "@/components/share/ShareSheet";
 import { buildPostSharePayload } from "@/lib/utils/share-post";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
+
+// Heavy share sheet — load only on first open
+const ShareSheet = dynamic(
+  () => import("@/components/share/ShareSheet").then((m) => ({ default: m.ShareSheet })),
+  { ssr: false },
+);
 
 type PostActionsBarProps = {
   post: UserPostDoc;

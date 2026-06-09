@@ -6,14 +6,32 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { getPostVideoUrl } from "@/lib/services/firestore";
 import { signOutUser } from "@/lib/services/auth";
 import { useProfile } from "@/lib/hooks/useProfile";
-import { FriendManageModal } from "@/components/profile/FriendManageModal";
-import { VideoUploadModal } from "@/components/upload/VideoUploadModal";
-import { PostManageModal } from "@/components/post/PostManageModal";
+import dynamic from "next/dynamic";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
 import { ProfileMenu } from "@/components/profile/ProfileMenu";
 import { ProfileHighlights } from "@/components/profile/ProfileHighlights";
-import { StoryUploadModal } from "@/components/stories/StoryUploadModal";
-import { StoryViewer } from "@/components/stories/StoryViewer";
+
+// Heavy modals — only load when opened
+const FriendManageModal = dynamic(
+  () => import("@/components/profile/FriendManageModal").then((m) => ({ default: m.FriendManageModal })),
+  { ssr: false },
+);
+const VideoUploadModal = dynamic(
+  () => import("@/components/upload/VideoUploadModal").then((m) => ({ default: m.VideoUploadModal })),
+  { ssr: false },
+);
+const PostManageModal = dynamic(
+  () => import("@/components/post/PostManageModal").then((m) => ({ default: m.PostManageModal })),
+  { ssr: false },
+);
+const StoryUploadModal = dynamic(
+  () => import("@/components/stories/StoryUploadModal").then((m) => ({ default: m.StoryUploadModal })),
+  { ssr: false },
+);
+const StoryViewer = dynamic(
+  () => import("@/components/stories/StoryViewer").then((m) => ({ default: m.StoryViewer })),
+  { ssr: false },
+);
 import { ProfileLayout } from "@/components/profile/ProfileLayout";
 import { ProfileTabs } from "@/components/profile/ProfileTabs";
 import {

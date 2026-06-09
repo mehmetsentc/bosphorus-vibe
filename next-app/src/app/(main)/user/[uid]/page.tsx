@@ -13,8 +13,13 @@ import {
 } from "@/lib/services/firestore";
 import { getStoriesByUser } from "@/lib/services/stories";
 import { buildProfileHighlightItems, groupStoriesByCategory } from "@/lib/utils/story-categories";
+import dynamic from "next/dynamic";
 import { ProfileHighlights } from "@/components/profile/ProfileHighlights";
-import { StoryViewer } from "@/components/stories/StoryViewer";
+
+const StoryViewer = dynamic(
+  () => import("@/components/stories/StoryViewer").then((m) => ({ default: m.StoryViewer })),
+  { ssr: false },
+);
 import { BRAND_NAME } from "@/lib/brand";
 import { findOrCreateDirectChat } from "@/lib/services/messages";
 import { followUser, isFollowing, unfollowUser } from "@/lib/services/friends";

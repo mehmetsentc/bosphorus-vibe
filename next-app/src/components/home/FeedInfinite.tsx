@@ -1,10 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { FeedPostCard } from "@/components/post/FeedPostCard";
-import { FeedFriendSuggestions } from "@/components/feed/FeedFriendSuggestions";
-import { FeedVideoSuggestions } from "@/components/feed/FeedVideoSuggestions";
-import { FeedEventSuggestions } from "@/components/feed/FeedEventSuggestions";
+
+// Suggestion cards only appear after scrolling — lazy load them
+const FeedFriendSuggestions = dynamic(
+  () => import("@/components/feed/FeedFriendSuggestions").then((m) => ({ default: m.FeedFriendSuggestions })),
+  { ssr: false },
+);
+const FeedVideoSuggestions = dynamic(
+  () => import("@/components/feed/FeedVideoSuggestions").then((m) => ({ default: m.FeedVideoSuggestions })),
+  { ssr: false },
+);
+const FeedEventSuggestions = dynamic(
+  () => import("@/components/feed/FeedEventSuggestions").then((m) => ({ default: m.FeedEventSuggestions })),
+  { ssr: false },
+);
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
 import {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,8 +16,13 @@ import {
 } from "@/lib/services/friends";
 import { IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
 import { PostActionsBar } from "@/components/post/PostActionsBar";
-import { PostCommentModal } from "@/components/post/PostCommentModal";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
+
+// Heavy modals — lazy loaded only when opened
+const PostCommentModal = dynamic(
+  () => import("@/components/post/PostCommentModal").then((m) => ({ default: m.PostCommentModal })),
+  { ssr: false },
+);
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
@@ -41,7 +47,7 @@ type FeedPostCardProps = {
   onFollowChange?: (uid: string, following: boolean) => void;
 };
 
-export function FeedPostCard({
+function FeedPostCardInner({
   post,
   followingIds,
   onFollowChange,
@@ -313,3 +319,5 @@ export function FeedPostCard({
     </article>
   );
 }
+
+export const FeedPostCard = memo(FeedPostCardInner);
