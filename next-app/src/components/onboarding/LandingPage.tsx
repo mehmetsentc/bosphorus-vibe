@@ -71,11 +71,11 @@ export function LandingPage() {
   }, [t]);
 
   useEffect(() => {
-    if (user) {
-      setAccessCookie(user.isAnonymous ? "guest" : "auth");
-      // Anonymous/guest users can only access /events and /feed —
-      // sending them to /home would trigger an infinite middleware redirect loop.
-      window.location.assign(user.isAnonymous ? "/events" : "/home");
+    // Only redirect authenticated (non-anonymous) users.
+    // Anonymous/guest users should stay on the welcome page so they can sign up or sign in.
+    if (user && !user.isAnonymous) {
+      setAccessCookie("auth");
+      window.location.assign("/home");
     }
   }, [user]);
 
