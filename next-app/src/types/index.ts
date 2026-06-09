@@ -32,7 +32,10 @@ export type PostTag = {
 export interface UserPostDoc {
   id: string;
   postPhoto?: string;
+  /** Low-quality compressed image (used in feed / grid) */
   postPhotoURL?: string;
+  postPhotoURL_original?: string;
+  postPhotoURL_low?: string;
   postTitle?: string;
   postDescription?: string;
   postUserId?: string;

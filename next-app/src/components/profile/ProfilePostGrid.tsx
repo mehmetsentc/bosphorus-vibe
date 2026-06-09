@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { getPostImageUrl, getPostVideoUrl } from "@/lib/services/firestore";
+import { getPostVideoUrl } from "@/lib/services/firestore";
+import { pickImageSource } from "@/lib/utils/video-sources";
 import { IconLayers, IconMenu, IconPin, IconReels } from "@/components/icons/Icons";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
@@ -42,10 +43,11 @@ export function ProfilePostGrid({
     <div className="grid grid-cols-3 gap-px bg-border">
       {posts.map((post, index) => {
         const videoUrl = getPostVideoUrl(post);
-        const thumb = post.postVideothumbnail || getPostImageUrl(post);
+        // Grid always uses low quality thumbnail for fast scrolling
+        const thumb = post.postVideothumbnail || pickImageSource(post, "grid");
         const isPinned = aspect === "square" && index < pinnedCount;
         const hasCarousel =
-          Boolean(getPostImageUrl(post)) && Boolean(videoUrl);
+          Boolean(pickImageSource(post, "grid")) && Boolean(videoUrl);
         const canManage =
           Boolean(ownerId) &&
           post.postUserId === ownerId &&

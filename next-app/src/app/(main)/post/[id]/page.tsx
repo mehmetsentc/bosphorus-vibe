@@ -6,10 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   getPostById,
   getPostCaption,
-  getPostImageUrl,
   getPostVideoUrl,
   enrichPostsWithUsers,
 } from "@/lib/services/firestore";
+import { pickImageSource } from "@/lib/utils/video-sources";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { IconMenu } from "@/components/icons/Icons";
@@ -89,7 +89,8 @@ function PostDetailContent({ id }: { id: string }) {
   if (!post) return null;
 
   const videoUrl = getPostVideoUrl(post);
-  const imageUrl = getPostImageUrl(post);
+  // Detail page → original quality
+  const imageUrl = pickImageSource(post, "detail");
   const caption = getPostCaption(post);
   const isOwner = Boolean(user && post.postUserId === user.uid);
 

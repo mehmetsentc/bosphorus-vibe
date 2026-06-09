@@ -25,7 +25,7 @@ import {
   useHideLikeCounts,
 } from "@/lib/hooks/useSettingsEffects";
 import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
-import { pickVideoSource } from "@/lib/utils/video-sources";
+import { pickImageSource, pickVideoSource } from "@/lib/utils/video-sources";
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
@@ -71,10 +71,11 @@ export function FeedPostCard({
   });
 
   const video = getPostVideoUrl(post);
-  const image = video ? "" : getPostImageUrl(post);
+  // Feed always uses low-quality image for fast scrolling
+  const image = video ? "" : pickImageSource(post, "feed");
   const caption = getPostCaption(post);
   const videoSrc = video ? pickVideoSource(post, tier).src : "";
-  const poster = post.postVideothumbnail || getPostImageUrl(post) || undefined;
+  const poster = post.postVideothumbnail || pickImageSource(post, "feed") || undefined;
   const videoPreload = getPreloadStrategy(tier, isActive);
   const isOwn = user?.uid === post.postUserId;
   const isFollowing = post.postUserId
