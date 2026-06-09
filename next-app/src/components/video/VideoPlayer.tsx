@@ -175,7 +175,7 @@ export function VideoPlayer({
       <video
         ref={videoRef}
         key={`${post.id}-${networkTier}`}
-        src={isActive || isNext ? src : undefined}
+        src={src}
         poster={poster}
         loop
         muted={muted}

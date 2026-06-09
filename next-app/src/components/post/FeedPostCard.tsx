@@ -222,7 +222,7 @@ export function FeedPostCard({
             <video
               ref={videoRef}
               key={videoSrc}
-              src={isActive ? videoSrc : undefined}
+              src={videoSrc}
               poster={poster}
               muted={muted}
               loop

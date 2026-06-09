@@ -71,7 +71,7 @@ export function AdaptiveVideo({
       <video
         ref={videoRef}
         key={`${post.id}-${tier}`}
-        src={isActive ? src : undefined}
+        src={src}
         poster={poster}
         loop={loop}
         muted={muted}
