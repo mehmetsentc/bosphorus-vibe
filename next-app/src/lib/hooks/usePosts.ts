@@ -20,6 +20,7 @@ export function useFeedPosts() {
   const postsCache = useAppStore((s) => s.posts);
   const lastFetched = useAppStore((s) => s.lastFetched.posts);
   const setPostsCache = useAppStore((s) => s.setPostsCache);
+  const appendFeedPosts = useAppStore((s) => s.appendFeedPosts);
   const clearPostsCache = useAppStore((s) => s.clearPostsCache);
 
   const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
@@ -100,10 +101,12 @@ export function useFeedPosts() {
       setHasMore(page.hasMore);
       const enriched = await enrichPostsWithUsers(page.posts);
       setLocalPosts((prev) => [...prev, ...enriched]);
+      // Persist paginated posts to store so they survive navigation
+      appendFeedPosts(enriched);
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore]);
+  }, [hasMore, loadingMore, appendFeedPosts]);
 
   const refresh = useCallback(async () => {
     clearPostsCache();

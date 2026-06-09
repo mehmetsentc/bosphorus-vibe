@@ -1,5 +1,5 @@
-/** Default cache TTL — 5 minutes */
-export const CACHE_TTL_MS = 5 * 60 * 1000;
+/** Default cache TTL — 30 minutes */
+export const CACHE_TTL_MS = 30 * 60 * 1000;
 
 export function isCacheExpired(
   lastFetched: number | undefined,

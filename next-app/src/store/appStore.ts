@@ -56,6 +56,7 @@ type AppStoreState = {
   setEvents: (data: EventsCache) => void;
   clearEventsCache: () => void;
   setPostsCache: (data: PostsCache) => void;
+  appendFeedPosts: (posts: EnrichedPost[]) => void;
   clearPostsCache: () => void;
   setReelsCache: (data: ReelsCache) => void;
   appendReelsPosts: (posts: EnrichedPost[]) => void;
@@ -107,6 +108,12 @@ export const useAppStore = create<AppStoreState>()(
         set((state) => ({
           posts: data,
           lastFetched: { ...state.lastFetched, posts: Date.now() },
+        })),
+      appendFeedPosts: (newPosts) =>
+        set((state) => ({
+          posts: state.posts
+            ? { ...state.posts, posts: [...state.posts.posts, ...newPosts] }
+            : { posts: newPosts, hasMore: true },
         })),
       clearPostsCache: () =>
         set((state) => ({
