@@ -15,15 +15,8 @@ const PUBLIC_PATHS = [
 const AUTH_ONLY_PREFIXES = ["/profile", "/upload", "/favorites", "/admin"];
 
 const GUEST_ALLOWED_PREFIXES = [
-  "/home",
   "/events",
-  "/reels",
-  "/team",
-  "/brand",
-  "/post",
-  "/user",
   "/feed",
-  "/messages",
 ];
 
 const PRIVATE_ROBOTS = ["/profile", "/admin", "/upload", "/favorites"];

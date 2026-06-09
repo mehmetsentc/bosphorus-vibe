@@ -6,6 +6,7 @@ import { NavigationProvider } from "@/components/layout/NavigationProvider";
 import { I18nProvider } from "@/components/providers/I18nProvider";
 import { SettingsProvider } from "@/components/settings/SettingsProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { GuestAuthModal } from "@/components/onboarding/GuestAuthModal";
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -14,7 +15,10 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
         <SettingsProvider>
           <CookieConsentProvider>
             <NavigationProvider>
-              <AuthProvider>{children}</AuthProvider>
+              <AuthProvider>
+                {children}
+                <GuestAuthModal />
+              </AuthProvider>
             </NavigationProvider>
           </CookieConsentProvider>
         </SettingsProvider>

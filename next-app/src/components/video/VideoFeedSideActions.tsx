@@ -12,7 +12,7 @@ import {
 } from "@/lib/services/firestore";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
-import { useRouter } from "next/navigation";
+import { triggerGuestModal } from "@/lib/hooks/useGuestModal";
 import {
   IconBookmark,
   IconHeart,
@@ -79,7 +79,6 @@ export function VideoFeedSideActions({
 }: VideoFeedSideActionsProps) {
   const { user } = useAuth();
   const { canLike, canComment } = useAccess();
-  const router = useRouter();
   const t = useT();
   const { prefs } = useSettings();
   const [liked, setLiked] = useState(false);
@@ -105,7 +104,7 @@ export function VideoFeedSideActions({
   }
 
   function requireAuth() {
-    router.push("/welcome?reason=auth-required");
+    triggerGuestModal();
   }
 
   async function handleLike() {

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { toggleLike, toggleSavePost } from "@/lib/services/firestore";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
-import { useRouter } from "next/navigation";
+import { triggerGuestModal } from "@/lib/hooks/useGuestModal";
 import {
   IconBookmark,
   IconHeart,
@@ -35,8 +35,7 @@ export function PostActionsBar({
   hideCommentPreview = false,
 }: PostActionsBarProps) {
   const { user } = useAuth();
-  const { canLike } = useAccess();
-  const router = useRouter();
+  const { canLike, canComment } = useAccess();
   const t = useT();
   const hideLikeCounts = useHideLikeCounts();
   const { prefs } = useSettings();
@@ -56,7 +55,7 @@ export function PostActionsBar({
 
   async function handleLike() {
     if (!canLike) {
-      router.push("/welcome?reason=auth-required");
+      triggerGuestModal();
       return;
     }
     if (!user) return;
@@ -80,7 +79,7 @@ export function PostActionsBar({
 
   async function handleSave() {
     if (!canLike) {
-      router.push("/welcome?reason=auth-required");
+      triggerGuestModal();
       return;
     }
     if (!user) return;
@@ -128,7 +127,7 @@ export function PostActionsBar({
           <button
             type="button"
             aria-label={t("comment")}
-            onClick={onCommentClick}
+            onClick={() => { if (!canComment) { triggerGuestModal(); return; } onCommentClick(); }}
             className={btnClass}
           >
             <IconMessage size={iconSize} className="text-foreground" />
