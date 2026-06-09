@@ -10,14 +10,47 @@ const VIDEO_RECORD_FPS = 24;
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
+const VIDEO_EXTENSIONS = new Set([
+  "mov",
+  "mp4",
+  "webm",
+  "m4v",
+  "avi",
+  "mkv",
+  "quicktime",
+]);
+const IMAGE_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "heic",
+  "heif",
+]);
+
+function fileExtension(file: File): string {
+  return file.name.split(".").pop()?.toLowerCase() ?? "";
+}
+
+export function isVideoFile(file: File): boolean {
+  if (file.type.startsWith("video/")) return true;
+  return VIDEO_EXTENSIONS.has(fileExtension(file));
+}
+
+export function isImageFile(file: File): boolean {
+  if (file.type.startsWith("image/")) return true;
+  return IMAGE_EXTENSIONS.has(fileExtension(file));
+}
+
 export type CompressedVideoResult = {
   video: Blob;
   thumbnail: Blob;
 };
 
 export function validateMediaSize(file: File, locale: Locale = "en"): string | null {
-  const isVideo = file.type.startsWith("video/");
-  const isImage = file.type.startsWith("image/");
+  const isVideo = isVideoFile(file);
+  const isImage = isImageFile(file);
   if (!isVideo && !isImage) return getMessage(locale, "mediaTypeError");
   if (isVideo && file.size > MAX_VIDEO_BYTES) {
     return getMessage(locale, "videoSizeError");
