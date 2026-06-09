@@ -12,6 +12,7 @@ import {
   uploadImagePost,
   uploadVideoPost,
 } from "@/lib/services/firestore";
+import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
 import {
   createStory,
   uploadStoryImage,
@@ -19,7 +20,7 @@ import {
 } from "@/lib/services/stories";
 import { StoryCategoryPicker } from "@/components/stories/StoryCategoryPicker";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
-import { validateMediaSize } from "@/lib/utils/media-compress";
+import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
 import { parseStoryCategory } from "@/lib/utils/story-categories";
 import { BRAND_NAME } from "@/lib/brand";
 import { IconGrid, IconPlus, IconReels } from "@/components/icons/Icons";
@@ -74,6 +75,10 @@ function CreateUploadFlowInner() {
   const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+
+  // Start uploading immediately when a file is selected (draft upload).
+  // For stories we skip this since they use different upload paths.
+  const draft = useDraftUpload(file, user?.uid, kind !== "story");
   const [storyCategory, setStoryCategory] = useState<StoryCategory>(initialStoryCategory);
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
 
@@ -119,7 +124,7 @@ function CreateUploadFlowInner() {
       setError("");
       if (!next || !kind) return;
 
-      if (kind === "reel" && !next.type.startsWith("video/")) {
+      if (kind === "reel" && !isVideoFile(next)) {
         setError(t("replaceVideoOnly"));
         return;
       }
@@ -131,7 +136,7 @@ function CreateUploadFlowInner() {
       }
 
       if (kind === "story") {
-        const isVideo = next.type.startsWith("video/");
+        const isVideo = isVideoFile(next);
         if (isVideo && next.size > STORY_MAX_VIDEO_MB * 1024 * 1024) {
           setError(t("storyVideoSizeError"));
           return;
@@ -143,7 +148,7 @@ function CreateUploadFlowInner() {
       }
 
       const url = URL.createObjectURL(next);
-      const isVideo = next.type.startsWith("video/");
+      const isVideo = isVideoFile(next);
       setFile(next);
       setPreview(url);
       setStep("edit");
@@ -190,8 +195,9 @@ function CreateUploadFlowInner() {
     const fullCaption = [textOverlay, caption].filter(Boolean).join("\n").trim();
 
     try {
+      // ── Story: always upload fresh (separate upload paths) ──────────────
       if (kind === "story") {
-        const isVideo = file.type.startsWith("video/");
+        const isVideo = isVideoFile(file);
         let photoUrl: string | undefined;
         let videoOriginalUrl: string | undefined;
         let videoLowUrl: string | undefined;
@@ -220,31 +226,48 @@ function CreateUploadFlowInner() {
         return;
       }
 
-      if (file.type.startsWith("video/")) {
-        const { originalUrl, lowUrl, thumbnailUrl } = await uploadVideoPost(
-          file,
-          user.uid,
-          setProgress,
-        );
+      // ── Post / Reel: use draft upload result if ready ────────────────────
+      let originalUrl: string;
+      let lowUrl: string;
+      let thumbnailUrl: string | undefined;
+
+      if (draft.status === "ready" && draft.result) {
+        // Draft finished in the background — only a Firestore write needed.
+        setProgress(98);
+        originalUrl = draft.result.originalUrl;
+        lowUrl = draft.result.lowUrl;
+        thumbnailUrl = draft.result.isVideo ? draft.result.thumbnailUrl : undefined;
+      } else {
+        // Draft still uploading or errored — fall back to fresh upload so
+        // the user is never stuck.
+        if (kind === "reel" || isVideoFile(file)) {
+          const result = await uploadVideoPost(file, user.uid, setProgress);
+          originalUrl = result.originalUrl;
+          lowUrl = result.lowUrl;
+          thumbnailUrl = result.thumbnailUrl;
+        } else {
+          const result = await uploadImagePost(file, user.uid, setProgress);
+          originalUrl = result.originalUrl;
+          lowUrl = result.lowUrl;
+        }
+      }
+
+      if (kind === "reel" || isVideoFile(file)) {
         await createVideoPost(
           originalUrl,
           lowUrl,
-          thumbnailUrl,
+          thumbnailUrl ?? "",
           fullCaption,
           user.uid,
           taggedPeople,
         );
       } else {
-        const { originalUrl, lowUrl } = await uploadImagePost(
-          file,
-          user.uid,
-          setProgress,
-        );
         await createImagePost(originalUrl, lowUrl, fullCaption, user.uid, taggedPeople);
       }
 
       router.push(kind === "reel" ? "/reels" : "/home");
-    } catch {
+    } catch (err) {
+      console.error("[CreateUpload]", err);
       setError(t("uploadFailed"));
     } finally {
       setUploading(false);
@@ -452,7 +475,7 @@ function CreateUploadFlowInner() {
             </button>
 
             <div className="absolute inset-0 bg-black">
-              {file.type.startsWith("video/") ? (
+              {isVideoFile(file) ? (
                 <video
                   src={preview}
                   className="h-full w-full object-contain"
@@ -525,9 +548,34 @@ function CreateUploadFlowInner() {
                   <div className="w-8" />
                 </header>
 
+                {/* Draft upload progress bar (shown while user writes caption) */}
+                {kind !== "story" && draft.status === "uploading" && (
+                  <div className="px-4 pb-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] text-white/50">
+                        Arka planda yükleniyor…
+                      </span>
+                      <span className="text-[11px] text-white/50">
+                        {draft.progress}%
+                      </span>
+                    </div>
+                    <div className="h-0.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-vibe transition-all duration-300"
+                        style={{ width: `${draft.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {kind !== "story" && draft.status === "ready" && (
+                  <p className="px-4 pb-2 text-[11px] text-vibe">
+                    ✓ Yükleme tamamlandı — yayınlamak için hazır
+                  </p>
+                )}
+
                 <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
                   <div className="mx-auto h-40 w-28 overflow-hidden rounded-lg bg-white/5">
-                    {file.type.startsWith("video/") ? (
+                    {isVideoFile(file) ? (
                       <video
                         src={preview}
                         className="h-full w-full object-cover"

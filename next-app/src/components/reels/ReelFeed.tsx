@@ -9,6 +9,8 @@ import { PostCommentModal } from "@/components/post/PostCommentModal";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
+import { useNetworkQuality } from "@/lib/hooks/useNetworkQuality";
+import { getPostVideoVariants } from "@/lib/utils/video-sources";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { UserPostDoc } from "@/types";
 
@@ -82,6 +84,7 @@ export function ReelFeed({
 }: ReelFeedProps) {
   const t = useT();
   const router = useRouter();
+  const networkTier = useNetworkQuality();
   const containerRef = useRef<HTMLDivElement>(null);
   useReelsViewportHeight(containerRef);
   const [posts, setPosts] = useState(initialPosts);
@@ -126,11 +129,24 @@ export function ReelFeed({
     );
   }
 
+  // Prefetch the next video's URL so it loads without waiting.
+  // Only do this on fast connections to avoid wasting bandwidth.
+  const nextPost = networkTier === "fast" ? visiblePosts[activeIndex + 1] : undefined;
+  const nextSrc = nextPost
+    ? (networkTier === "fast"
+        ? getPostVideoVariants(nextPost).original
+        : getPostVideoVariants(nextPost).low) || undefined
+    : undefined;
+
   return (
     <div
       ref={containerRef}
       className="reels-shell-scroll"
     >
+      {/* Prefetch next video — invisible, no autoplay */}
+      {nextSrc && (
+        <link rel="prefetch" href={nextSrc} as="video" />
+      )}
       {visiblePosts.map((post, i) => (
         <ReelItem
           key={post.id}
