@@ -14,6 +14,7 @@ import { StoryCategoryPicker } from "@/components/stories/StoryCategoryPicker";
 import { StoryMediaDisplay } from "@/components/stories/StoryMediaDisplay";
 import { STORY_MEDIA_CLASS } from "@/lib/utils/story-media";
 import { BRAND_NAME } from "@/lib/brand";
+import { isImageFile, isVideoFile } from "@/lib/utils/media-compress";
 import type { StoryCategory } from "@/types";
 
 const MAX_VIDEO_MB = 30;
@@ -88,8 +89,8 @@ export function StoryUploadModal({
       setError("");
       if (!next) return;
 
-      const isVideo = next.type.startsWith("video/");
-      const isImage = next.type.startsWith("image/");
+      const isVideo = isVideoFile(next);
+      const isImage = isImageFile(next);
       if (!isVideo && !isImage) {
         setError(t("mediaTypeError"));
         return;
@@ -122,7 +123,7 @@ export function StoryUploadModal({
     setUploading(true);
     setError("");
     try {
-      const isVideo = file.type.startsWith("video/");
+      const isVideo = isVideoFile(file);
       let photoUrl: string | undefined;
       let videoOriginalUrl: string | undefined;
       let videoLowUrl: string | undefined;
@@ -299,7 +300,7 @@ export function StoryUploadModal({
               </button>
 
               <div className="absolute inset-0 bg-black">
-                {file?.type.startsWith("video/") ? (
+                {file && isVideoFile(file) ? (
                   <StoryMediaDisplay
                     src={preview ?? ""}
                     isVideo

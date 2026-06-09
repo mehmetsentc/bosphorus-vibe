@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { getPostImageUrl, getPostVideoUrl } from "@/lib/services/firestore";
-import { AdaptiveVideo } from "@/components/video/AdaptiveVideo";
 import { IconLayers, IconMenu, IconPin, IconReels } from "@/components/icons/Icons";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
@@ -62,14 +61,14 @@ export function ProfilePostGrid({
               href={href}
               className="relative block h-full overflow-hidden bg-background"
             >
-              {videoUrl ? (
-                <AdaptiveVideo
-                  post={post}
-                  className="pointer-events-none h-full w-full object-cover"
-                />
-              ) : thumb ? (
+              {thumb ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={thumb} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={thumb}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <div className="flex h-full items-center justify-center bg-surface-overlay text-xs text-muted">
                   {t("postFallback")}

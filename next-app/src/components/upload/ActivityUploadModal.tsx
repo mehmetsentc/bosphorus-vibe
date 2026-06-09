@@ -8,6 +8,7 @@ import { getCurrentLocationLabel } from "@/lib/utils/geolocation";
 import {
   compressImage,
   compressVideo,
+  isVideoFile,
   validateMediaSize,
 } from "@/lib/utils/media-compress";
 import { useI18n, useT } from "@/components/providers/I18nProvider";
@@ -74,7 +75,7 @@ export function ActivityUploadModal({
     setUploading(true);
     setError("");
     try {
-      const isVideo = file.type.startsWith("video/");
+      const isVideo = isVideoFile(file);
       setProgress(2);
       let compressed: Awaited<ReturnType<typeof compressVideo>> | null = null;
       const lowQualityBlob = isVideo
@@ -100,7 +101,8 @@ export function ActivityUploadModal({
       await refreshProfile();
       onSuccess();
       onClose();
-    } catch {
+    } catch (err) {
+      console.error("[ActivityUpload]", err);
       setError(t("uploadActivityFailed"));
     } finally {
       setUploading(false);

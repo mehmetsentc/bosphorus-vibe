@@ -20,6 +20,7 @@ import {
 } from "@/components/icons/Icons";
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
+import { useVideoPlayStore } from "@/store/videoPlayStore";
 import type { UserPostDoc } from "@/types";
 
 const DOUBLE_TAP_MS = 280;
@@ -62,23 +63,42 @@ export function VideoPlayer({
 
   const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
+  const requestPlay = useVideoPlayStore((s) => s.requestPlay);
+  const releasePlay = useVideoPlayStore((s) => s.releasePlay);
+  const playingId = useVideoPlayStore((s) => s.playingId);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showPauseIcon, setShowPauseIcon] = useState(false);
   const [muteFlash, setMuteFlash] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPoster, setShowPoster] = useState(true);
+
+  // Global singleton: another video started → pause this one
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (playingId !== null && playingId !== post.id) {
+      video.pause();
+    }
+  }, [playingId, post.id]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
       video.play().catch(() => setPlaying(false));
+      requestPlay(post.id);
     } else {
       video.pause();
-      if (!isActive) video.currentTime = 0;
+      if (!isActive) {
+        video.currentTime = 0;
+        setShowPoster(true);
+      }
+      releasePlay(post.id);
     }
-  }, [isActive, autoPlay, src]);
+    return () => { releasePlay(post.id); };
+  }, [isActive, autoPlay, src, post.id, requestPlay, releasePlay]);
 
   useEffect(() => {
     if (networkTier === "fast" && isActive) {
@@ -135,10 +155,19 @@ export function VideoPlayer({
 
   return (
     <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-black">
+      {/* Thumbnail shown until video starts playing */}
+      {showPoster && poster && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={poster}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
       <video
         ref={videoRef}
         key={`${post.id}-${networkTier}`}
-        src={src}
+        src={isActive ? src : undefined}
         poster={poster}
         loop
         muted={muted}
@@ -154,8 +183,13 @@ export function VideoPlayer({
         onPlaying={() => {
           setLoading(false);
           setPlaying(true);
+          setShowPoster(false);
+          requestPlay(post.id);
         }}
-        onPause={() => setPlaying(false)}
+        onPause={() => {
+          setPlaying(false);
+          setShowPoster(true);
+        }}
         onTimeUpdate={(e) => {
           setCurrent(e.currentTarget.currentTime);
           setDuration(e.currentTarget.duration || 0);

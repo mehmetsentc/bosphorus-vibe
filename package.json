@@ -6,6 +6,8 @@
     "dev": "cd next-app && npm run dev",
     "dev:clean": "cd next-app && npm run dev:clean",
     "dev:reset": "cd next-app && npm run dev:reset",
-    "start": "cd next-app && npm start"
+    "start": "cd next-app && npm start",
+    "firebase:deploy:storage": "cd firebase && firebase deploy --only storage",
+    "firebase:deploy:rules": "cd firebase && firebase deploy --only firestore:rules,storage"
   }
 }

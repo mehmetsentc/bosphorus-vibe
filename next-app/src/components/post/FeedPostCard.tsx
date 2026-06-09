@@ -28,6 +28,7 @@ import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
 import { pickVideoSource } from "@/lib/utils/video-sources";
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
+import { useVideoPlayStore } from "@/store/videoPlayStore";
 import type { UserPostDoc } from "@/types";
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
@@ -54,7 +55,11 @@ export function FeedPostCard({
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
+  const requestPlay = useVideoPlayStore((s) => s.requestPlay);
+  const releasePlay = useVideoPlayStore((s) => s.releasePlay);
+  const playingId = useVideoPlayStore((s) => s.playingId);
   const [muteFlash, setMuteFlash] = useState<boolean | null>(null);
+  const [showPoster, setShowPoster] = useState(true);
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(post.numComments);
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
@@ -76,12 +81,27 @@ export function FeedPostCard({
     ? followingIds?.has(post.postUserId)
     : false;
 
+  // Global singleton: pause this video when another one starts playing
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !video) return;
-    if (isActive) el.play().catch(() => {});
-    else el.pause();
-  }, [isActive, video, videoSrc]);
+    if (playingId !== null && playingId !== post.id) {
+      el.pause();
+    }
+  }, [playingId, video, post.id]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !video) return;
+    if (isActive) {
+      el.play().catch(() => {});
+      requestPlay(post.id);
+    } else {
+      el.pause();
+      releasePlay(post.id);
+      setShowPoster(true);
+    }
+  }, [isActive, video, videoSrc, post.id, requestPlay, releasePlay]);
 
   useEffect(
     () => () => {
@@ -188,16 +208,28 @@ export function FeedPostCard({
           aria-label={t("videoControl")}
         >
           <div className="relative aspect-square w-full overflow-hidden">
+            {/* Poster shown until video starts playing */}
+            {showPoster && poster && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={poster}
+                alt=""
+                loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
             <video
               ref={videoRef}
               key={videoSrc}
-              src={videoSrc}
+              src={isActive ? videoSrc : undefined}
               poster={poster}
               muted={muted}
               loop
               playsInline
               preload={videoPreload}
               className="h-full w-full object-cover"
+              onPlaying={() => setShowPoster(false)}
+              onPause={() => setShowPoster(true)}
             />
             {muteFlash !== null && (
               <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">

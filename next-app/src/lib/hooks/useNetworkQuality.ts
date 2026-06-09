@@ -61,6 +61,6 @@ export function getPreloadStrategy(
   tier: NetworkTier,
   isActive: boolean,
 ): "none" | "metadata" | "auto" {
-  if (!isActive) return "metadata";
+  if (!isActive) return "none";
   return tier === "slow" ? "metadata" : "auto";
 }

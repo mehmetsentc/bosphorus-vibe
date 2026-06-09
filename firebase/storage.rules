@@ -15,7 +15,7 @@ service firebase.storage {
     }
 
     function isVideo() {
-      return request.resource.contentType == 'video/mp4';
+      return request.resource.contentType.matches('video/.*');
     }
 
     function under10MB() {

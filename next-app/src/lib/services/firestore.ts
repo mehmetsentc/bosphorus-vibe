@@ -735,13 +735,36 @@ export async function createImagePost(
   return docRef.id;
 }
 
+function contentTypeForUpload(storagePath: string, blob: Blob): string {
+  if (blob.type && blob.type !== "application/octet-stream") {
+    return blob.type;
+  }
+  const ext = storagePath.split(".").pop()?.toLowerCase();
+  const byExt: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+    heic: "image/heic",
+    heif: "image/heif",
+    mp4: "video/mp4",
+    m4v: "video/mp4",
+    mov: "video/quicktime",
+    webm: "video/webm",
+  };
+  return byExt[ext ?? ""] ?? (blob.type || "application/octet-stream");
+}
+
 export function uploadBlob(
   blob: Blob,
   storagePath: string,
   onProgress?: (pct: number) => void,
 ): Promise<string> {
   const storageRef = ref(getFirebaseStorage(), storagePath);
-  const task = uploadBytesResumable(storageRef, blob);
+  const task = uploadBytesResumable(storageRef, blob, {
+    contentType: contentTypeForUpload(storagePath, blob),
+  });
 
   return new Promise((resolve, reject) => {
     task.on(

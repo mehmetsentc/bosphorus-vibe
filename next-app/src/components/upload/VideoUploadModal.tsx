@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { uploadVideoPost, createVideoPost } from "@/lib/services/firestore";
+import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
+import { useI18n } from "@/components/providers/I18nProvider";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
@@ -19,6 +21,7 @@ export function VideoUploadModal({
 }) {
   const { user } = useAuth();
   const t = useT();
+  const { locale } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
@@ -28,6 +31,15 @@ export function VideoUploadModal({
 
   async function handleUpload() {
     if (!file || !user) return;
+    if (!isVideoFile(file)) {
+      setError(t("replaceVideoOnly"));
+      return;
+    }
+    const sizeError = validateMediaSize(file, locale);
+    if (sizeError) {
+      setError(sizeError);
+      return;
+    }
     setUploading(true);
     setError("");
     try {
@@ -43,7 +55,8 @@ export function VideoUploadModal({
       setProgress(0);
       onSuccess();
       onClose();
-    } catch {
+    } catch (err) {
+      console.error("[VideoUpload]", err);
       setError(t("uploadFailed"));
     } finally {
       setUploading(false);
