@@ -29,6 +29,8 @@ const SEEK_STEP = 10;
 type VideoPlayerProps = {
   post: UserPostDoc;
   isActive?: boolean;
+  /** True for the video immediately after the active one — preloads in background */
+  isNext?: boolean;
   autoPlay?: boolean;
   className?: string;
   overlay?: ReactNode;
@@ -46,6 +48,7 @@ function formatTime(seconds: number): string {
 export function VideoPlayer({
   post,
   isActive = true,
+  isNext = false,
   autoPlay = true,
   className = "max-h-full max-w-full object-contain",
   overlay,
@@ -59,7 +62,12 @@ export function VideoPlayer({
 
   const networkTier = useEffectiveNetworkTier();
   const { src, poster } = pickVideoSource(post, networkTier);
-  const preload = getPreloadStrategy(networkTier, isActive);
+  // Active: auto or metadata based on speed. Next-in-queue: metadata to buffer ahead. Others: none.
+  const preload = isActive
+    ? getPreloadStrategy(networkTier, true)
+    : isNext
+      ? "metadata"
+      : "none";
 
   const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
@@ -167,7 +175,7 @@ export function VideoPlayer({
       <video
         ref={videoRef}
         key={`${post.id}-${networkTier}`}
-        src={isActive ? src : undefined}
+        src={isActive || isNext ? src : undefined}
         poster={poster}
         loop
         muted={muted}

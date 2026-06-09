@@ -20,7 +20,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { compressImage, compressVideo } from "@/lib/utils/media-compress";
+import { compressImage, videoThumbnailFromFile } from "@/lib/utils/media-compress";
 import { hasPostVideo } from "@/lib/utils/video-sources";
 import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
 import {
@@ -619,34 +619,31 @@ export async function uploadVideoPost(
   userId: string,
   onProgress: (pct: number) => void,
 ): Promise<{ originalUrl: string; lowUrl: string; thumbnailUrl: string }> {
-  onProgress(2);
-  const { video: lowBlob, thumbnail } = await compressVideo(file);
-  onProgress(12);
+  // Step 1: Extract a single thumbnail frame — fast (no re-encoding).
+  onProgress(3);
+  const thumbnail = await videoThumbnailFromFile(file).catch(() => file);
+  onProgress(8);
 
   const stamp = Date.now();
   const ext = file.name.split(".").pop() || "mp4";
   const basePath = `users/${userId}/uploads/${stamp}`;
 
-  const [originalUrl, lowUrl, thumbnailUrl] = await Promise.all([
+  // Step 2: Upload original + thumbnail in parallel.
+  // We use the original file for both original and low-quality slots so the
+  // upload finishes quickly. Server-side transcoding can be added later via
+  // a Cloud Function if a lower-quality variant is needed.
+  const [originalUrl, thumbnailUrl] = await Promise.all([
     uploadBlob(
       file,
       `${basePath}/original.${ext}`,
-      (pct) => onProgress(12 + Math.round(pct * 0.38)),
+      (pct) => onProgress(8 + Math.round(pct * 0.88)),
     ),
-    uploadBlob(
-      lowBlob,
-      `${basePath}/low.webm`,
-      (pct) => onProgress(50 + Math.round(pct * 0.35)),
-    ),
-    uploadBlob(
-      thumbnail,
-      `${basePath}/thumb.jpg`,
-      (pct) => onProgress(85 + Math.round(pct * 0.12)),
-    ),
+    uploadBlob(thumbnail, `${basePath}/thumb.jpg`),
   ]);
 
   onProgress(100);
-  return { originalUrl, lowUrl, thumbnailUrl };
+  // Use originalUrl for both until server-side transcoding is available.
+  return { originalUrl, lowUrl: originalUrl, thumbnailUrl };
 }
 
 export async function createVideoPost(
