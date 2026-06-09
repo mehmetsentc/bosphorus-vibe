@@ -71,6 +71,16 @@ export function ProfilePostGrid({
                   loading="lazy"
                   className="h-full w-full object-cover"
                 />
+              ) : videoUrl ? (
+                // No thumbnail yet — let browser render the first video frame
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video
+                  src={videoUrl}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  className="pointer-events-none h-full w-full object-cover"
+                />
               ) : (
                 <div className="flex h-full items-center justify-center bg-surface-overlay text-xs text-muted">
                   {t("postFallback")}
