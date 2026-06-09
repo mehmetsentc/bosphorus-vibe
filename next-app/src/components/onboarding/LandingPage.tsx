@@ -12,6 +12,7 @@ import {
   signInWithEmail,
   signUpWithEmail,
   sendPasswordReset,
+  signInAnonymous,
   ensureCanonicalOrigin,
   getAuthErrorCode,
   formatAuthErrorMessage,
@@ -151,6 +152,18 @@ export function LandingPage() {
     } catch (err: unknown) {
       showAuthError(err, "Password reset failed");
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGuest() {
+    setBusy(true);
+    setError("");
+    try {
+      await signInAnonymous();
+      window.location.assign("/events");
+    } catch (err: unknown) {
+      showAuthError(err, "Anonymous sign-in failed");
       setBusy(false);
     }
   }
@@ -301,8 +314,18 @@ export function LandingPage() {
                     type="button"
                     onClick={() => switchView("signIn")}
                     className={`mt-8 ${primaryBtnClass}`}
+                    disabled={busy}
                   >
                     {t("authGetStarted")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGuest}
+                    disabled={busy}
+                    className={`mt-3 ${outlineBtnClass}`}
+                  >
+                    <GuestIcon />
+                    {busy ? t("loginSigningIn") : "Misafir olarak devam et"}
                   </button>
                   <p className="mt-6 text-sm text-muted">
                     {t("authNoAccount")}{" "}
@@ -536,6 +559,14 @@ function GoogleIcon() {
         fill="#EA4335"
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
       />
+    </svg>
+  );
+}
+
+function GuestIcon() {
+  return (
+    <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
     </svg>
   );
 }
