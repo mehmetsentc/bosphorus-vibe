@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { toggleLike, toggleSavePost } from "@/lib/services/firestore";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -41,12 +41,15 @@ export function PostActionsBar({
   const { prefs } = useSettings();
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
+  const likePendingRef = useRef(false);
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
   const [commentCount, setCommentCount] = useState(post.numComments);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
 
   useEffect(() => {
+    // Skip reset while a like request is in flight (optimistic update active)
+    if (likePendingRef.current) return;
     setLiked(user ? post.likedByIds.includes(user.uid) : false);
     setSaved(user ? post.savedByIds.includes(user.uid) : false);
     setLikeCount(post.likedByIds.length);
@@ -64,6 +67,7 @@ export function PostActionsBar({
     const newCount = next ? likeCount + 1 : likeCount - 1;
     setLikeCount(newCount);
     onLikeCountChange?.(newCount);
+    likePendingRef.current = true;
     try {
       await toggleLike(post.id, user.uid, !next);
       if (next && prefs.autoArchive && !saved) {
@@ -74,6 +78,8 @@ export function PostActionsBar({
       setLiked(!next);
       setLikeCount(post.likedByIds.length);
       onLikeCountChange?.(post.likedByIds.length);
+    } finally {
+      likePendingRef.current = false;
     }
   }
 
