@@ -74,7 +74,7 @@ export function FeedPostCard({
   // Feed always uses low-quality image for fast scrolling
   const image = video ? "" : pickImageSource(post, "feed");
   const caption = getPostCaption(post);
-  const videoSrc = video ? pickVideoSource(post, tier).src : "";
+  const videoSrc = video ? pickVideoSource(post, tier, "feed").src : "";
   const poster = post.postVideothumbnail || pickImageSource(post, "feed") || undefined;
   const videoPreload = getPreloadStrategy(tier, isActive);
   const isOwn = user?.uid === post.postUserId;

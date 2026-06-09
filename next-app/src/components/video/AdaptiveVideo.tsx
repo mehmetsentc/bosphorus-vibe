@@ -27,7 +27,7 @@ export function AdaptiveVideo({
   isActive = false,
 }: AdaptiveVideoProps) {
   const tier = useEffectiveNetworkTier();
-  const { src, poster } = pickVideoSource(post, tier);
+  const { src, poster } = pickVideoSource(post, tier, "detail");
   const preload = getPreloadStrategy(tier, isActive);
   const videoRef = useRef<HTMLVideoElement>(null);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);

@@ -33,13 +33,27 @@ export function getPostVideoVariants(post: UserPostDoc): {
   return { original, low, poster };
 }
 
-/** Yavaş bağlantıda düşük, hızlıda orijinal kalite */
+/**
+ * Returns the best video URL for the given context.
+ *
+ * - `"feed"` → always low quality (fast scroll; 480p after Cloud Function runs)
+ * - `"detail"` → tier-aware: slow=low, fast=original
+ *
+ * Falls back to whichever variant is available.
+ */
 export function pickVideoSource(
   post: UserPostDoc,
   tier: NetworkTier,
+  context: "feed" | "detail" = "feed",
 ): { src: string; poster?: string } {
   const { original, low, poster } = getPostVideoVariants(post);
 
+  if (context === "feed") {
+    // Always prefer low quality in feed for faster playback
+    return { src: low || original, poster };
+  }
+
+  // Detail / Reels full-screen: use tier
   if (tier === "slow") {
     return { src: low || original, poster };
   }

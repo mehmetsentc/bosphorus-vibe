@@ -61,7 +61,7 @@ export function VideoPlayer({
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const networkTier = useEffectiveNetworkTier();
-  const { src, poster } = pickVideoSource(post, networkTier);
+  const { src, poster } = pickVideoSource(post, networkTier, "detail");
   // Active: auto or metadata based on speed. Next-in-queue: metadata to buffer ahead. Others: none.
   const preload = isActive
     ? getPreloadStrategy(networkTier, true)
