@@ -208,7 +208,6 @@ export function VideoPlayer({
         src={src}
         poster={poster}
         loop
-        muted  // always set for iOS autoplay; actual .muted controlled imperatively
         playsInline
         preload={preload}
         className={className}

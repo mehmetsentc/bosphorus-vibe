@@ -250,7 +250,6 @@ function FeedPostCardInner({
               key={videoSrc}
               src={videoSrc}
               poster={poster}
-              muted  // always set for iOS autoplay; actual .muted controlled imperatively
               loop
               playsInline
               preload={videoPreload}
