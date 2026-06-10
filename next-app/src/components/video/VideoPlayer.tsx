@@ -59,6 +59,9 @@ export function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastTapRef = useRef(0);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks whether video has started playing at least once this activation.
+  // Prevents showing the poster (which would cause a black flash) when pausing mid-play.
+  const hasPlayedRef = useRef(false);
 
   const networkTier = useEffectiveNetworkTier();
   const { src, poster } = pickVideoSource(post, networkTier, "detail");
@@ -102,6 +105,7 @@ export function VideoPlayer({
       if (!isActive) {
         video.currentTime = 0;
         setShowPoster(true);
+        hasPlayedRef.current = false;
       }
       releasePlay(post.id);
     }
@@ -189,6 +193,7 @@ export function VideoPlayer({
         }}
         onWaiting={() => setLoading(true)}
         onPlaying={() => {
+          hasPlayedRef.current = true;
           setLoading(false);
           setPlaying(true);
           setShowPoster(false);
@@ -196,7 +201,9 @@ export function VideoPlayer({
         }}
         onPause={() => {
           setPlaying(false);
-          setShowPoster(true);
+          // Only restore poster before first play — not mid-playback.
+          // Without this guard the video area goes black on iOS when paused.
+          if (!hasPlayedRef.current) setShowPoster(true);
         }}
         onTimeUpdate={(e) => {
           setCurrent(e.currentTarget.currentTime);

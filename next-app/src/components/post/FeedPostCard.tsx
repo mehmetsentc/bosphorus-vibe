@@ -131,24 +131,27 @@ function FeedPostCardInner({
   const toggleMute = useCallback(() => {
     const next = !muted;
     setFeedMuted(next);
+    // Imperative DOM update — React prop alone doesn't unmute on iOS Safari
+    if (videoRef.current) videoRef.current.muted = next;
     setMuteFlash(!next);
     setTimeout(() => setMuteFlash(null), 700);
   }, [muted, setFeedMuted]);
 
-  // Instagram behaviour: single tap = toggle sound, double tap = open post page
+  // Single tap → open scrollable feed view starting at this post
+  // Double tap → toggle mute/unmute
   const handleVideoMediaClick = useCallback(() => {
     const now = Date.now();
     if (now - lastTapRef.current < DOUBLE_TAP_MS) {
-      // Double tap → navigate to full post page
+      // Double tap → toggle sound
       if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
       lastTapRef.current = 0;
-      router.push(`/post/${post.id}`);
+      toggleMute();
       return;
     }
     lastTapRef.current = now;
     tapTimerRef.current = setTimeout(() => {
-      // Single tap → unmute / mute
-      toggleMute();
+      // Single tap → open swipeable feed view
+      router.push(`/feed/${post.id}`);
     }, DOUBLE_TAP_MS);
   }, [post.id, router, toggleMute]);
 

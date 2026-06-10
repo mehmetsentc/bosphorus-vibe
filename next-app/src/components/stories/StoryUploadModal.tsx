@@ -18,7 +18,7 @@ import { isImageFile, isVideoFile } from "@/lib/utils/media-compress";
 import type { StoryCategory } from "@/types";
 
 const MAX_VIDEO_MB = 200;
-const MAX_IMAGE_MB = 50;
+const MAX_IMAGE_MB = 20;
 
 type Step = "gallery" | "edit";
 

@@ -29,6 +29,8 @@ type ReelFeedProps = {
   onActiveChange?: (index: number) => void;
   onPostDeleted?: (postId: string) => void;
   guestPreview?: boolean;
+  /** Scroll to this post on first render (e.g. when opening from feed) */
+  initialPostId?: string;
 };
 
 // Memoized per-slide — only re-renders when isActive/isNext changes
@@ -83,6 +85,7 @@ export function ReelFeed({
   onActiveChange,
   onPostDeleted,
   guestPreview = false,
+  initialPostId,
 }: ReelFeedProps) {
   const t = useT();
   const router = useRouter();
@@ -91,6 +94,7 @@ export function ReelFeed({
   useReelsViewportHeight(containerRef);
   const [posts, setPosts] = useState(initialPosts);
   const [activeIndex, setActiveIndex] = useState(0);
+  const initialScrollDone = useRef(false);
 
   // Single shared comment modal lifted out of N ReelItems
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -133,6 +137,26 @@ export function ReelFeed({
 
   const openComment = useCallback((postId: string) => setCommentPostId(postId), []);
   const closeComment = useCallback(() => setCommentPostId(null), []);
+
+  // Scroll to the post matching initialPostId on first render
+  useEffect(() => {
+    if (initialScrollDone.current || !initialPostId || !containerRef.current) return;
+    const idx = visiblePosts.findIndex((p) => p.id === initialPostId);
+    if (idx <= 0) {
+      initialScrollDone.current = true;
+      return;
+    }
+    setActiveIndex(idx);
+    // Double rAF ensures scroll-snap container has painted before we jump
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTop = idx * containerRef.current.clientHeight;
+        }
+      });
+    });
+    initialScrollDone.current = true;
+  }, [visiblePosts, initialPostId]);
 
   if (!visiblePosts.length) {
     return (
