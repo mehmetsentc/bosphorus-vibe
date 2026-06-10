@@ -1,19 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { ReelFeed } from "@/components/reels/ReelFeed";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useReelsPosts } from "@/lib/hooks/usePosts";
 import { useAccess } from "@/lib/hooks/useAccess";
-
-const ReelFeed = dynamic(
-  () =>
-    import("@/components/reels/ReelFeed").then((m) => ({
-      default: m.ReelFeed,
-    })),
-  { ssr: false, loading: () => <ReelsPageSkeleton /> },
-);
 
 export default function ReelsPage() {
   const { isGuest } = useAccess();

@@ -3,6 +3,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { MainContentArea } from "@/components/layout/MainContentArea";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { RoutePrefetcher } from "@/components/layout/RoutePrefetcher";
+import { ReelsPrefetcher } from "@/components/layout/ReelsPrefetcher";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { GuestBanner } from "@/components/onboarding/GuestBanner";
 import { LegalFooter } from "@/components/layout/LegalFooter";
@@ -16,6 +17,7 @@ export default function MainLayout({
   return (
     <>
       <RoutePrefetcher />
+      <ReelsPrefetcher />
       <NavigationProgress />
       <AuthGuard>
         <div className="min-h-screen md:pl-[244px]">
