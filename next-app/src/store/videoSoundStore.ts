@@ -11,7 +11,7 @@ type VideoSoundState = {
 export const useVideoSoundStore = create<VideoSoundState>()(
   persist(
     (set, get) => ({
-      feedMuted: false, // default: sound on — user can mute if they want
+      feedMuted: true, // default muted — iOS can't autoplay unmuted; user taps once to unlock audio
       setFeedMuted: (muted) => set({ feedMuted: muted }),
       toggleFeedMuted: () => {
         const next = !get().feedMuted;

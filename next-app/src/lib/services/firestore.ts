@@ -338,33 +338,57 @@ export type VideoPostsPage = {
   hasMore: boolean;
 };
 
-/** Paginated video posts — uses Firestore cursor + limit for fewer reads. */
+/** Paginated video posts — loops through batches until enough video posts collected.
+ *  cursor can be a Firestore DocumentSnapshot (live session) or a Date timestamp
+ *  (restored from localStorage cache between sessions).
+ */
 export async function getVideoPostsPage(
   pageSize = 12,
-  cursor?: QueryDocumentSnapshot<DocumentData> | null,
+  cursor?: QueryDocumentSnapshot<DocumentData> | Date | null,
 ): Promise<VideoPostsPage> {
-  const constraints: QueryConstraint[] = [
-    orderBy("timePosted", "desc"),
-    limit(pageSize * 4),
-  ];
-  if (cursor) constraints.push(startAfter(cursor));
+  const batchSize = 20;
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | null =
+    cursor instanceof Date ? null : (cursor ?? null);
+  const dateAnchor = cursor instanceof Date ? cursor : null;
+  const collected: { post: UserPostDoc; doc: QueryDocumentSnapshot<DocumentData> }[] = [];
+  let hasMore = true;
 
-  const snap = await getDocs(
-    query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
-  );
+  while (collected.length < pageSize && hasMore) {
+    const constraints: QueryConstraint[] = [
+      orderBy("timePosted", "desc"),
+      limit(batchSize),
+    ];
+    if (lastDoc) {
+      constraints.push(startAfter(lastDoc));
+    } else if (dateAnchor) {
+      constraints.push(startAfter(dateAnchor));
+    }
 
-  const allMapped = snap.docs.map((d) => ({
-    post: mapPost(d.id, d.data()),
-    doc: d,
-  }));
-  const videoRows = allMapped.filter((r) => getPostVideoUrl(r.post));
-  const posts = videoRows.slice(0, pageSize).map((r) => r.post);
-  const lastRaw = snap.docs[snap.docs.length - 1] ?? null;
+    const snap = await getDocs(
+      query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
+    );
+
+    if (snap.empty) {
+      hasMore = false;
+      break;
+    }
+
+    for (const d of snap.docs) {
+      lastDoc = d;
+      const post = mapPost(d.id, d.data());
+      if (getPostVideoUrl(post)) {
+        collected.push({ post, doc: d });
+      }
+      if (collected.length >= pageSize) break;
+    }
+
+    hasMore = snap.docs.length === batchSize;
+  }
 
   return {
-    posts,
-    lastDoc: lastRaw,
-    hasMore: snap.docs.length >= pageSize,
+    posts: collected.map((r) => r.post),
+    lastDoc: collected[collected.length - 1]?.doc ?? lastDoc,
+    hasMore,
   };
 }
 

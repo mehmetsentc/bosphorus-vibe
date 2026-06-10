@@ -147,6 +147,8 @@ export function useReelsPosts() {
   const clearReelsCache = useAppStore((s) => s.clearReelsCache);
 
   const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  // Fallback cursor for cache-restored sessions (DocumentSnapshot not serializable)
+  const dateCursorRef = useRef<Date | null>(null);
   const fetchRef = useRef(0);
   const [localPosts, setLocalPosts] = useState<EnrichedPost[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -163,6 +165,9 @@ export function useReelsPosts() {
     setLocalPosts(reelsCache.posts);
     setHasMore(reelsCache.hasMore);
     cursorRef.current = null;
+    // Use last post's timePosted as Date cursor so loadMore doesn't restart from page 1
+    const lastPost = reelsCache.posts[reelsCache.posts.length - 1];
+    dateCursorRef.current = lastPost?.timePosted instanceof Date ? lastPost.timePosted : null;
     setInitialized(true);
   }, [reelsCache]);
 
@@ -216,14 +221,19 @@ export function useReelsPosts() {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
     try {
-      const page = await getVideoPostsPage(
-        REELS_PAGE_SIZE,
-        cursorRef.current,
-      );
+      // Prefer live DocumentSnapshot cursor; fall back to Date from cache restore
+      const cursor = cursorRef.current ?? dateCursorRef.current;
+      const page = await getVideoPostsPage(REELS_PAGE_SIZE, cursor);
       cursorRef.current = page.lastDoc;
+      dateCursorRef.current = null; // consumed
       setHasMore(page.hasMore);
       const enriched = await enrichPostsWithUsers(page.posts);
-      setLocalPosts((prev) => [...prev, ...enriched]);
+      setLocalPosts((prev) => {
+        // Deduplicate — cache restore + loadMore could overlap
+        const existingIds = new Set(prev.map((p) => p.id));
+        const fresh = enriched.filter((p) => !existingIds.has(p.id));
+        return [...prev, ...fresh];
+      });
       appendReelsPosts(enriched);
     } finally {
       setLoadingMore(false);
