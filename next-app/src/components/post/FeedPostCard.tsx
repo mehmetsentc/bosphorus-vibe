@@ -25,6 +25,7 @@ import {
 } from "@/lib/services/friends";
 import { pickImageSource, pickVideoSource } from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
+import { isAudioUnlocked, markAudioUnlocked } from "@/lib/utils/audioUnlock";
 import { IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
 import { PostActionsBar } from "@/components/post/PostActionsBar";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
@@ -59,8 +60,6 @@ function FeedPostCardInner({
   const { user } = useAuth();
   const { canLike } = useAccess();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const lastTapRef = useRef(0);
-  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewedRef = useRef(false); // fire view count once per mount
   const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
@@ -104,13 +103,18 @@ function FeedPostCardInner({
     const el = videoRef.current;
     if (!el || !video) return;
     if (isActive) {
+      // If user has already unlocked audio this session, respect their muted preference.
+      // Otherwise start muted (iOS autoplay requirement).
+      el.muted = isAudioUnlocked() ? muted : true;
       el.play().catch(() => {});
       requestPlay(post.id);
     } else {
       el.pause();
+      el.muted = true; // reset when leaving viewport
       releasePlay(post.id);
       setShowPoster(true);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, video, videoSrc, post.id, requestPlay, releasePlay]);
 
   // Increment view count once when post first enters viewport
@@ -121,24 +125,23 @@ function FeedPostCardInner({
     }
   }, [isActive, post.id]);
 
-  useEffect(
-    () => () => {
-      if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
-    },
-    [],
-  );
-
   const toggleMute = useCallback(() => {
     const next = !muted;
     setFeedMuted(next);
     const vid = videoRef.current;
     if (vid) {
       if (!next) {
-        // iOS requires: pause → set muted=false → play() — all inside one gesture handler.
-        // Calling play() on an already-playing muted video does NOT unlock audio on iOS.
+        // iOS: pause → muted=false → play() must all happen synchronously in a gesture handler.
         vid.pause();
         vid.muted = false;
-        vid.play().catch(() => {});
+        vid.play()
+          .then(() => markAudioUnlocked()) // session audio unlock — subsequent videos can auto-unmute
+          .catch(() => {
+            // iOS still blocked — fall back to muted
+            vid.muted = true;
+            vid.play().catch(() => {});
+            setFeedMuted(true);
+          });
       } else {
         vid.muted = true;
       }
@@ -147,23 +150,11 @@ function FeedPostCardInner({
     setTimeout(() => setMuteFlash(null), 700);
   }, [muted, setFeedMuted]);
 
-  // Single tap → open scrollable feed view starting at this post
-  // Double tap → toggle mute/unmute
+  // Single tap on video → toggle sound (direct gesture = iOS grants audio permission)
+  // Navigation to post is available via the ··· button in the post header
   const handleVideoMediaClick = useCallback(() => {
-    const now = Date.now();
-    if (now - lastTapRef.current < DOUBLE_TAP_MS) {
-      // Double tap → toggle sound
-      if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
-      lastTapRef.current = 0;
-      toggleMute();
-      return;
-    }
-    lastTapRef.current = now;
-    tapTimerRef.current = setTimeout(() => {
-      // Single tap → open swipeable feed view
-      router.push(`/feed/${post.id}`);
-    }, DOUBLE_TAP_MS);
-  }, [post.id, router, toggleMute]);
+    toggleMute();
+  }, [toggleMute]);
 
   async function handleFollow() {
     if (!canLike || !user || !post.postUserId || isOwn) return;
@@ -259,7 +250,7 @@ function FeedPostCardInner({
               key={videoSrc}
               src={videoSrc}
               poster={poster}
-              muted={muted}
+              muted  // always set for iOS autoplay; actual .muted controlled imperatively
               loop
               playsInline
               preload={videoPreload}

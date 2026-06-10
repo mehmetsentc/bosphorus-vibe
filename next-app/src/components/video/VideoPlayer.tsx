@@ -21,6 +21,7 @@ import {
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
+import { isAudioUnlocked, markAudioUnlocked } from "@/lib/utils/audioUnlock";
 import type { UserPostDoc } from "@/types";
 
 const DOUBLE_TAP_MS = 280;
@@ -99,18 +100,23 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
+      // Respect user's muted preference only after audio has been unlocked this session.
+      // On iOS, video must start muted for autoplay to work until user taps to unmute.
+      video.muted = isAudioUnlocked() ? muted : true;
       video.play().catch(() => setPlaying(false));
       requestPlay(post.id);
     } else {
       video.pause();
       if (!isActive) {
         video.currentTime = 0;
+        video.muted = true;
         setShowPoster(true);
         hasPlayedRef.current = false;
       }
       releasePlay(post.id);
     }
     return () => { releasePlay(post.id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, autoPlay, src, post.id, requestPlay, releasePlay]);
 
   useEffect(() => {
@@ -144,7 +150,14 @@ export function VideoPlayer({
         // Calling play() on an already-playing muted video does NOT unlock audio on iOS.
         video.pause();
         video.muted = false;
-        video.play().catch(() => {});
+        video.play()
+          .then(() => markAudioUnlocked())
+          .catch(() => {
+            // iOS still blocked — fall back to muted
+            video.muted = true;
+            video.play().catch(() => {});
+            setFeedMuted(true);
+          });
       } else {
         video.muted = true;
       }
@@ -195,7 +208,7 @@ export function VideoPlayer({
         src={src}
         poster={poster}
         loop
-        muted={muted}
+        muted  // always set for iOS autoplay; actual .muted controlled imperatively
         playsInline
         preload={preload}
         className={className}

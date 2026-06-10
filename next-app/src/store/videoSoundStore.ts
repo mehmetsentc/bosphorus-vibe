@@ -11,7 +11,7 @@ type VideoSoundState = {
 export const useVideoSoundStore = create<VideoSoundState>()(
   persist(
     (set, get) => ({
-      feedMuted: true,
+      feedMuted: false, // default: sound on — user can mute if they want
       setFeedMuted: (muted) => set({ feedMuted: muted }),
       toggleFeedMuted: () => {
         const next = !get().feedMuted;
