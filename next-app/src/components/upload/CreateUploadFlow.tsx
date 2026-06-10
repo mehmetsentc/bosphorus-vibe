@@ -37,8 +37,8 @@ type RecentItem = {
   duration?: string;
 };
 
-const STORY_MAX_VIDEO_MB = 30;
-const STORY_MAX_IMAGE_MB = 8;
+const STORY_MAX_VIDEO_MB = 200;
+const STORY_MAX_IMAGE_MB = 50;
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);

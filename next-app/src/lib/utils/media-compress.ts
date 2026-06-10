@@ -7,8 +7,8 @@ const VIDEO_LOW_MAX_WIDTH = 640;
 const VIDEO_LOW_BITRATE = 750_000;
 const VIDEO_RECORD_FPS = 24;
 
-export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+export const MAX_IMAGE_BYTES = 50 * 1024 * 1024;  // 50 MB
 
 const VIDEO_EXTENSIONS = new Set([
   "mov",

@@ -17,8 +17,8 @@ import { BRAND_NAME } from "@/lib/brand";
 import { isImageFile, isVideoFile } from "@/lib/utils/media-compress";
 import type { StoryCategory } from "@/types";
 
-const MAX_VIDEO_MB = 30;
-const MAX_IMAGE_MB = 8;
+const MAX_VIDEO_MB = 200;
+const MAX_IMAGE_MB = 50;
 
 type Step = "gallery" | "edit";
 
