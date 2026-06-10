@@ -139,10 +139,15 @@ export function VideoPlayer({
     setFeedMuted(next);
     const video = videoRef.current;
     if (video) {
-      // Imperative update required — React prop alone doesn't unmute on iOS Safari.
-      video.muted = next;
-      // Re-trigger play so iOS commits the new audio state within the gesture handler.
-      if (!next) video.play().catch(() => {});
+      if (!next) {
+        // iOS requires: pause → set muted=false → play() — all inside one gesture handler.
+        // Calling play() on an already-playing muted video does NOT unlock audio on iOS.
+        video.pause();
+        video.muted = false;
+        video.play().catch(() => {});
+      } else {
+        video.muted = true;
+      }
     }
     setMuteFlash(!next);
     setTimeout(() => setMuteFlash(null), 700);
