@@ -1,11 +1,34 @@
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
 import { getPostVideoUrl } from "@/lib/services/firestore";
 import { pickImageSource } from "@/lib/utils/video-sources";
 import { IconLayers, IconMenu, IconPin, IconReels } from "@/components/icons/Icons";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
+
+/**
+ * Renders a muted video and seeks to 0.1s on metadata load so mobile
+ * browsers (especially iOS Safari) show the first real frame instead of black.
+ */
+function VideoThumb({ src, className }: { src: string; className?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  return (
+    // eslint-disable-next-line jsx-a11y/media-has-caption
+    <video
+      ref={ref}
+      src={src}
+      preload="metadata"
+      muted
+      playsInline
+      onLoadedMetadata={() => {
+        if (ref.current) ref.current.currentTime = 0.1;
+      }}
+      className={className}
+    />
+  );
+}
 
 type ProfilePostGridProps = {
   posts: UserPostDoc[];
@@ -72,13 +95,9 @@ export function ProfilePostGrid({
                   className="h-full w-full object-cover"
                 />
               ) : videoUrl ? (
-                // No thumbnail yet — let browser render the first video frame
-                // eslint-disable-next-line jsx-a11y/media-has-caption
-                <video
+                // No thumbnail stored — seek to first frame via JS
+                <VideoThumb
                   src={videoUrl}
-                  preload="metadata"
-                  muted
-                  playsInline
                   className="pointer-events-none h-full w-full object-cover"
                 />
               ) : (
