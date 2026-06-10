@@ -24,6 +24,8 @@ export function useFeedPosts() {
   const clearPostsCache = useAppStore((s) => s.clearPostsCache);
 
   const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  // Fallback cursor for cache-restored sessions (DocumentSnapshot not serializable)
+  const dateCursorRef = useRef<Date | null>(null);
   const fetchRef = useRef(0);
   const [localPosts, setLocalPosts] = useState<EnrichedPost[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -40,6 +42,9 @@ export function useFeedPosts() {
     setLocalPosts(postsCache.posts);
     setHasMore(postsCache.hasMore);
     cursorRef.current = null;
+    // Use last post's timePosted as Date cursor so loadMore doesn't restart from page 1
+    const lastPost = postsCache.posts[postsCache.posts.length - 1];
+    dateCursorRef.current = lastPost?.timePosted instanceof Date ? lastPost.timePosted : null;
     setInitialized(true);
   }, [postsCache]);
 
@@ -93,15 +98,19 @@ export function useFeedPosts() {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
     try {
-      const page = await getFeedPostsPage(
-        FEED_PAGE_SIZE,
-        cursorRef.current,
-      );
+      // Prefer live DocumentSnapshot cursor; fall back to Date from cache restore
+      const cursor = cursorRef.current ?? dateCursorRef.current;
+      const page = await getFeedPostsPage(FEED_PAGE_SIZE, cursor);
       cursorRef.current = page.lastDoc;
+      dateCursorRef.current = null; // consumed
       setHasMore(page.hasMore);
       const enriched = await enrichPostsWithUsers(page.posts);
-      setLocalPosts((prev) => [...prev, ...enriched]);
-      // Persist paginated posts to store so they survive navigation
+      setLocalPosts((prev) => {
+        // Deduplicate — cache restore + loadMore could overlap
+        const existingIds = new Set(prev.map((p) => p.id));
+        const fresh = enriched.filter((p) => !existingIds.has(p.id));
+        return [...prev, ...fresh];
+      });
       appendFeedPosts(enriched);
     } finally {
       setLoadingMore(false);

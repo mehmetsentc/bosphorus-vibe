@@ -91,6 +91,7 @@ function mapPost(id: string, data: Record<string, unknown>): UserPostDoc {
     postVideothumbnail: (data.postVideothumbnail as string) ?? undefined,
     timePosted: toDate(data.timePosted ?? data.createdAt),
     numComments: (data.numComments as number) ?? 0,
+    numViews: (data.numViews as number) ?? 0,
     likedByIds,
     savedByIds,
     category: (data.category as string) ?? undefined,
@@ -135,22 +136,32 @@ export type PostsPage = {
   hasMore: boolean;
 };
 
-/** Paginated feed — photo and video posts, cursor-based infinite scroll. */
+/** Paginated feed — photo and video posts, cursor-based infinite scroll.
+ *  cursor can be a Firestore DocumentSnapshot (live session) or a Date
+ *  timestamp (restored from localStorage cache between sessions).
+ */
 export async function getFeedPostsPage(
   pageSize = 10,
-  cursor?: QueryDocumentSnapshot<DocumentData> | null,
+  cursor?: QueryDocumentSnapshot<DocumentData> | Date | null,
 ): Promise<PostsPage> {
   const batchSize = 20;
-  let lastDoc = cursor ?? null;
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | null =
+    cursor instanceof Date ? null : (cursor ?? null);
   const collected: UserPostDoc[] = [];
   let hasMore = true;
+  // For Date cursors we use the timestamp value directly with startAfter
+  const dateAnchor = cursor instanceof Date ? cursor : null;
 
   while (collected.length < pageSize && hasMore) {
     const constraints: QueryConstraint[] = [
       orderBy("timePosted", "desc"),
       limit(batchSize),
     ];
-    if (lastDoc) constraints.push(startAfter(lastDoc));
+    if (lastDoc) {
+      constraints.push(startAfter(lastDoc));
+    } else if (dateAnchor) {
+      constraints.push(startAfter(dateAnchor));
+    }
 
     const snap = await getDocs(
       query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
@@ -426,6 +437,12 @@ export async function getFollowStats(
     followers: followersSnap.size,
     following: followingSnap.size,
   };
+}
+
+/** Increments numViews by 1. Fire-and-forget — errors are silently ignored. */
+export function incrementPostViews(postId: string): void {
+  const postRef = doc(getFirebaseDb(), COLLECTIONS.userPosts, postId);
+  updateDoc(postRef, { numViews: increment(1) }).catch(() => {});
 }
 
 export async function toggleLike(

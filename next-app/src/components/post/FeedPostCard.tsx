@@ -4,25 +4,6 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  getPostCaption,
-  getPostImageUrl,
-  getPostVideoUrl,
-} from "@/lib/services/firestore";
-import {
-  followUser,
-  getFollowingSet,
-  unfollowUser,
-} from "@/lib/services/friends";
-import { IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
-import { PostActionsBar } from "@/components/post/PostActionsBar";
-import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
-
-// Heavy modals — lazy loaded only when opened
-const PostCommentModal = dynamic(
-  () => import("@/components/post/PostCommentModal").then((m) => ({ default: m.PostCommentModal })),
-  { ssr: false },
-);
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
@@ -31,11 +12,32 @@ import {
   useHideLikeCounts,
 } from "@/lib/hooks/useSettingsEffects";
 import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
+import {
+  getPostCaption,
+  getPostImageUrl,
+  getPostVideoUrl,
+  incrementPostViews,
+} from "@/lib/services/firestore";
+import {
+  followUser,
+  getFollowingSet,
+  unfollowUser,
+} from "@/lib/services/friends";
 import { pickImageSource, pickVideoSource } from "@/lib/utils/video-sources";
+import { formatTimeAgo } from "@/lib/utils/time";
+import { IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
+import { PostActionsBar } from "@/components/post/PostActionsBar";
+import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
 import type { UserPostDoc } from "@/types";
+
+// Heavy modals — lazy loaded only when opened
+const PostCommentModal = dynamic(
+  () => import("@/components/post/PostCommentModal").then((m) => ({ default: m.PostCommentModal })),
+  { ssr: false },
+);
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
 
@@ -59,6 +61,7 @@ function FeedPostCardInner({
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastTapRef = useRef(0);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewedRef = useRef(false); // fire view count once per mount
   const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
@@ -110,6 +113,14 @@ function FeedPostCardInner({
     }
   }, [isActive, video, videoSrc, post.id, requestPlay, releasePlay]);
 
+  // Increment view count once when post first enters viewport
+  useEffect(() => {
+    if (isActive && !viewedRef.current) {
+      viewedRef.current = true;
+      incrementPostViews(post.id);
+    }
+  }, [isActive, post.id]);
+
   useEffect(
     () => () => {
       if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
@@ -124,17 +135,20 @@ function FeedPostCardInner({
     setTimeout(() => setMuteFlash(null), 700);
   }, [muted, setFeedMuted]);
 
+  // Instagram behaviour: single tap = toggle sound, double tap = open post page
   const handleVideoMediaClick = useCallback(() => {
     const now = Date.now();
     if (now - lastTapRef.current < DOUBLE_TAP_MS) {
+      // Double tap → navigate to full post page
       if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
       lastTapRef.current = 0;
-      toggleMute();
+      router.push(`/post/${post.id}`);
       return;
     }
     lastTapRef.current = now;
     tapTimerRef.current = setTimeout(() => {
-      router.push(`/post/${post.id}`);
+      // Single tap → unmute / mute
+      toggleMute();
     }, DOUBLE_TAP_MS);
   }, [post.id, router, toggleMute]);
 
@@ -177,9 +191,11 @@ function FeedPostCardInner({
             <p className="truncate text-[13px] font-semibold leading-tight">
               {post.userName ?? "user"}
             </p>
-            {post.activityName && (
-              <p className="truncate text-[11px] text-muted">{post.activityName}</p>
-            )}
+            <p className="truncate text-[11px] text-muted">
+              {post.activityName
+                ? `${post.activityName} · ${formatTimeAgo(post.timePosted)}`
+                : formatTimeAgo(post.timePosted)}
+            </p>
           </div>
         </Link>
 
@@ -276,11 +292,18 @@ function FeedPostCardInner({
       />
 
       <div className="space-y-1 px-3 pb-4">
-        {likeCount > 0 && !hideLikeCounts && (
-          <p className="text-[13px] font-semibold">
-            {likeCount} {t("likes")}
-          </p>
-        )}
+        <div className="flex items-center gap-3">
+          {likeCount > 0 && !hideLikeCounts && (
+            <p className="text-[13px] font-semibold">
+              {likeCount} {t("likes")}
+            </p>
+          )}
+          {(post.numViews ?? 0) > 0 && (
+            <p className="text-[12px] text-muted">
+              {(post.numViews ?? 0).toLocaleString()} görüntülenme
+            </p>
+          )}
+        </div>
         {caption && (
           <p className="text-[13px] leading-snug">
             <Link

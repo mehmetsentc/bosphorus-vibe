@@ -46,6 +46,7 @@ export interface UserPostDoc {
   postVideothumbnail?: string;
   timePosted: Date;
   numComments: number;
+  numViews?: number;
   likedByIds: string[];
   savedByIds: string[];
   category?: string;

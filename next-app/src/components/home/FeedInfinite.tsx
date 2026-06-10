@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { FeedPostCard } from "@/components/post/FeedPostCard";
+import { markPostsSeen, sortPostsByUnseen } from "@/lib/utils/seenPosts";
 
 // Suggestion cards only appear after scrolling — lazy load them
 const FeedFriendSuggestions = dynamic(
@@ -19,6 +20,7 @@ const FeedEventSuggestions = dynamic(
 );
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
+
 import {
   getSuggestedUsers,
   getFollowingSet,
@@ -152,7 +154,14 @@ export function FeedInfinite() {
     setFriendSuggestions((prev) => prev.filter((u) => u.uid !== uid));
   }
 
-  const feedPostIds = useMemo(() => new Set(posts.map((p) => p.id)), [posts]);
+  // Sort unseen posts first, then seen ones — mark all as seen after render
+  const sortedPosts = useMemo(() => sortPostsByUnseen(posts), [posts]);
+
+  useEffect(() => {
+    if (posts.length > 0) markPostsSeen(posts.map((p) => p.id));
+  }, [posts]);
+
+  const feedPostIds = useMemo(() => new Set(sortedPosts.map((p) => p.id)), [sortedPosts]);
 
   const filteredVideoSuggestions = useMemo(
     () => videoSuggestions.filter((p) => !feedPostIds.has(p.id)).slice(0, 8),
@@ -169,8 +178,8 @@ export function FeedInfinite() {
   );
 
   const feedRows = useMemo(
-    () => buildFeedRows(posts, availability),
-    [posts, availability],
+    () => buildFeedRows(sortedPosts, availability),
+    [sortedPosts, availability],
   );
 
   if (loading) {
