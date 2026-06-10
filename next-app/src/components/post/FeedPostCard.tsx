@@ -131,8 +131,13 @@ function FeedPostCardInner({
   const toggleMute = useCallback(() => {
     const next = !muted;
     setFeedMuted(next);
-    // Imperative DOM update — React prop alone doesn't unmute on iOS Safari
-    if (videoRef.current) videoRef.current.muted = next;
+    const vid = videoRef.current;
+    if (vid) {
+      // Imperative DOM update — React prop alone doesn't unmute on iOS Safari.
+      vid.muted = next;
+      // Re-trigger play so iOS commits the new audio state within the gesture handler.
+      if (!next) vid.play().catch(() => {});
+    }
     setMuteFlash(!next);
     setTimeout(() => setMuteFlash(null), 700);
   }, [muted, setFeedMuted]);

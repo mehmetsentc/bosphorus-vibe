@@ -64,7 +64,8 @@ export function VideoPlayer({
   const hasPlayedRef = useRef(false);
 
   const networkTier = useEffectiveNetworkTier();
-  const { src, poster } = pickVideoSource(post, networkTier, "detail");
+  // Always use feed (low) quality in the reels player — original is too slow to stream.
+  const { src, poster } = pickVideoSource(post, networkTier, "feed");
   // Active: auto or metadata based on speed. Next-in-queue: metadata to buffer ahead. Others: none.
   const preload = isActive
     ? getPreloadStrategy(networkTier, true)
@@ -136,6 +137,13 @@ export function VideoPlayer({
   const toggleMute = useCallback(() => {
     const next = !muted;
     setFeedMuted(next);
+    const video = videoRef.current;
+    if (video) {
+      // Imperative update required — React prop alone doesn't unmute on iOS Safari.
+      video.muted = next;
+      // Re-trigger play so iOS commits the new audio state within the gesture handler.
+      if (!next) video.play().catch(() => {});
+    }
     setMuteFlash(!next);
     setTimeout(() => setMuteFlash(null), 700);
   }, [muted, setFeedMuted]);
