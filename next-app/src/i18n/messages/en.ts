@@ -125,7 +125,7 @@ const en = {
   noVideosYet: "No videos yet. Upload from your profile!",
   videoControl: "Video control",
   slowConnection: "Slow connection — optimizing",
-  tapHint: "Tap: pause · Double tap: sound",
+  tapHint: "Tap: toggle sound",
   noContentInTab: "No content in this tab.",
   postFallback: "Post",
   uploadReel: "Upload reel",

@@ -125,7 +125,7 @@ const pl: Messages = {
   noVideosYet: "Brak filmów. Prześlij z profilu!",
   videoControl: "Sterowanie wideo",
   slowConnection: "Wolne połączenie — optymalizacja",
-  tapHint: "Dotknij: pauza · Podwójne dotknięcie: dźwięk",
+  tapHint: "Dotknij: dźwięk wł/wył",
   noContentInTab: "Brak treści w tej zakładce.",
   postFallback: "Post",
   uploadReel: "Prześlij reel",

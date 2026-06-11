@@ -128,7 +128,7 @@ const tr: Messages = {
   noVideosYet: "Henüz video yok. Profilden yükleyin!",
   videoControl: "Video kontrol",
   slowConnection: "Yavaş bağlantı — optimize ediliyor",
-  tapHint: "Tek dokun: duraklat · Çift dokun: ses",
+  tapHint: "Dokun: ses aç/kapat",
   noContentInTab: "Bu sekmede içerik yok.",
   postFallback: "Gönderi",
   uploadReel: "Reel yükle",

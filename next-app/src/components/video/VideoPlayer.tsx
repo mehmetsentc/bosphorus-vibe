@@ -24,7 +24,6 @@ import { useVideoPlayStore } from "@/store/videoPlayStore";
 import { isAudioUnlocked, markAudioUnlocked } from "@/lib/utils/audioUnlock";
 import type { UserPostDoc } from "@/types";
 
-const DOUBLE_TAP_MS = 280;
 const SEEK_STEP = 10;
 
 type VideoPlayerProps = {
@@ -58,8 +57,6 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const lastTapRef = useRef(0);
-  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks whether video has started playing at least once this activation.
   // Prevents showing the poster (which would cause a black flash) when pausing mid-play.
   const hasPlayedRef = useRef(false);
@@ -173,19 +170,10 @@ export function VideoPlayer({
     );
   }, []);
 
+  // Single tap = toggle sound (direct user gesture = iOS audio unlock opportunity)
   const handleTap = useCallback(() => {
-    const now = Date.now();
-    if (now - lastTapRef.current < DOUBLE_TAP_MS) {
-      if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
-      lastTapRef.current = 0;
-      toggleMute();
-      return;
-    }
-    lastTapRef.current = now;
-    tapTimerRef.current = setTimeout(() => {
-      togglePlay();
-    }, DOUBLE_TAP_MS);
-  }, [toggleMute, togglePlay]);
+    toggleMute();
+  }, [toggleMute]);
 
   if (!src) return null;
 

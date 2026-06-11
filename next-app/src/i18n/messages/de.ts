@@ -126,7 +126,7 @@ const de: Messages = {
   noVideosYet: "Noch keine Videos. Aus dem Profil hochladen!",
   videoControl: "Videosteuerung",
   slowConnection: "Langsame Verbindung — wird optimiert",
-  tapHint: "Tippen: Pause · Doppeltippen: Ton",
+  tapHint: "Tippen: Ton an/aus",
   noContentInTab: "Kein Inhalt in diesem Tab.",
   postFallback: "Beitrag",
   uploadReel: "Reel hochladen",

@@ -126,7 +126,7 @@ const xk: Messages = {
   noVideosYet: "Ende s'ka video. Ngarko nga profili!",
   videoControl: "Kontrolli i videos",
   slowConnection: "Lidhje e ngadaltë — po optimizohet",
-  tapHint: "Prek: pauzë · Dy herë: zëri",
+  tapHint: "Prek: zëri on/off",
   noContentInTab: "Pa përmbajtje në këtë skedë.",
   postFallback: "Postim",
   uploadReel: "Ngarko reel",

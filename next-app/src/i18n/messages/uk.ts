@@ -125,7 +125,7 @@ const uk: Messages = {
   noVideosYet: "Відео поки немає. Завантажте з профілю!",
   videoControl: "Керування відео",
   slowConnection: "Повільне з'єднання — оптимізація",
-  tapHint: "Натисніть: пауза · Двічі: звук",
+  tapHint: "Натисніть: звук вкл/викл",
   noContentInTab: "Немає контенту на цій вкладці.",
   postFallback: "Допис",
   uploadReel: "Завантажити reel",

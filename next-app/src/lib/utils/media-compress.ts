@@ -3,9 +3,7 @@ import { getMessage } from "@/i18n/messages";
 
 const IMAGE_LOW_MAX_WIDTH = 1280;
 const IMAGE_LOW_QUALITY = 0.65;
-const VIDEO_LOW_MAX_WIDTH = 640;
-const VIDEO_LOW_BITRATE = 750_000;
-const VIDEO_RECORD_FPS = 24;
+const VIDEO_LOW_MAX_WIDTH = 640; // used for thumbnail sizing
 
 export const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;  // 20 MB
@@ -78,17 +76,6 @@ function canvasToBlob(
   });
 }
 
-function pickRecorderMimeType(): string {
-  // Prefer codecs that include audio (opus). Falls back to video-only if unsupported.
-  const candidates = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
-  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? "video/webm";
-}
 
 async function loadVideoMetadata(file: File): Promise<{
   video: HTMLVideoElement;
@@ -129,86 +116,6 @@ async function captureVideoFrame(
   return canvasToBlob(canvas, "image/jpeg", IMAGE_LOW_QUALITY);
 }
 
-async function reencodeVideoAtLowQuality(
-  video: HTMLVideoElement,
-  width: number,
-  height: number,
-): Promise<Blob> {
-  if (typeof MediaRecorder === "undefined") {
-    throw new Error("MediaRecorder unavailable");
-  }
-
-  const mimeType = pickRecorderMimeType();
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas unavailable");
-
-  const stream = canvas.captureStream(VIDEO_RECORD_FPS);
-
-  // Capture audio from the source video element when the selected codec supports it.
-  // captureStream() on a video element is available in Chrome/Firefox but not iOS Safari —
-  // if unavailable, we proceed with video-only (silent) and the Cloud Function re-encodes later.
-  const wantsAudio = mimeType.includes("opus") || mimeType.includes("aac");
-  if (wantsAudio) {
-    const captureStreamFn = (
-      video as HTMLVideoElement & { captureStream?: () => MediaStream }
-    ).captureStream;
-    if (typeof captureStreamFn === "function") {
-      try {
-        const srcStream = captureStreamFn.call(video);
-        for (const track of srcStream.getAudioTracks()) {
-          stream.addTrack(track);
-        }
-      } catch {
-        // captureStream unavailable or video has no audio track — proceed without audio
-      }
-    }
-  }
-
-  const hasAudio = stream.getAudioTracks().length > 0;
-  const recorder = new MediaRecorder(stream, {
-    mimeType,
-    videoBitsPerSecond: VIDEO_LOW_BITRATE,
-    ...(hasAudio ? { audioBitsPerSecond: 128_000 } : {}),
-  });
-
-  const chunks: Blob[] = [];
-  recorder.ondataavailable = (event) => {
-    if (event.data.size > 0) chunks.push(event.data);
-  };
-
-  const recorded = new Promise<Blob>((resolve, reject) => {
-    recorder.onstop = () => {
-      const type = mimeType.split(";")[0] ?? "video/webm";
-      const blob = new Blob(chunks, { type });
-      if (blob.size > 1024) resolve(blob);
-      else reject(new Error("Empty recording"));
-    };
-    recorder.onerror = () => reject(new Error("Recording failed"));
-  });
-
-  recorder.start(250);
-  video.currentTime = 0;
-  await video.play();
-
-  await new Promise<void>((resolve) => {
-    const tick = () => {
-      if (video.ended || video.currentTime >= video.duration - 0.05) {
-        video.pause();
-        if (recorder.state === "recording") recorder.stop();
-        resolve();
-        return;
-      }
-      ctx.drawImage(video, 0, 0, width, height);
-      requestAnimationFrame(tick);
-    };
-    tick();
-  });
-
-  return recorded;
-}
 
 /** İlk kare JPEG poster */
 export async function videoThumbnailFromFile(file: File): Promise<Blob> {
@@ -224,7 +131,13 @@ export async function videoThumbnailFromFile(file: File): Promise<Blob> {
   }
 }
 
-/** Orijinal + düşük bitrate WebM + poster JPEG */
+/** Thumbnail üret + orijinal videoyu döndür.
+ *
+ * Client-side video re-encoding kaldırıldı: canvas-based recorder ses kanalını
+ * siliyordu (canvas captureStream → yalnızca görüntü). Orijinal dosya ses
+ * korunarak yükleniyor; Cloud Function FFmpeg ile ses koruyan low-quality
+ * versiyonu oluşturur ve postVideoURL_low'u günceller.
+ */
 export async function compressVideo(file: File): Promise<CompressedVideoResult> {
   let objectUrl = "";
   try {
@@ -237,16 +150,11 @@ export async function compressVideo(file: File): Promise<CompressedVideoResult> 
       video.onseeked = () => resolve();
     });
     const thumbnail = await captureVideoFrame(video, width, height);
-
-    try {
-      const lowVideo = await reencodeVideoAtLowQuality(video, width, height);
-      return { video: lowVideo, thumbnail };
-    } catch {
-      return { video: file, thumbnail };
-    }
-  } catch {
-    const thumbnail = await videoThumbnailFromFile(file).catch(() => file);
+    // Return original file — audio preserved. Cloud Function handles low-quality encoding.
     return { video: file, thumbnail };
+  // eslint-disable-next-line no-empty
+  } catch {
+    return { video: file, thumbnail: file };
   } finally {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   }

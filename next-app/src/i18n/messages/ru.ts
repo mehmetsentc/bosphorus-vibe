@@ -125,7 +125,7 @@ const ru: Messages = {
   noVideosYet: "Видео пока нет. Загрузите из профиля!",
   videoControl: "Управление видео",
   slowConnection: "Медленное соединение — оптимизация",
-  tapHint: "Нажмите: пауза · Дважды: звук",
+  tapHint: "Нажмите: звук вкл/выкл",
   noContentInTab: "Нет контента на этой вкладке.",
   postFallback: "Публикация",
   uploadReel: "Загрузить reel",

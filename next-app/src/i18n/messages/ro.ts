@@ -125,7 +125,7 @@ const ro: Messages = {
   noVideosYet: "Încă nu sunt videoclipuri. Încarcă din profil!",
   videoControl: "Control video",
   slowConnection: "Conexiune lentă — se optimizează",
-  tapHint: "Atinge: pauză · Dublu: sunet",
+  tapHint: "Atinge: sunet on/off",
   noContentInTab: "Fără conținut în acest tab.",
   postFallback: "Postare",
   uploadReel: "Încarcă reel",
