@@ -145,21 +145,19 @@ export function VideoPlayer({
     setFeedMuted(next);
     const video = videoRef.current;
     if (video) {
+      video.muted = next;
       if (!next) {
-        // iOS requires: pause → set muted=false → play() — all inside one gesture handler.
-        // Calling play() on an already-playing muted video does NOT unlock audio on iOS.
-        video.pause();
-        video.muted = false;
+        // iOS audio unlock: set muted=false then call play() from within a user gesture.
+        // Do NOT pause first — pause→play causes AbortError which previously re-muted the video.
         video.play()
           .then(() => markAudioUnlocked())
-          .catch(() => {
-            // iOS still blocked — fall back to muted
-            video.muted = true;
-            video.play().catch(() => {});
-            setFeedMuted(true);
+          .catch((err: unknown) => {
+            // Only revert on explicit denial (NotAllowedError), not on AbortError.
+            if (err instanceof DOMException && err.name === "NotAllowedError") {
+              video.muted = true;
+              setFeedMuted(true);
+            }
           });
-      } else {
-        video.muted = true;
       }
     }
     setMuteFlash(!next);

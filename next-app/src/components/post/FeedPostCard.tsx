@@ -130,20 +130,22 @@ function FeedPostCardInner({
     setFeedMuted(next);
     const vid = videoRef.current;
     if (vid) {
+      vid.muted = next;
       if (!next) {
-        // iOS: pause → muted=false → play() must all happen synchronously in a gesture handler.
-        vid.pause();
-        vid.muted = false;
+        // iOS audio unlock: set muted=false then call play() from within a user gesture.
+        // play() on an already-playing video resolves immediately and triggers iOS audio unlock.
+        // Do NOT pause first — pause→play can trigger AbortError which previously caused
+        // the catch block to wrongly re-mute the video.
         vid.play()
-          .then(() => markAudioUnlocked()) // session audio unlock — subsequent videos can auto-unmute
-          .catch(() => {
-            // iOS still blocked — fall back to muted
-            vid.muted = true;
-            vid.play().catch(() => {});
-            setFeedMuted(true);
+          .then(() => markAudioUnlocked())
+          .catch((err: unknown) => {
+            // Only revert to muted if iOS explicitly denies audio (NotAllowedError).
+            // AbortError or other errors: keep muted=false, video will resume unmuted.
+            if (err instanceof DOMException && err.name === "NotAllowedError") {
+              vid.muted = true;
+              setFeedMuted(true);
+            }
           });
-      } else {
-        vid.muted = true;
       }
     }
     setMuteFlash(!next);
