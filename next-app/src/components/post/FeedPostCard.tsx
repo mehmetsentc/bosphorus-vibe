@@ -25,7 +25,6 @@ import {
 } from "@/lib/services/friends";
 import { pickImageSource, pickVideoSource } from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
-import { isAudioUnlocked, markAudioUnlocked } from "@/lib/utils/audioUnlock";
 import { IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
 import { PostActionsBar } from "@/components/post/PostActionsBar";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
@@ -103,14 +102,12 @@ function FeedPostCardInner({
     const el = videoRef.current;
     if (!el || !video) return;
     if (isActive) {
-      // If user has already unlocked audio this session, respect their muted preference.
-      // Otherwise start muted (iOS autoplay requirement).
-      el.muted = isAudioUnlocked() ? muted : true;
+      el.muted = true; // always start muted — iOS autoplay requirement
       el.play().catch(() => {});
       requestPlay(post.id);
     } else {
       el.pause();
-      el.muted = true; // reset when leaving viewport
+      el.muted = true;
       releasePlay(post.id);
       setShowPoster(true);
     }
@@ -125,35 +122,17 @@ function FeedPostCardInner({
     }
   }, [isActive, post.id]);
 
+  // Simple sound toggle — just set .muted directly from click handler
+  // No play(), no pause(), no AudioContext needed
   const toggleMute = useCallback(() => {
     const next = !muted;
     setFeedMuted(next);
     const vid = videoRef.current;
-    if (vid) {
-      vid.muted = next;
-      if (!next) {
-        // iOS audio unlock: set muted=false then call play() from within a user gesture.
-        // play() on an already-playing video resolves immediately and triggers iOS audio unlock.
-        // Do NOT pause first — pause→play can trigger AbortError which previously caused
-        // the catch block to wrongly re-mute the video.
-        vid.play()
-          .then(() => markAudioUnlocked())
-          .catch((err: unknown) => {
-            // Only revert to muted if iOS explicitly denies audio (NotAllowedError).
-            // AbortError or other errors: keep muted=false, video will resume unmuted.
-            if (err instanceof DOMException && err.name === "NotAllowedError") {
-              vid.muted = true;
-              setFeedMuted(true);
-            }
-          });
-      }
-    }
+    if (vid) vid.muted = next;
     setMuteFlash(!next);
     setTimeout(() => setMuteFlash(null), 700);
   }, [muted, setFeedMuted]);
 
-  // Single tap on video → toggle sound (direct gesture = iOS grants audio permission)
-  // Navigation to post is available via the ··· button in the post header
   const handleVideoMediaClick = useCallback(() => {
     toggleMute();
   }, [toggleMute]);
