@@ -79,7 +79,10 @@ function canvasToBlob(
 }
 
 function pickRecorderMimeType(): string {
+  // Prefer codecs that include audio (opus). Falls back to video-only if unsupported.
   const candidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
     "video/webm;codecs=vp9",
     "video/webm;codecs=vp8",
     "video/webm",
@@ -143,9 +146,32 @@ async function reencodeVideoAtLowQuality(
   if (!ctx) throw new Error("Canvas unavailable");
 
   const stream = canvas.captureStream(VIDEO_RECORD_FPS);
+
+  // Capture audio from the source video element when the selected codec supports it.
+  // captureStream() on a video element is available in Chrome/Firefox but not iOS Safari —
+  // if unavailable, we proceed with video-only (silent) and the Cloud Function re-encodes later.
+  const wantsAudio = mimeType.includes("opus") || mimeType.includes("aac");
+  if (wantsAudio) {
+    const captureStreamFn = (
+      video as HTMLVideoElement & { captureStream?: () => MediaStream }
+    ).captureStream;
+    if (typeof captureStreamFn === "function") {
+      try {
+        const srcStream = captureStreamFn.call(video);
+        for (const track of srcStream.getAudioTracks()) {
+          stream.addTrack(track);
+        }
+      } catch {
+        // captureStream unavailable or video has no audio track — proceed without audio
+      }
+    }
+  }
+
+  const hasAudio = stream.getAudioTracks().length > 0;
   const recorder = new MediaRecorder(stream, {
     mimeType,
     videoBitsPerSecond: VIDEO_LOW_BITRATE,
+    ...(hasAudio ? { audioBitsPerSecond: 128_000 } : {}),
   });
 
   const chunks: Blob[] = [];
