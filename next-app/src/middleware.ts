@@ -14,9 +14,14 @@ const PUBLIC_PATHS = [
 
 const AUTH_ONLY_PREFIXES = ["/profile", "/upload", "/favorites", "/admin"];
 
+/** Routes anonymous / guest users may open (matches AuthGuard + GuestBanner UX). */
 const GUEST_ALLOWED_PREFIXES = [
+  "/home",
   "/events",
   "/feed",
+  "/reels",
+  "/team",
+  "/post",
 ];
 
 const PRIVATE_ROBOTS = ["/profile", "/admin", "/upload", "/favorites"];
@@ -61,7 +66,13 @@ export function middleware(request: NextRequest) {
 
   if (pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = hasAccess ? "/home" : "/welcome";
+    if (!hasAccess) {
+      url.pathname = "/welcome";
+    } else if (access === "guest") {
+      url.pathname = "/home";
+    } else {
+      url.pathname = "/home";
+    }
     return withHeaders(NextResponse.redirect(url));
   }
 

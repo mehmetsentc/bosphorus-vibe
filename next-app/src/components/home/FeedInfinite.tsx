@@ -31,7 +31,10 @@ import {
   getUpcomingEventSuggestions,
   getVideoPosts,
 } from "@/lib/services/firestore";
+import { isCacheExpired } from "@/lib/cache/constants";
 import { useFeedPosts } from "@/lib/hooks/usePosts";
+import { FEED_SUGGESTIONS_DEFER_MS } from "@/lib/performance/app-state";
+import { useAppStore } from "@/store/appStore";
 import type { PublicUser } from "@/lib/services/friends";
 import type { EnrichedPost } from "@/store/appStore";
 import type { EventDoc } from "@/types";
@@ -109,11 +112,19 @@ export function FeedInfinite() {
   }, [user]);
 
   const loadSuggestions = useCallback(async (followingSet: Set<string>) => {
+    const { reels, lastFetched } = useAppStore.getState();
+    const cachedVideos =
+      reels && !isCacheExpired(lastFetched.reels)
+        ? reels.posts.slice(0, 10)
+        : null;
+
     const [friendsRaw, videosRaw, eventsRaw] = await Promise.all([
       user
         ? getSuggestedUsers(user.uid, followingSet, 8)
         : listUsersForFriends("", 8),
-      getVideoPosts(10).then(enrichPostsWithUsers),
+      cachedVideos?.length
+        ? Promise.resolve(cachedVideos)
+        : getVideoPosts(10).then(enrichPostsWithUsers),
       getUpcomingEventSuggestions(8),
     ]);
     setFriendSuggestions(friendsRaw);
@@ -122,7 +133,10 @@ export function FeedInfinite() {
   }, [user]);
 
   useEffect(() => {
-    loadSuggestions(following);
+    const id = window.setTimeout(() => {
+      void loadSuggestions(following);
+    }, FEED_SUGGESTIONS_DEFER_MS);
+    return () => window.clearTimeout(id);
   }, [following, loadSuggestions]);
 
   useEffect(() => {

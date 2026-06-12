@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  documentId,
   getDoc,
   getDocs,
   orderBy,
@@ -399,13 +400,19 @@ export async function getVideoPostsPage(
   };
 }
 
-export async function getPostsByUser(userId: string): Promise<UserPostDoc[]> {
+const PROFILE_POSTS_PAGE = 40;
+
+export async function getPostsByUser(
+  userId: string,
+  max = PROFILE_POSTS_PAGE,
+): Promise<UserPostDoc[]> {
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const snap = await getDocs(
     query(
       collection(getFirebaseDb(), COLLECTIONS.userPosts),
       where("postUser", "==", userRef),
       orderBy("timePosted", "desc"),
+      limit(max),
     ),
   );
   return snap.docs.map((d) => mapPost(d.id, d.data()));
@@ -605,37 +612,58 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
   return results;
 }
 
+const USER_BATCH_SIZE = 10;
+
+export async function fetchUsersByIds(
+  userIds: string[],
+): Promise<Map<string, { name: string; photo: string }>> {
+  const result = new Map<string, { name: string; photo: string }>();
+  if (!userIds.length) return result;
+
+  const db = getFirebaseDb();
+  const chunks: string[][] = [];
+  for (let i = 0; i < userIds.length; i += USER_BATCH_SIZE) {
+    chunks.push(userIds.slice(i, i + USER_BATCH_SIZE));
+  }
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const snap = await getDocs(
+        query(
+          collection(db, COLLECTIONS.users),
+          where(documentId(), "in", chunk),
+        ),
+      );
+      for (const d of snap.docs) {
+        const data = d.data();
+        result.set(d.id, {
+          name: (data.display_name as string) || (data.userName as string) || "user",
+          photo: (data.photo_url as string) ?? "",
+        });
+      }
+    }),
+  );
+
+  return result;
+}
+
 export async function enrichPostsWithUsers(
   posts: UserPostDoc[],
 ): Promise<(UserPostDoc & { userName?: string; userPhoto?: string })[]> {
-  const cache = new Map<string, { name: string; photo: string }>();
-  const enriched = [];
+  const uniqueIds = [
+    ...new Set(posts.map((p) => p.postUserId).filter(Boolean)),
+  ] as string[];
+  const users = await fetchUsersByIds(uniqueIds);
 
-  for (const post of posts) {
-    if (!post.postUserId) {
-      enriched.push(post);
-      continue;
-    }
-    if (!cache.has(post.postUserId)) {
-      const snap = await getDoc(
-        doc(getFirebaseDb(), COLLECTIONS.users, post.postUserId),
-      );
-      if (snap.exists()) {
-        const d = snap.data();
-        cache.set(post.postUserId, {
-          name: (d.display_name as string) || (d.userName as string) || "user",
-          photo: (d.photo_url as string) ?? "",
-        });
-      }
-    }
-    const user = cache.get(post.postUserId);
-    enriched.push({
+  return posts.map((post) => {
+    if (!post.postUserId) return post;
+    const user = users.get(post.postUserId);
+    return {
       ...post,
       userName: user?.name,
       userPhoto: user?.photo,
-    });
-  }
-  return enriched;
+    };
+  });
 }
 
 export function uploadVideo(

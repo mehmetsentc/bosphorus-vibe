@@ -46,9 +46,6 @@ export const metadata: Metadata = {
   },
 };
 
-/** Avoid static prerender export failures for Firebase-heavy client providers. */
-export const dynamic = "force-dynamic";
-
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f7f6f2" },

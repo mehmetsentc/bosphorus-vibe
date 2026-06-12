@@ -1,5 +1,7 @@
+import { PAGE_CACHE_TTL_MS } from "@/lib/performance/app-state";
+
 /** Default cache TTL — 30 minutes */
-export const CACHE_TTL_MS = 30 * 60 * 1000;
+export const CACHE_TTL_MS = PAGE_CACHE_TTL_MS;
 
 export function isCacheExpired(
   lastFetched: number | undefined,

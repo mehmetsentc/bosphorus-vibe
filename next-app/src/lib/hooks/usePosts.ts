@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isCacheExpired } from "@/lib/cache/constants";
+import { fetchReelsFirstPage } from "@/lib/cache/reels-fetch";
+import {
+  FEED_PAGE_SIZE,
+  REELS_PAGE_SIZE,
+} from "@/lib/performance/app-state";
 import { useStoreHydration } from "@/lib/hooks/useStoreHydration";
 import {
   enrichPostsWithUsers,
@@ -11,8 +16,6 @@ import {
 import { useAppStore, type EnrichedPost } from "@/store/appStore";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 
-const FEED_PAGE_SIZE = 10;
-const REELS_PAGE_SIZE = 12;
 
 /** Home feed — caches first page only */
 export function useFeedPosts() {
@@ -111,7 +114,7 @@ export function useFeedPosts() {
         const fresh = enriched.filter((p) => !existingIds.has(p.id));
         return [...prev, ...fresh];
       });
-      appendFeedPosts(enriched);
+      appendFeedPosts(enriched, page.hasMore);
     } finally {
       setLoadingMore(false);
     }
@@ -141,7 +144,6 @@ export function useReelsPosts() {
   const hydrated = useStoreHydration();
   const reelsCache = useAppStore((s) => s.reels);
   const lastFetched = useAppStore((s) => s.lastFetched.reels);
-  const setReelsCache = useAppStore((s) => s.setReelsCache);
   const appendReelsPosts = useAppStore((s) => s.appendReelsPosts);
   const removeReelPost = useAppStore((s) => s.removeReelPost);
   const clearReelsCache = useAppStore((s) => s.clearReelsCache);
@@ -193,14 +195,12 @@ export function useReelsPosts() {
       cursorRef.current = null;
 
       try {
-        const page = await getVideoPostsPage(REELS_PAGE_SIZE, null);
-        const enriched = await enrichPostsWithUsers(page.posts);
+        const page = await fetchReelsFirstPage(force);
         if (requestId !== fetchRef.current) return;
 
         cursorRef.current = page.lastDoc;
-        setLocalPosts(enriched);
+        setLocalPosts(page.posts);
         setHasMore(page.hasMore);
-        setReelsCache({ posts: enriched, hasMore: page.hasMore });
         setInitialized(true);
       } finally {
         if (requestId === fetchRef.current) {
@@ -209,7 +209,7 @@ export function useReelsPosts() {
         }
       }
     },
-    [reelsCache, lastFetched, setReelsCache, syncFromCache],
+    [reelsCache, lastFetched, syncFromCache],
   );
 
   useEffect(() => {
@@ -234,7 +234,7 @@ export function useReelsPosts() {
         const fresh = enriched.filter((p) => !existingIds.has(p.id));
         return [...prev, ...fresh];
       });
-      appendReelsPosts(enriched);
+      appendReelsPosts(enriched, page.hasMore);
     } finally {
       setLoadingMore(false);
     }

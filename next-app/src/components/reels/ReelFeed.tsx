@@ -10,6 +10,7 @@ import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
 import { useNetworkQuality } from "@/lib/hooks/useNetworkQuality";
+import { REELS_VIDEO_WINDOW_RADIUS } from "@/lib/performance/app-state";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { UserPostDoc } from "@/types";
 
@@ -38,6 +39,7 @@ const ReelItem = memo(function ReelItem({
   post,
   isActive,
   isNext,
+  mountVideo,
   onBecameActive,
   onPostDeleted,
   onCommentClick,
@@ -45,6 +47,7 @@ const ReelItem = memo(function ReelItem({
   post: EnrichedPost;
   isActive: boolean;
   isNext: boolean;
+  mountVideo: boolean;
   onBecameActive: () => void;
   onPostDeleted: () => void;
   onCommentClick: () => void;
@@ -65,14 +68,25 @@ const ReelItem = memo(function ReelItem({
   );
 
   return (
-    <div ref={ref} className="reels-slide">
-      <VideoPlayer
-        post={post}
-        isActive={isActive}
-        isNext={isNext}
-        overlay={isActive ? sideActions : undefined}
-        showSeekBar={isActive}
-      />
+    <div ref={ref} className="reels-slide bg-black">
+      {mountVideo ? (
+        <VideoPlayer
+          post={post}
+          isActive={isActive}
+          isNext={isNext}
+          overlay={isActive ? sideActions : undefined}
+          showSeekBar={isActive}
+        />
+      ) : (
+        post.postVideothumbnail && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.postVideothumbnail}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        )
+      )}
     </div>
   );
 });
@@ -178,6 +192,7 @@ export function ReelFeed({
           post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
           isActive={i === activeIndex}
           isNext={i === activeIndex + 1 && networkTier === "fast"}
+          mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
           onBecameActive={() => handleActive(i)}
           onPostDeleted={() => handlePostDeleted(post.id)}
           onCommentClick={() => openComment(post.id)}

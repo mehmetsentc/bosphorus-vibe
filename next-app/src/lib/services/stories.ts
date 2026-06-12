@@ -26,7 +26,11 @@ import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
 import { refToId, refsToIds, toDate } from "@/lib/utils/firestore-helpers";
 import { buildPostTagFields, parseTaggedPeople } from "@/lib/utils/post-tags";
 import { COLLECTIONS, type StoryCategory, type StoryDoc, type StoryUserGroup, type PostTag } from "@/types";
-import { uploadBlob, uploadVideoPost } from "@/lib/services/firestore";
+import {
+  fetchUsersByIds,
+  uploadBlob,
+  uploadVideoPost,
+} from "@/lib/services/firestore";
 
 export const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -184,25 +188,6 @@ export async function getStoriesByUser(userId: string): Promise<StoryDoc[]> {
     .sort((a, b) => a.storyPostedAt.getTime() - b.storyPostedAt.getTime());
 }
 
-async function fetchUserMeta(
-  userId: string,
-  cache: Map<string, { userName: string; userPhoto: string }>,
-) {
-  if (cache.has(userId)) return cache.get(userId)!;
-  const snap = await getDoc(doc(getFirebaseDb(), COLLECTIONS.users, userId));
-  const meta = snap.exists()
-    ? {
-        userName:
-          (snap.data().userName as string) ||
-          (snap.data().display_name as string) ||
-          "user",
-        userPhoto: (snap.data().photo_url as string) ?? "",
-      }
-    : { userName: "user", userPhoto: "" };
-  cache.set(userId, meta);
-  return meta;
-}
-
 export async function groupStoriesByUser(
   stories: StoryDoc[],
   viewerUid?: string,
@@ -218,14 +203,19 @@ export async function groupStoriesByUser(
     byUser.set(story.userId, list);
   }
 
+  const userIds = [...byUser.keys()];
+  const batchMeta = await fetchUsersByIds(userIds);
   const cache = new Map<string, { userName: string; userPhoto: string }>();
+  for (const [id, meta] of batchMeta) {
+    cache.set(id, { userName: meta.name, userPhoto: meta.photo });
+  }
   const groups: StoryUserGroup[] = [];
 
   for (const [userId, userStories] of byUser) {
     const sorted = [...userStories].sort(
       (a, b) => a.storyPostedAt.getTime() - b.storyPostedAt.getTime(),
     );
-    const meta = await fetchUserMeta(userId, cache);
+    const meta = cache.get(userId) ?? { userName: "user", userPhoto: "" };
     const hasUnviewed = viewerUid
       ? sorted.some((s) => !s.viewedByIds.includes(viewerUid))
       : true;

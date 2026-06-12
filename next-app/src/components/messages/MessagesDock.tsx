@@ -7,6 +7,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
 import { IconMessage } from "@/components/icons/Icons";
 import { ChatListItem } from "@/components/messages/ChatListItem";
+import { MESSAGES_DOCK_DEFER_MS } from "@/lib/performance/app-state";
 import {
   enrichChatPreviews,
   subscribeChats,
@@ -19,6 +20,7 @@ export function MessagesDock() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [chats, setChats] = useState<ChatPreview[]>([]);
+  const [subscribeReady, setSubscribeReady] = useState(false);
 
   const hidden =
     pathname.startsWith("/messages") ||
@@ -27,13 +29,23 @@ export function MessagesDock() {
     pathname.includes("/posts/");
 
   useEffect(() => {
-    if (!user || hidden) return;
+    if (open) setSubscribeReady(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!user || hidden || subscribeReady) return;
+    const id = window.setTimeout(() => setSubscribeReady(true), MESSAGES_DOCK_DEFER_MS);
+    return () => window.clearTimeout(id);
+  }, [user, hidden, subscribeReady]);
+
+  useEffect(() => {
+    if (!user || hidden || !subscribeReady) return;
     const unsub = subscribeChats(user.uid, async (raw) => {
       const enriched = await enrichChatPreviews(raw, user.uid);
       setChats(enriched.slice(0, 5));
     });
     return unsub;
-  }, [user, hidden]);
+  }, [user, hidden, subscribeReady]);
 
   const unreadCount = useMemo(
     () => chats.filter((c) => c.unread).length,

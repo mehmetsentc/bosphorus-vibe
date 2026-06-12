@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import {
+  PERSIST_POSTS_MAX,
+  slimPostsCache,
+  slimReelsCache,
+} from "@/lib/cache/slim-cache";
+import {
   reviveEnrichedPosts,
   reviveEvents,
   revivePosts,
@@ -56,10 +61,10 @@ type AppStoreState = {
   setEvents: (data: EventsCache) => void;
   clearEventsCache: () => void;
   setPostsCache: (data: PostsCache) => void;
-  appendFeedPosts: (posts: EnrichedPost[]) => void;
+  appendFeedPosts: (posts: EnrichedPost[], hasMore?: boolean) => void;
   clearPostsCache: () => void;
   setReelsCache: (data: ReelsCache) => void;
-  appendReelsPosts: (posts: EnrichedPost[]) => void;
+  appendReelsPosts: (posts: EnrichedPost[], hasMore?: boolean) => void;
   removeReelPost: (postId: string) => void;
   clearReelsCache: () => void;
   resetStore: () => void;
@@ -109,11 +114,15 @@ export const useAppStore = create<AppStoreState>()(
           posts: data,
           lastFetched: { ...state.lastFetched, posts: Date.now() },
         })),
-      appendFeedPosts: (newPosts) =>
+      appendFeedPosts: (newPosts, hasMore) =>
         set((state) => ({
           posts: state.posts
-            ? { ...state.posts, posts: [...state.posts.posts, ...newPosts] }
-            : { posts: newPosts, hasMore: true },
+            ? {
+                ...state.posts,
+                posts: [...state.posts.posts, ...newPosts],
+                hasMore: hasMore ?? state.posts.hasMore,
+              }
+            : { posts: newPosts, hasMore: hasMore ?? true },
         })),
       clearPostsCache: () =>
         set((state) => ({
@@ -125,14 +134,15 @@ export const useAppStore = create<AppStoreState>()(
           reels: data,
           lastFetched: { ...state.lastFetched, reels: Date.now() },
         })),
-      appendReelsPosts: (newPosts) =>
+      appendReelsPosts: (newPosts, hasMore) =>
         set((state) => ({
           reels: state.reels
             ? {
                 ...state.reels,
                 posts: [...state.reels.posts, ...newPosts],
+                hasMore: hasMore ?? state.reels.hasMore,
               }
-            : { posts: newPosts, hasMore: true },
+            : { posts: newPosts, hasMore: hasMore ?? true },
         })),
       removeReelPost: (postId) =>
         set((state) => ({
@@ -154,10 +164,16 @@ export const useAppStore = create<AppStoreState>()(
       name: "bv-app-cache-v1",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        profileData: state.profileData,
+        profileData: state.profileData
+          ? {
+              ...state.profileData,
+              posts: state.profileData.posts.slice(0, PERSIST_POSTS_MAX * 2),
+              taggedPosts: state.profileData.taggedPosts.slice(0, PERSIST_POSTS_MAX),
+            }
+          : null,
         events: state.events,
-        posts: state.posts,
-        reels: state.reels,
+        posts: slimPostsCache(state.posts),
+        reels: slimReelsCache(state.reels),
         lastFetched: state.lastFetched,
       }),
       onRehydrateStorage: () => (state) => {

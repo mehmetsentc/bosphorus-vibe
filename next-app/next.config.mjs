@@ -42,7 +42,20 @@ const nextConfig = {
   },
 
   async headers() {
+    const longCache = "public, max-age=31536000, immutable";
     return [
+      {
+        source: "/icon-:size(192|512).png",
+        headers: [{ key: "Cache-Control", value: longCache }],
+      },
+      {
+        source: "/apple-icon.png",
+        headers: [{ key: "Cache-Control", value: longCache }],
+      },
+      {
+        source: "/manifest.json",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400" }],
+      },
       {
         source: "/(.*)",
         headers: [

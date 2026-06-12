@@ -9,6 +9,9 @@ import { GuestBanner } from "@/components/onboarding/GuestBanner";
 import { LegalFooter } from "@/components/layout/LegalFooter";
 import { MessagesDock } from "@/components/messages/MessagesDock";
 
+/** Main app shell uses client auth — keep dynamic for session-aware rendering. */
+export const dynamic = "force-dynamic";
+
 export default function MainLayout({
   children,
 }: {
