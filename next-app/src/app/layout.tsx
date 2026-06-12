@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree, Outfit } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClientProvidersLoader } from "@/components/providers/ClientProvidersLoader";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import "./globals.css";
@@ -65,6 +67,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${outfit.variable} ${figtree.variable} font-body`}>
         <ClientProvidersLoader>{children}</ClientProvidersLoader>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
