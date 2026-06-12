@@ -241,6 +241,195 @@ exports.runVideoTranscodeBatch = functions
     }
   });
 
+// --- Video thumbnail backfill (cover frame from video) ---
+
+const THUMBNAIL_BATCH_SIZE = 5;
+const THUMBNAIL_RUN_OPTS = { memory: "1GB", timeoutSeconds: 540 };
+
+function decodeStoragePathFromUrl(url) {
+  try {
+    const pathname = new URL(url).pathname;
+    const encoded = pathname.match(/\/o\/(.+)/)?.[1];
+    if (!encoded) return null;
+    return decodeURIComponent(encoded.split("?")[0]);
+  } catch {
+    return null;
+  }
+}
+
+function thumbStoragePath(originalUrl, userId, postId) {
+  const decoded = decodeStoragePathFromUrl(originalUrl);
+  if (decoded && /original\.[a-z0-9]+$/i.test(decoded)) {
+    return decoded.replace(/original\.[a-z0-9]+$/i, "thumb.jpg");
+  }
+  if (decoded && decoded.includes("/uploads/")) {
+    return decoded.replace(/\/[^/]+$/, "/thumb.jpg");
+  }
+  return `users/${userId}/uploads/${postId}/thumb.jpg`;
+}
+
+function isImageMediaUrlServer(url) {
+  if (!url || typeof url !== "string") return false;
+  const lower = url.toLowerCase();
+  if (/\.(mp4|mov|webm|m4v|avi|mkv|m4a)(\?|$)/.test(lower)) return false;
+  return /\.(jpg|jpeg|png|gif|webp|heic|heif)(\?|$)/i.test(lower) || !/\.[a-z0-9]+(\?|$)/i.test(lower);
+}
+
+async function uploadThumbJpeg(storagePath, localPath) {
+  const bucket = admin.storage().bucket();
+  const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+  await bucket.upload(localPath, {
+    destination: storagePath,
+    metadata: {
+      contentType: "image/jpeg",
+      metadata: { firebaseStorageDownloadTokens: token },
+    },
+  });
+
+  return (
+    `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/` +
+    `${encodeURIComponent(storagePath)}?alt=media&token=${token}`
+  );
+}
+
+async function regenerateThumbnailForPost(postId, data, docRef) {
+  const originalUrl = getOriginalVideoUrl(data);
+  if (!originalUrl) {
+    await docRef.update({
+      videoThumbnailStatus: "skipped",
+      videoThumbnailUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return { ok: false, reason: "no_video" };
+  }
+
+  const existingThumb = data.postVideothumbnail;
+  if (
+    data.videoThumbnailStatus === "done" &&
+    existingThumb &&
+    isImageMediaUrlServer(existingThumb) &&
+    existingThumb !== originalUrl
+  ) {
+    return { ok: true, reason: "already_done" };
+  }
+
+  const tmpInput = path.join(os.tmpdir(), `${postId}_thumb_src`);
+  const tmpOutput = path.join(os.tmpdir(), `${postId}_thumb.jpg`);
+
+  await docRef.update({
+    videoThumbnailStatus: "processing",
+    videoThumbnailUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  try {
+    const response = await axios.get(originalUrl, {
+      responseType: "arraybuffer",
+      timeout: 120000,
+      maxContentLength: 500 * 1024 * 1024,
+    });
+    fs.writeFileSync(tmpInput, Buffer.from(response.data));
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(tmpInput)
+        .seekInput(0.5)
+        .frames(1)
+        .outputOptions(["-q:v", "4"])
+        .on("end", resolve)
+        .on("error", reject)
+        .save(tmpOutput);
+    });
+
+    const userId = getPostUserId(data);
+    if (!userId) {
+      throw new Error("missing postUser");
+    }
+
+    const storagePath = thumbStoragePath(originalUrl, userId, postId);
+    const thumbUrl = await uploadThumbJpeg(storagePath, tmpOutput);
+
+    await docRef.update({
+      postVideothumbnail: thumbUrl,
+      videoThumbnailStatus: "done",
+      videoThumbnailError: admin.firestore.FieldValue.delete(),
+      videoThumbnailUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    functions.logger.info(`regenerateThumbnailForPost: done postId=${postId}`);
+    return { ok: true, reason: "regenerated", thumbUrl };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    functions.logger.error(`regenerateThumbnailForPost: failed postId=${postId}`, err);
+    await docRef.update({
+      videoThumbnailStatus: "failed",
+      videoThumbnailError: message.slice(0, 500),
+      videoThumbnailUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return { ok: false, reason: "failed", error: message };
+  } finally {
+    if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput);
+    if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput);
+  }
+}
+
+async function processPendingThumbnailBatch(limit = THUMBNAIL_BATCH_SIZE) {
+  const db = admin.firestore();
+  const snap = await db
+    .collection("userPosts")
+    .where("videoThumbnailStatus", "==", "pending")
+    .limit(limit)
+    .get();
+
+  const results = [];
+  for (const doc of snap.docs) {
+    const result = await regenerateThumbnailForPost(doc.id, doc.data(), doc.ref);
+    results.push({ postId: doc.id, ...result });
+  }
+
+  return {
+    processed: snap.size,
+    succeeded: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok && r.reason !== "no_video" && r.reason !== "already_done").length,
+    results,
+  };
+}
+
+/** Every 30 minutes — regenerate broken/missing video thumbnails. */
+exports.processPendingVideoThumbnails = functions
+  .region(REGION)
+  .runWith(THUMBNAIL_RUN_OPTS)
+  .pubsub.schedule("every 30 minutes")
+  .onRun(async () => {
+    const summary = await processPendingThumbnailBatch(THUMBNAIL_BATCH_SIZE);
+    functions.logger.info("processPendingVideoThumbnails", summary);
+    return null;
+  });
+
+/** Manual thumbnail batch — secured with TRANSCODE_BACKFILL_SECRET. */
+exports.runVideoThumbnailBatch = functions
+  .region(REGION)
+  .runWith(THUMBNAIL_RUN_OPTS)
+  .https.onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    try {
+      assertBackfillAuth(req);
+      const limit = Math.min(
+        Math.max(parseInt(req.body?.limit, 10) || THUMBNAIL_BATCH_SIZE, 1),
+        8,
+      );
+      const summary = await processPendingThumbnailBatch(limit);
+      res.json(summary);
+    } catch (err) {
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err instanceof Error ? err.message : "Internal error",
+      });
+    }
+  });
+
 exports.onUserDeleted = functions
   .region(REGION)
   .auth.user()

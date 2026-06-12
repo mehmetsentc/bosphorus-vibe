@@ -764,6 +764,7 @@ export async function createVideoPost(
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
     videoTranscodeStatus: videoTranscodeStatusForUpload(originalUrl, lowUrl),
+    videoThumbnailStatus: "done",
     postDescription: caption,
     postTitle: caption.slice(0, 80),
     postUser: userRef,
@@ -1010,6 +1011,9 @@ export async function createActivityPostFromMedia(
       urls.originalUrl,
       urls.lowUrl,
     );
+    if (urls.thumbUrl) {
+      postData.videoThumbnailStatus = "done";
+    }
   } else {
     postData.postPhoto = urls.originalUrl;
     postData.postPhotoURL = urls.lowUrl;
@@ -1199,6 +1203,7 @@ export async function replaceUserPostVideo(
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
     videoTranscodeStatus: videoTranscodeStatusForUpload(originalUrl, lowUrl),
+    videoThumbnailStatus: "done",
     DateUpdated: serverTimestamp(),
   });
   await deleteStorageUrls(oldUrls);

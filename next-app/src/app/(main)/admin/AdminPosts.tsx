@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { getDb } from "@/lib/firebase/client";
+import { getFirebaseDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/types";
 
 type PostRow = {
@@ -27,7 +27,7 @@ export function AdminPosts() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const db = getDb();
+      const db = getFirebaseDb();
       const q = query(
         collection(db, COLLECTIONS.userPosts),
         orderBy("timePosted", "desc"),

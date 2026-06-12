@@ -7,9 +7,13 @@ export type AuditAction =
   | "delete_account"
   | "export_data"
   | "admin_delete_post"
+  | "admin_create_event"
   | "admin_update_event"
+  | "admin_update_user_role"
   | "admin_transcode_enqueue"
   | "admin_transcode_run"
+  | "admin_thumbnail_enqueue"
+  | "admin_thumbnail_run"
   | "api_error";
 
 export async function writeAuditLog(
