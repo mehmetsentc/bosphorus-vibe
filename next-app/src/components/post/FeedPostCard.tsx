@@ -280,7 +280,7 @@ function FeedPostCardInner({
                 const fallbacks = videoFallbacksRef.current;
                 if (next <= fallbacks.length) {
                   fallbackIndexRef.current = next;
-                  setVideoSrc(fallbacks[next - 1]);
+                  setFallbackSrc(fallbacks[next - 1]);
                   setShowPoster(true);
                   return;
                 }
