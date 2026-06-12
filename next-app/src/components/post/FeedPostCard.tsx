@@ -46,12 +46,15 @@ type FeedPostCardProps = {
   post: EnrichedPost;
   followingIds?: Set<string>;
   onFollowChange?: (uid: string, following: boolean) => void;
+  /** First visible card — eager-load poster for better LCP */
+  priority?: boolean;
 };
 
 function FeedPostCardInner({
   post,
   followingIds,
   onFollowChange,
+  priority = false,
 }: FeedPostCardProps) {
   const t = useT();
   const { user } = useAuth();
@@ -82,18 +85,18 @@ function FeedPostCardInner({
     () => (video ? pickVideoSource(post, tier, "feed") : null),
     [video, post, tier],
   );
-  const [videoSrc, setVideoSrc] = useState("");
+  // Derive src synchronously — no extra render cycle, no key="" on first mount
+  const primarySrc = videoPick?.src ?? "";
+  const [fallbackSrc, setFallbackSrc] = useState<string | null>(null);
+  const videoSrc = fallbackSrc ?? primarySrc;
   const videoFallbacksRef = useRef<string[]>([]);
   const fallbackIndexRef = useRef(0);
 
+  // Keep fallback refs in sync; reset on source change
   useEffect(() => {
-    if (!videoPick) {
-      setVideoSrc("");
-      return;
-    }
-    setVideoSrc(videoPick.src);
-    videoFallbacksRef.current = videoPick.fallbacks;
+    videoFallbacksRef.current = videoPick?.fallbacks ?? [];
     fallbackIndexRef.current = 0;
+    setFallbackSrc(null);
     setIsMuted(true);
   }, [videoPick]);
   const poster = post.postVideothumbnail || pickImageSource(post, "feed") || undefined;
@@ -120,8 +123,10 @@ function FeedPostCardInner({
       el.setAttribute("muted", "");
       el.muted = true;
       setIsMuted(true);
-      // play() may fail if data not yet loaded → retry on canplay
+      // On iOS with preload="none", load() must be called explicitly before play()
+      if (el.readyState === 0) el.load();
       el.play().catch(() => {
+        // play() failed (data not ready yet) — retry when canplay fires
         const onCanPlay = () => el.play().catch(() => {});
         el.addEventListener("canplay", onCanPlay, { once: true });
       });
@@ -252,7 +257,9 @@ function FeedPostCardInner({
               <img
                 src={poster}
                 alt=""
-                loading="lazy"
+                loading={priority ? "eager" : "lazy"}
+                // @ts-ignore — fetchpriority is valid but not yet in React types
+                fetchpriority={priority ? "high" : "auto"}
                 className="absolute inset-0 h-full w-full object-cover"
               />
             )}
@@ -332,7 +339,9 @@ function FeedPostCardInner({
               <img
                 src={image}
                 alt={caption}
-                loading="lazy"
+                loading={priority ? "eager" : "lazy"}
+                // @ts-ignore — fetchpriority is valid but not yet in React types
+                fetchpriority={priority ? "high" : "auto"}
                 className="h-full w-full object-cover"
               />
             )}

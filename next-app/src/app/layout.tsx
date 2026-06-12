@@ -65,6 +65,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Preconnect to Firebase Storage — reduces LCP for images/videos */}
+        <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://storage.googleapis.com" crossOrigin="anonymous" />
+        {/* DNS prefetch fallback */}
+        <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
+        <link rel="dns-prefetch" href="https://storage.googleapis.com" />
+      </head>
       <body className={`${outfit.variable} ${figtree.variable} font-body`}>
         <ClientProvidersLoader>{children}</ClientProvidersLoader>
         <Analytics />

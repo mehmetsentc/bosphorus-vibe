@@ -216,6 +216,7 @@ export function FeedInfinite() {
               post={row.post}
               followingIds={following}
               onFollowChange={handleFollowChange}
+              priority={index === 0}
             />
           );
         }
