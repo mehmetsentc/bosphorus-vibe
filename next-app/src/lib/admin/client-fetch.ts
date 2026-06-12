@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import type { User } from "firebase/auth";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { ensureAuthReady } from "@/lib/firebase";
+import { clientApiUrl } from "@/lib/client-api-url";
 
 async function buildAuthHeaders(
   init: RequestInit,
@@ -27,8 +28,12 @@ export async function adminFetch(
   firebaseUser?: User | null,
 ): Promise<Response> {
   const headers = await buildAuthHeaders(init, firebaseUser);
+  const url =
+    typeof input === "string" && input.startsWith("/")
+      ? clientApiUrl(input)
+      : input;
 
-  return fetch(input, {
+  return fetch(url, {
     ...init,
     headers,
     credentials: "include",

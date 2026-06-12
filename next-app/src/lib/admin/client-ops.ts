@@ -21,6 +21,7 @@ import { getFirebaseDb } from "@/lib/firebase";
 import { getAllEvents } from "@/lib/services/firestore";
 import { postNeedsThumbnailRegen } from "@/lib/admin/video-thumbnail-backfill";
 import { postNeedsVideoTranscode } from "@/lib/admin/video-transcode";
+import { clientApiUrl } from "@/lib/client-api-url";
 import { COLLECTIONS } from "@/types";
 
 const PAGE_SIZE = 100;
@@ -250,7 +251,7 @@ async function runCloudBatch(
 ): Promise<{ processed: number; succeeded: number; failed: number }> {
   let res: Response;
   try {
-    res = await fetch(`/api/admin/functions/${functionName}`, {
+    res = await fetch(clientApiUrl(`/api/admin/functions/${functionName}`), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${idToken}`,

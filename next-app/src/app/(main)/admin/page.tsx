@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useRole } from "@/lib/hooks/useRole";
+import { ensureCanonicalOrigin } from "@/lib/services/auth";
 import { PageShell } from "@/components/layout/PageShell";
 import { AdminDashboard } from "./AdminDashboard";
 import { AdminEvents } from "./AdminEvents";
@@ -24,6 +25,10 @@ export default function AdminPage() {
   const { user, loading } = useAuth();
   const { isAdmin } = useRole();
   const [tab, setTab] = useState<Tab>("dashboard");
+
+  useEffect(() => {
+    ensureCanonicalOrigin();
+  }, []);
 
   // Allow quick-nav from Dashboard cards
   useEffect(() => {
