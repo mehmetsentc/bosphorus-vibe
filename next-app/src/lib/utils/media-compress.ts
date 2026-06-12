@@ -77,6 +77,15 @@ function canvasToBlob(
 }
 
 
+function raceTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), ms),
+    ),
+  ]);
+}
+
 async function loadVideoMetadata(file: File): Promise<{
   video: HTMLVideoElement;
   objectUrl: string;
@@ -90,10 +99,14 @@ async function loadVideoMetadata(file: File): Promise<{
   video.preload = "auto";
   video.src = objectUrl;
 
-  await new Promise<void>((resolve, reject) => {
-    video.onloadedmetadata = () => resolve();
-    video.onerror = () => reject(new Error("Video metadata failed"));
-  });
+  // iOS Safari can be slow — 8 s timeout so upload never hangs forever
+  await raceTimeout(
+    new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("Video metadata failed"));
+    }),
+    8000,
+  );
 
   const scale = Math.min(1, VIDEO_LOW_MAX_WIDTH / (video.videoWidth || 640));
   const width = Math.max(2, Math.round((video.videoWidth || 640) * scale));
@@ -122,9 +135,11 @@ export async function videoThumbnailFromFile(file: File): Promise<Blob> {
   const { video, objectUrl, width, height } = await loadVideoMetadata(file);
   try {
     video.currentTime = 0;
-    await new Promise<void>((resolve) => {
-      video.onseeked = () => resolve();
-    });
+    // iOS: onseeked may never fire for t=0 — 3 s timeout fallback
+    await raceTimeout(
+      new Promise<void>((resolve) => { video.onseeked = () => resolve(); }),
+      3000,
+    ).catch(() => { /* timeout — capture whatever frame is ready */ });
     return await captureVideoFrame(video, width, height);
   } finally {
     URL.revokeObjectURL(objectUrl);
