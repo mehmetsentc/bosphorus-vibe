@@ -36,7 +36,7 @@ export function RoutePrefetcher() {
     }
 
     if ("requestIdleCallback" in window) {
-      const id = requestIdleCallback(prefetchAll, { timeout: 2500 });
+      const id = requestIdleCallback(prefetchAll, { timeout: 5000 });
       return () => cancelIdleCallback(id);
     }
 

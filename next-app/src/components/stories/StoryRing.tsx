@@ -1,6 +1,7 @@
 "use client";
 
 import { useT } from "@/components/providers/I18nProvider";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 type StoryRingProps = {
   label: string;
@@ -41,8 +42,14 @@ export function StoryRing({
         <div className="rounded-full bg-background p-[2.5px]">
           <div className="relative h-[62px] w-[62px] overflow-hidden rounded-full bg-surface-overlay">
             {innerSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={innerSrc} alt="" className="h-full w-full object-cover" />
+              <OptimizedImage
+                src={innerSrc}
+                alt=""
+                width={62}
+                height={62}
+                sizes="62px"
+                className="h-full w-full object-cover"
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gold">
                 {(label[0] ?? "?").toUpperCase()}

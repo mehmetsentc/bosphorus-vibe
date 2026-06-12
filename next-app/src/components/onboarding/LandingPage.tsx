@@ -240,9 +240,7 @@ export function LandingPage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(0,122,153,0.25),transparent_55%)]" />
 
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          initial={false}
           className="relative z-10"
         >
           <Logo size="lg" showTagline className="mx-auto drop-shadow-lg" />

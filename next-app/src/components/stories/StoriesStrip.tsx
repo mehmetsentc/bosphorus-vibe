@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useT } from "@/components/providers/I18nProvider";
 import { StoryRing } from "@/components/stories/StoryRing";
-import { StoryUploadModal } from "@/components/stories/StoryUploadModal";
-import { StoryViewer } from "@/components/stories/StoryViewer";
 import {
   getActiveStories,
   groupStoriesByUser,
@@ -15,6 +14,16 @@ import {
   storyCoverUrl,
 } from "@/lib/services/stories";
 import type { StoryUserGroup } from "@/types";
+
+const StoryUploadModal = dynamic(
+  () => import("@/components/stories/StoryUploadModal").then((m) => ({ default: m.StoryUploadModal })),
+  { ssr: false },
+);
+
+const StoryViewer = dynamic(
+  () => import("@/components/stories/StoryViewer").then((m) => ({ default: m.StoryViewer })),
+  { ssr: false },
+);
 
 type StoriesStripProps = {
   uploadOpen?: boolean;

@@ -18,8 +18,13 @@ export function ReelsPrefetcher() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (reelsCache && !isCacheExpired(lastFetched)) return;
-    void fetchReelsFirstPage().catch(() => {});
+
+    const timer = window.setTimeout(() => {
+      if (reelsCache && !isCacheExpired(lastFetched)) return;
+      void fetchReelsFirstPage().catch(() => {});
+    }, 4000);
+
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 

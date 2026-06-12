@@ -27,6 +27,7 @@ import {
 } from "@/components/icons/Icons";
 import { PostActionsBar } from "@/components/post/PostActionsBar";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
@@ -39,6 +40,8 @@ const PostCommentModal = dynamic(
 );
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
+
+const FEED_MEDIA_SIZES = "(max-width: 768px) 100vw, 470px";
 
 type FeedPostCardProps = {
   post: EnrichedPost;
@@ -243,14 +246,13 @@ function FeedPostCardInner({
           <div className="relative aspect-square w-full overflow-hidden">
             {/* Poster image — shown until video starts playing */}
             {showPoster && poster && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <OptimizedImage
                 src={poster}
                 alt=""
-                loading={priority ? "eager" : "lazy"}
-                // @ts-ignore — fetchpriority is valid but not yet in React types
-                fetchpriority={priority ? "high" : "auto"}
-                className="absolute inset-0 h-full w-full object-cover"
+                fill
+                sizes={FEED_MEDIA_SIZES}
+                priority={priority}
+                className="object-cover"
               />
             )}
 
@@ -321,14 +323,13 @@ function FeedPostCardInner({
         <Link href={`/post/${post.id}`} className="relative block w-full bg-black">
           <div className="relative aspect-square w-full overflow-hidden">
             {image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <OptimizedImage
                 src={image}
                 alt={caption}
-                loading={priority ? "eager" : "lazy"}
-                // @ts-ignore — fetchpriority is valid but not yet in React types
-                fetchpriority={priority ? "high" : "auto"}
-                className="h-full w-full object-cover"
+                fill
+                sizes={FEED_MEDIA_SIZES}
+                priority={priority}
+                className="object-cover"
               />
             )}
           </div>

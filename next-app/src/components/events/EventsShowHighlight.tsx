@@ -23,7 +23,7 @@ export function EventsShowHighlight({ event }: EventsShowHighlightProps) {
   return (
     <Link
       href={`/events/${event.id}?from=/events`}
-      className="relative block overflow-hidden rounded-2xl border border-gold/30 bg-surface-card transition hover:border-gold/50 active:scale-[0.99]"
+      className="relative block min-h-[240px] overflow-hidden rounded-2xl border border-gold/30 bg-surface-card transition hover:border-gold/50 active:scale-[0.99] sm:min-h-[280px]"
     >
       {event.eventImage ? (
         <div className="absolute inset-0">
@@ -31,7 +31,7 @@ export function EventsShowHighlight({ event }: EventsShowHighlightProps) {
             src={event.eventImage}
             alt={event.eventName}
             fill
-            sizes="100vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 672px, 896px"
             className="object-cover"
             priority
           />

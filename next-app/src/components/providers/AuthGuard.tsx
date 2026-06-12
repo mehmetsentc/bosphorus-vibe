@@ -18,6 +18,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [user, loading, router]);
 
   if (loading) {
+    const access = getAccessCookie();
+    if (access === "auth" || access === "guest") {
+      return <>{children}</>;
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
         <Logo size="sm" />
