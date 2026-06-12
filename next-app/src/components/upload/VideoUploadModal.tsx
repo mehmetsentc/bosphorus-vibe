@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { uploadVideoPost, createVideoPost } from "@/lib/services/firestore";
+import { createVideoPost, uploadVideoPost } from "@/lib/services/firestore";
+import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
 import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
@@ -33,6 +34,8 @@ export function VideoUploadModal({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
+  const draft = useDraftUpload(file, user?.uid, { enabled: open && Boolean(file) });
+
   async function handleUpload() {
     if (!file || !user) return;
     if (!isVideoFile(file)) {
@@ -47,12 +50,22 @@ export function VideoUploadModal({
     setUploading(true);
     setError("");
     try {
-      const { originalUrl, lowUrl, thumbnailUrl } = await uploadVideoPost(
-        file,
+      let media;
+      try {
+        media = await draft.waitUntilReady();
+      } catch {
+        const result = await uploadVideoPost(file, user.uid, setProgress);
+        media = { isVideo: true, ...result };
+      }
+      setProgress(98);
+      await createVideoPost(
+        media.originalUrl,
+        media.lowUrl,
+        media.thumbnailUrl ?? "",
+        caption,
         user.uid,
-        setProgress,
+        taggedPeople,
       );
-      await createVideoPost(originalUrl, lowUrl, thumbnailUrl, caption, user.uid, taggedPeople);
       invalidateFeedCaches();
       markReelsRefreshPending();
       setFile(null);
@@ -95,7 +108,11 @@ export function VideoUploadModal({
                 type="file"
                 accept="video/*"
                 className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const next = e.target.files?.[0] ?? null;
+                  setFile(next);
+                  setError("");
+                }}
               />
               {file ? (
                 <span className="text-sm text-gold">{file.name}</span>
@@ -103,6 +120,24 @@ export function VideoUploadModal({
                 <span className="text-sm text-white/40">{t("selectVideo")}</span>
               )}
             </label>
+
+            {draft.status === "uploading" && (
+              <div className="mt-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-white/40">
+                  <span>{t("draftUploading")}</span>
+                  <span>{draft.progress}%</span>
+                </div>
+                <div className="h-1 overflow-hidden rounded-full bg-[#242424]">
+                  <div
+                    className="h-full gold-gradient transition-all"
+                    style={{ width: `${draft.progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {draft.status === "ready" && (
+              <p className="mt-2 text-xs text-gold">{t("draftUploadReady")}</p>
+            )}
 
             <input
               type="text"

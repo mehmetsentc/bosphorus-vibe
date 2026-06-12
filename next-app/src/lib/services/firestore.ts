@@ -696,30 +696,43 @@ export async function uploadVideoPost(
   userId: string,
   onProgress: (pct: number) => void,
 ): Promise<{ originalUrl: string; lowUrl: string; thumbnailUrl: string }> {
-  // Step 1: Extract a single thumbnail frame — fast (no re-encoding).
-  onProgress(3);
-  const thumbnail = await videoThumbnailFromFile(file).catch(() => file);
-  onProgress(8);
+  onProgress(2);
 
   const stamp = Date.now();
   const ext = file.name.split(".").pop() || "mp4";
   const basePath = `users/${userId}/uploads/${stamp}`;
 
-  // Step 2: Upload original + thumbnail in parallel.
-  // We use the original file for both original and low-quality slots so the
-  // upload finishes quickly. Server-side transcoding can be added later via
-  // a Cloud Function if a lower-quality variant is needed.
-  const [originalUrl, thumbnailUrl] = await Promise.all([
-    uploadBlob(
-      file,
-      `${basePath}/original.${ext}`,
-      (pct) => onProgress(8 + Math.round(pct * 0.88)),
-    ),
-    uploadBlob(thumbnail, `${basePath}/thumb.jpg`),
-  ]);
+  // Upload video immediately; extract thumbnail in parallel (don't block the upload).
+  let videoPct = 0;
+  let thumbDone = false;
+  const report = () => {
+    const thumbPct = thumbDone ? 100 : 0;
+    onProgress(5 + Math.round(videoPct * 0.9 + thumbPct * 0.05));
+  };
+
+  const thumbnailPromise = videoThumbnailFromFile(file)
+    .catch(() => file)
+    .then((thumb) => {
+      thumbDone = true;
+      report();
+      return thumb;
+    });
+
+  const originalUrl = await uploadBlob(
+    file,
+    `${basePath}/original.${ext}`,
+    (pct) => {
+      videoPct = pct;
+      report();
+    },
+  );
+
+  const thumbnail = await thumbnailPromise;
+  const thumbnailUrl = await uploadBlob(thumbnail, `${basePath}/thumb.jpg`, (pct) => {
+    onProgress(95 + Math.round(pct * 0.05));
+  });
 
   onProgress(100);
-  // Use originalUrl for both until server-side transcoding is available.
   return { originalUrl, lowUrl: originalUrl, thumbnailUrl };
 }
 
@@ -762,22 +775,35 @@ export async function uploadImagePost(
   const ext = file.name.split(".").pop() || "jpg";
   const basePath = `users/${userId}/uploads/${stamp}`;
 
-  onProgress(8);
-  const lowBlob = await compressImage(file);
-  onProgress(20);
+  onProgress(5);
+  let originalPct = 0;
+  let compressDone = false;
+  const report = () => {
+    const compressPct = compressDone ? 100 : 0;
+    onProgress(8 + Math.round(originalPct * 0.55 + compressPct * 0.12));
+  };
 
-  const [originalUrl, lowUrl] = await Promise.all([
-    uploadBlob(
-      file,
-      `${basePath}/original.${ext}`,
-      (pct) => onProgress(20 + Math.round(pct * 0.4)),
-    ),
-    uploadBlob(
-      lowBlob,
-      `${basePath}/low.jpg`,
-      (pct) => onProgress(60 + Math.round(pct * 0.35)),
-    ),
-  ]);
+  const lowBlobPromise = compressImage(file).then((blob) => {
+    compressDone = true;
+    report();
+    return blob;
+  });
+
+  const originalUrl = await uploadBlob(
+    file,
+    `${basePath}/original.${ext}`,
+    (pct) => {
+      originalPct = pct;
+      report();
+    },
+  );
+
+  const lowBlob = await lowBlobPromise;
+  const lowUrl = await uploadBlob(
+    lowBlob,
+    `${basePath}/low.jpg`,
+    (pct) => onProgress(75 + Math.round(pct * 0.25)),
+  );
 
   onProgress(100);
   return { originalUrl, lowUrl };
@@ -870,15 +896,26 @@ export type ActivityUploadInput = {
   tags?: PostTag[];
 };
 
-export async function createActivityUpload(
-  input: ActivityUploadInput,
+export type ActivityMediaUrls = {
+  originalUrl: string;
+  lowUrl: string;
+  thumbUrl?: string;
+};
+
+export async function uploadActivityMedia(
+  input: {
+    userId: string;
+    isVideo: boolean;
+    originalFile: File;
+    lowQualityBlob: Blob;
+    thumbnailBlob?: Blob;
+    stamp?: number;
+  },
   onProgress: (pct: number) => void,
-): Promise<string> {
-  const { userId, eventId, activityName, location, participantCount, isVideo } =
-    input;
-  const stamp = Date.now();
-  const basePath = `users/${userId}/activities/${stamp}`;
-  const ext = isVideo
+): Promise<ActivityMediaUrls> {
+  const stamp = input.stamp ?? Date.now();
+  const basePath = `users/${input.userId}/activities/${stamp}`;
+  const ext = input.isVideo
     ? input.originalFile.name.split(".").pop() || "mp4"
     : "jpg";
 
@@ -891,12 +928,12 @@ export async function createActivityUpload(
     ),
     uploadBlob(
       input.lowQualityBlob,
-      `${basePath}/low.${isVideo ? ext : "jpg"}`,
+      `${basePath}/low.${input.isVideo ? ext : "jpg"}`,
       (pct) => onProgress(45 + Math.round(pct * 0.35)),
     ),
   ];
 
-  if (isVideo && input.thumbnailBlob) {
+  if (input.isVideo && input.thumbnailBlob) {
     uploads.push(
       uploadBlob(
         input.thumbnailBlob,
@@ -907,11 +944,30 @@ export async function createActivityUpload(
   }
 
   const results = await Promise.all(uploads);
-  const originalUrl = results[0];
-  const lowUrl = results[1];
-  const thumbUrl = isVideo ? results[2] : lowUrl;
+  return {
+    originalUrl: results[0],
+    lowUrl: results[1],
+    thumbUrl: input.isVideo ? results[2] : results[1],
+  };
+}
 
-  onProgress(92);
+export async function createActivityPostFromMedia(
+  urls: ActivityMediaUrls,
+  input: Omit<
+    ActivityUploadInput,
+    "originalFile" | "lowQualityBlob" | "thumbnailBlob"
+  >,
+): Promise<string> {
+  const {
+    userId,
+    eventId,
+    activityName,
+    location,
+    participantCount,
+    isVideo,
+    tags = [],
+  } = input;
+
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const postData: Record<string, unknown> = {
     postUser: userRef,
@@ -929,24 +985,24 @@ export async function createActivityUpload(
     Post_liked_by: [],
     allowComments: true,
     isPrivate: false,
-    ...buildPostTagFields(input.tags ?? []),
+    ...buildPostTagFields(tags),
   };
 
   if (isVideo) {
-    postData.postVideo = originalUrl;
-    postData.postVideoURL = lowUrl;
-    postData.postVideoURL_original = originalUrl;
-    postData.postVideoURL_low = lowUrl;
-    postData.postVideothumbnail = thumbUrl ?? lowUrl;
+    postData.postVideo = urls.originalUrl;
+    postData.postVideoURL = urls.lowUrl;
+    postData.postVideoURL_original = urls.originalUrl;
+    postData.postVideoURL_low = urls.lowUrl;
+    postData.postVideothumbnail = urls.thumbUrl ?? urls.lowUrl;
     postData.videoTranscodeStatus = videoTranscodeStatusForUpload(
-      originalUrl,
-      lowUrl,
+      urls.originalUrl,
+      urls.lowUrl,
     );
   } else {
-    postData.postPhoto = originalUrl;
-    postData.postPhotoURL = lowUrl;
-    postData.postPhotoURL_original = originalUrl;
-    postData.postPhotoURL_low = lowUrl;
+    postData.postPhoto = urls.originalUrl;
+    postData.postPhotoURL = urls.lowUrl;
+    postData.postPhotoURL_original = urls.originalUrl;
+    postData.postPhotoURL_low = urls.lowUrl;
   }
 
   const docRef = await addDoc(
@@ -958,8 +1014,28 @@ export async function createActivityUpload(
     total_activity_participants: increment(participantCount),
   });
 
-  onProgress(100);
   return docRef.id;
+}
+
+export async function createActivityUpload(
+  input: ActivityUploadInput,
+  onProgress: (pct: number) => void,
+): Promise<string> {
+  const urls = await uploadActivityMedia(
+    {
+      userId: input.userId,
+      isVideo: input.isVideo,
+      originalFile: input.originalFile,
+      lowQualityBlob: input.lowQualityBlob,
+      thumbnailBlob: input.thumbnailBlob,
+    },
+    onProgress,
+  );
+
+  onProgress(92);
+  const id = await createActivityPostFromMedia(urls, input);
+  onProgress(100);
+  return id;
 }
 
 function storagePathFromDownloadUrl(url: string): string | null {

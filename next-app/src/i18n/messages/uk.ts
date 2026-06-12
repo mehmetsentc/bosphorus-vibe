@@ -140,6 +140,8 @@ const uk: Messages = {
   selectVideo: "Обрати відео",
   writeCaption: "Напишіть підпис…",
   uploading: "Завантаження…",
+  draftUploading: "Uploading in background…",
+  draftUploadReady: "Upload complete — ready to share",
   shareAction: "Поділитися",
   uploadFailed: "Помилка завантаження",
   uploadActivity: "Завантажити активність",

@@ -140,6 +140,8 @@ const ro: Messages = {
   selectVideo: "Selectează videoclip",
   writeCaption: "Scrie o descriere…",
   uploading: "Se încarcă…",
+  draftUploading: "Uploading in background…",
+  draftUploadReady: "Upload complete — ready to share",
   shareAction: "Distribuie",
   uploadFailed: "Încărcarea a eșuat",
   uploadActivity: "Încarcă activitate",

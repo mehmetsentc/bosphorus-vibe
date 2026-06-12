@@ -140,6 +140,8 @@ const sq: Messages = {
   selectVideo: "Zgjidh videon",
   writeCaption: "Shkruaj përshkrimin…",
   uploading: "Duke ngarkuar…",
+  draftUploading: "Uploading in background…",
+  draftUploadReady: "Upload complete — ready to share",
   shareAction: "Ndaj",
   uploadFailed: "Ngarkimi dështoi",
   uploadActivity: "Ngarko aktivitetin",

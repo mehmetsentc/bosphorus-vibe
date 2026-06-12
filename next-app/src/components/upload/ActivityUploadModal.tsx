@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { createActivityUpload } from "@/lib/services/firestore";
+import {
+  createActivityPostFromMedia,
+  createActivityUpload,
+} from "@/lib/services/firestore";
+import { useActivityDraftUpload } from "@/lib/hooks/useActivityDraftUpload";
 import { getCurrentLocationLabel } from "@/lib/utils/geolocation";
 import {
   compressImage,
@@ -42,6 +46,8 @@ export function ActivityUploadModal({
   const [error, setError] = useState("");
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
 
+  const draft = useActivityDraftUpload(file, user?.uid, open && Boolean(file));
+
   useEffect(() => {
     if (!open || !event) return;
     setActivityName(event.eventName);
@@ -76,28 +82,38 @@ export function ActivityUploadModal({
     setUploading(true);
     setError("");
     try {
-      const isVideo = isVideoFile(file);
-      setProgress(2);
-      let compressed: Awaited<ReturnType<typeof compressVideo>> | null = null;
-      const lowQualityBlob = isVideo
-        ? (compressed = await compressVideo(file)).video
-        : await compressImage(file, locale);
+      const meta = {
+        userId: user.uid,
+        eventId: event.id,
+        activityName: activityName.trim() || event.eventName,
+        location: location.trim() || event.eventLocation,
+        participantCount: count,
+        isVideo: isVideoFile(file),
+        tags: taggedPeople,
+      };
 
-      await createActivityUpload(
-        {
-          userId: user.uid,
-          eventId: event.id,
-          activityName: activityName.trim() || event.eventName,
-          location: location.trim() || event.eventLocation,
-          participantCount: count,
-          isVideo,
-          originalFile: file,
-          lowQualityBlob,
-          thumbnailBlob: compressed?.thumbnail,
-          tags: taggedPeople,
-        },
-        setProgress,
-      );
+      try {
+        const urls = await draft.waitUntilReady();
+        setProgress(95);
+        await createActivityPostFromMedia(urls, meta);
+      } catch {
+        setProgress(2);
+        const isVideo = isVideoFile(file);
+        let compressed: Awaited<ReturnType<typeof compressVideo>> | null = null;
+        const lowBlob = isVideo
+          ? (compressed = await compressVideo(file)).video
+          : await compressImage(file, locale);
+        await createActivityUpload(
+          {
+            ...meta,
+            isVideo,
+            originalFile: file,
+            lowQualityBlob: lowBlob,
+            thumbnailBlob: compressed?.thumbnail,
+          },
+          setProgress,
+        );
+      }
 
       invalidateFeedCaches();
       await refreshProfile();
@@ -150,6 +166,24 @@ export function ActivityUploadModal({
                 <span className="text-sm text-muted">{t("selectMedia")}</span>
               )}
             </label>
+
+            {draft.status === "uploading" && (
+              <div className="mt-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-muted">
+                  <span>{t("draftUploading")}</span>
+                  <span>{draft.progress}%</span>
+                </div>
+                <div className="h-1 overflow-hidden rounded-full bg-surface-overlay">
+                  <div
+                    className="h-full bg-vibe transition-all"
+                    style={{ width: `${draft.progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {draft.status === "ready" && (
+              <p className="mt-2 text-xs text-vibe">{t("draftUploadReady")}</p>
+            )}
 
             <div className="mt-4 space-y-3">
               <Field label={t("activityName")}>

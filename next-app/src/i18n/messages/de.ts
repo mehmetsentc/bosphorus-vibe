@@ -141,6 +141,8 @@ const de: Messages = {
   selectVideo: "Video auswählen",
   writeCaption: "Beschreibung schreiben…",
   uploading: "Wird hochgeladen…",
+  draftUploading: "Uploading in background…",
+  draftUploadReady: "Upload complete — ready to share",
   shareAction: "Teilen",
   uploadFailed: "Upload fehlgeschlagen",
   uploadActivity: "Aktivität hochladen",

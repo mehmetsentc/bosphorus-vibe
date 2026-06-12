@@ -140,6 +140,8 @@ const pl: Messages = {
   selectVideo: "Wybierz wideo",
   writeCaption: "Napisz opis…",
   uploading: "Przesyłanie…",
+  draftUploading: "Uploading in background…",
+  draftUploadReady: "Upload complete — ready to share",
   shareAction: "Udostępnij",
   uploadFailed: "Przesyłanie nie powiodło się",
   uploadActivity: "Prześlij aktywność",

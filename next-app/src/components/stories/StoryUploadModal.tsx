@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useT } from "@/components/providers/I18nProvider";
+import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
 import {
   createStory,
   uploadStoryImage,
@@ -53,6 +54,11 @@ export function StoryUploadModal({
   const [recentFiles, setRecentFiles] = useState<
     { file: File; url: string; isVideo: boolean }[]
   >([]);
+
+  const draft = useDraftUpload(file, user?.uid, {
+    enabled: open && Boolean(file),
+    mode: "story",
+  });
 
   useEffect(() => {
     if (!open) {
@@ -123,31 +129,42 @@ export function StoryUploadModal({
     setUploading(true);
     setError("");
     try {
-      const isVideo = isVideoFile(file);
-      let photoUrl: string | undefined;
-      let videoOriginalUrl: string | undefined;
-      let videoLowUrl: string | undefined;
-
-      if (isVideo) {
-        const { originalUrl, lowUrl, thumbnailUrl } = await uploadStoryVideo(
-          file,
-          user.uid,
-          setProgress,
-        );
-        videoOriginalUrl = originalUrl;
-        videoLowUrl = lowUrl;
-        photoUrl = thumbnailUrl;
-      } else {
-        photoUrl = await uploadStoryImage(file, user.uid, setProgress);
+      let media;
+      try {
+        media = await draft.waitUntilReady();
+      } catch {
+        const isVideo = isVideoFile(file);
+        if (isVideo) {
+          const { originalUrl, lowUrl, thumbnailUrl } = await uploadStoryVideo(
+            file,
+            user.uid,
+            setProgress,
+          );
+          media = {
+            isVideo: true,
+            originalUrl,
+            lowUrl,
+            thumbnailUrl,
+            photoUrl: thumbnailUrl,
+          };
+        } else {
+          const photoUrl = await uploadStoryImage(file, user.uid, setProgress);
+          media = {
+            isVideo: false,
+            originalUrl: photoUrl,
+            lowUrl: photoUrl,
+            photoUrl,
+          };
+        }
       }
 
       const caption = [textOverlay, description].filter(Boolean).join("\n").trim();
 
       await createStory({
         userId: user.uid,
-        photoUrl,
-        videoOriginalUrl,
-        videoLowUrl,
+        photoUrl: media.photoUrl ?? media.thumbnailUrl ?? media.lowUrl,
+        videoOriginalUrl: media.isVideo ? media.originalUrl : undefined,
+        videoLowUrl: media.isVideo ? media.lowUrl : undefined,
         storyCategory,
         description: closeFriends ? `[close-friends] ${caption}` : caption,
       });
@@ -342,6 +359,23 @@ export function StoryUploadModal({
 
               {/* Bottom editor */}
               <div className="absolute bottom-0 left-0 right-0 z-30 space-y-3 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-16">
+                {draft.status === "uploading" && (
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-[11px] text-white/50">
+                      <span>{t("draftUploading")}</span>
+                      <span>{draft.progress}%</span>
+                    </div>
+                    <div className="h-0.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-vibe transition-all"
+                        style={{ width: `${draft.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {draft.status === "ready" && (
+                  <p className="text-[11px] text-vibe">{t("draftUploadReady")}</p>
+                )}
                 <StoryCategoryPicker
                   value={storyCategory}
                   onChange={setStoryCategory}

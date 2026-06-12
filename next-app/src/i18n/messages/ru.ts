@@ -140,6 +140,8 @@ const ru: Messages = {
   selectVideo: "Выбрать видео",
   writeCaption: "Напишите подпись…",
   uploading: "Загрузка…",
+  draftUploading: "Uploading in background…",
+  draftUploadReady: "Upload complete — ready to share",
   shareAction: "Поделиться",
   uploadFailed: "Ошибка загрузки",
   uploadActivity: "Загрузить активность",

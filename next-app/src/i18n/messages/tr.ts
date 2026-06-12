@@ -143,6 +143,8 @@ const tr: Messages = {
   selectVideo: "Video seç",
   writeCaption: "Açıklama yaz…",
   uploading: "Yükleniyor…",
+  draftUploading: "Arka planda yükleniyor…",
+  draftUploadReady: "Yükleme tamam — paylaşmaya hazır",
   shareAction: "Paylaş",
   uploadFailed: "Yükleme başarısız",
   uploadActivity: "Aktivite Yükle",

@@ -140,6 +140,8 @@ const en = {
   selectVideo: "Select video",
   writeCaption: "Write a caption…",
   uploading: "Uploading…",
+  draftUploading: "Uploading in background…",
+  draftUploadReady: "Upload complete — ready to share",
   shareAction: "Share",
   uploadFailed: "Upload failed",
   uploadActivity: "Upload Activity",

@@ -81,8 +81,10 @@ function CreateUploadFlowInner() {
   const [error, setError] = useState("");
 
   // Start uploading immediately when a file is selected (draft upload).
-  // For stories we skip this since they use different upload paths.
-  const draft = useDraftUpload(file, user?.uid, kind !== "story");
+  const draft = useDraftUpload(file, user?.uid, {
+    enabled: Boolean(file && user && kind),
+    mode: kind === "story" ? "story" : "post",
+  });
   const [storyCategory, setStoryCategory] = useState<StoryCategory>(initialStoryCategory);
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
 
@@ -190,6 +192,47 @@ function CreateUploadFlowInner() {
     router.push("/home");
   }
 
+  async function resolveDraftOrUpload(): Promise<{
+    isVideo: boolean;
+    originalUrl: string;
+    lowUrl: string;
+    thumbnailUrl?: string;
+    photoUrl?: string;
+  }> {
+    if (!file || !user) throw new Error("Missing file or user");
+
+    try {
+      return await draft.waitUntilReady();
+    } catch {
+      if (kind === "story") {
+        const isVideo = isVideoFile(file);
+        if (isVideo) {
+          const { originalUrl, lowUrl, thumbnailUrl } = await uploadStoryVideo(
+            file,
+            user.uid,
+            setProgress,
+          );
+          return {
+            isVideo: true,
+            originalUrl,
+            lowUrl,
+            thumbnailUrl,
+            photoUrl: thumbnailUrl,
+          };
+        }
+        const photoUrl = await uploadStoryImage(file, user.uid, setProgress);
+        return { isVideo: false, originalUrl: photoUrl, lowUrl: photoUrl, photoUrl };
+      }
+
+      if (kind === "reel" || isVideoFile(file)) {
+        const result = await uploadVideoPost(file, user.uid, setProgress);
+        return { isVideo: true, ...result };
+      }
+      const result = await uploadImagePost(file, user.uid, setProgress);
+      return { isVideo: false, ...result };
+    }
+  }
+
   async function handlePublish() {
     if (!file || !user || !kind) return;
     setUploading(true);
@@ -199,29 +242,15 @@ function CreateUploadFlowInner() {
     const fullCaption = [textOverlay, caption].filter(Boolean).join("\n").trim();
 
     try {
-      // ── Story: always upload fresh (separate upload paths) ──────────────
+      const media = await resolveDraftOrUpload();
+      setProgress(98);
+
       if (kind === "story") {
-        const isVideo = isVideoFile(file);
-        let photoUrl: string | undefined;
-        let videoOriginalUrl: string | undefined;
-        let videoLowUrl: string | undefined;
-        if (isVideo) {
-          const { originalUrl, lowUrl, thumbnailUrl } = await uploadStoryVideo(
-            file,
-            user.uid,
-            setProgress,
-          );
-          videoOriginalUrl = originalUrl;
-          videoLowUrl = lowUrl;
-          photoUrl = thumbnailUrl;
-        } else {
-          photoUrl = await uploadStoryImage(file, user.uid, setProgress);
-        }
         await createStory({
           userId: user.uid,
-          photoUrl,
-          videoOriginalUrl,
-          videoLowUrl,
+          photoUrl: media.photoUrl ?? media.thumbnailUrl ?? media.lowUrl,
+          videoOriginalUrl: media.isVideo ? media.originalUrl : undefined,
+          videoLowUrl: media.isVideo ? media.lowUrl : undefined,
           storyCategory,
           description: fullCaption,
           tags: taggedPeople,
@@ -230,43 +259,23 @@ function CreateUploadFlowInner() {
         return;
       }
 
-      // ── Post / Reel: use draft upload result if ready ────────────────────
-      let originalUrl: string;
-      let lowUrl: string;
-      let thumbnailUrl: string | undefined;
-
-      if (draft.status === "ready" && draft.result) {
-        // Draft finished in the background — only a Firestore write needed.
-        setProgress(98);
-        originalUrl = draft.result.originalUrl;
-        lowUrl = draft.result.lowUrl;
-        thumbnailUrl = draft.result.isVideo ? draft.result.thumbnailUrl : undefined;
-      } else {
-        // Draft still uploading or errored — fall back to fresh upload so
-        // the user is never stuck.
-        if (kind === "reel" || isVideoFile(file)) {
-          const result = await uploadVideoPost(file, user.uid, setProgress);
-          originalUrl = result.originalUrl;
-          lowUrl = result.lowUrl;
-          thumbnailUrl = result.thumbnailUrl;
-        } else {
-          const result = await uploadImagePost(file, user.uid, setProgress);
-          originalUrl = result.originalUrl;
-          lowUrl = result.lowUrl;
-        }
-      }
-
-      if (kind === "reel" || isVideoFile(file)) {
+      if (kind === "reel" || media.isVideo) {
         await createVideoPost(
-          originalUrl,
-          lowUrl,
-          thumbnailUrl ?? "",
+          media.originalUrl,
+          media.lowUrl,
+          media.thumbnailUrl ?? "",
           fullCaption,
           user.uid,
           taggedPeople,
         );
       } else {
-        await createImagePost(originalUrl, lowUrl, fullCaption, user.uid, taggedPeople);
+        await createImagePost(
+          media.originalUrl,
+          media.lowUrl,
+          fullCaption,
+          user.uid,
+          taggedPeople,
+        );
       }
 
       invalidateFeedCaches();
@@ -503,6 +512,25 @@ function CreateUploadFlowInner() {
 
             {step === "edit" && (
               <>
+                {draft.status === "uploading" && (
+                  <div className="absolute left-4 right-4 top-[max(3rem,env(safe-area-inset-top))] z-30">
+                    <div className="flex items-center justify-between text-[10px] text-white/60">
+                      <span>{t("draftUploading")}</span>
+                      <span>{draft.progress}%</span>
+                    </div>
+                    <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-vibe transition-all"
+                        style={{ width: `${draft.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {draft.status === "ready" && (
+                  <p className="absolute left-4 right-4 top-[max(3rem,env(safe-area-inset-top))] z-30 text-center text-[10px] text-vibe">
+                    {t("draftUploadReady")}
+                  </p>
+                )}
                 <div className="pointer-events-none absolute inset-x-0 bottom-32 z-20 flex flex-col items-center text-white/70">
                   <span className="text-lg">⌃</span>
                   <span className="text-xs">{t("swipeToEdit")}</span>
@@ -554,12 +582,12 @@ function CreateUploadFlowInner() {
                   <div className="w-8" />
                 </header>
 
-                {/* Draft upload progress bar (shown while user writes caption) */}
-                {kind !== "story" && draft.status === "uploading" && (
+                {/* Draft upload progress — starts as soon as media is selected */}
+                {draft.status === "uploading" && (
                   <div className="px-4 pb-2">
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="mb-1 flex items-center justify-between">
                       <span className="text-[11px] text-white/50">
-                        Arka planda yükleniyor…
+                        {t("draftUploading")}
                       </span>
                       <span className="text-[11px] text-white/50">
                         {draft.progress}%
@@ -573,9 +601,9 @@ function CreateUploadFlowInner() {
                     </div>
                   </div>
                 )}
-                {kind !== "story" && draft.status === "ready" && (
+                {draft.status === "ready" && (
                   <p className="px-4 pb-2 text-[11px] text-vibe">
-                    ✓ Yükleme tamamlandı — yayınlamak için hazır
+                    {t("draftUploadReady")}
                   </p>
                 )}
 

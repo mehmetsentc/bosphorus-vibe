@@ -3,18 +3,22 @@
 /**
  * useDraftUpload — Instagram-style background upload.
  *
- * Starts compressing + uploading to Firebase Storage immediately when a file
- * is selected, so by the time the user finishes writing a caption the media
- * is already (or nearly) uploaded. Publishing then only needs a Firestore
- * document write instead of the full upload wait.
+ * Starts uploading to Firebase Storage as soon as a file is selected, so
+ * publishing only needs a Firestore write when the user taps Share.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isVideoFile } from "@/lib/utils/media-compress";
 import {
   uploadVideoPost,
   uploadImagePost,
 } from "@/lib/services/firestore";
+import {
+  uploadStoryImage,
+  uploadStoryVideo,
+} from "@/lib/services/stories";
+
+export type DraftUploadMode = "post" | "story";
 
 export type DraftStatus = "idle" | "uploading" | "ready" | "error";
 
@@ -23,6 +27,8 @@ export type DraftResult = {
   originalUrl: string;
   lowUrl: string;
   thumbnailUrl?: string;
+  /** Story cover — image URL or video poster */
+  photoUrl?: string;
 };
 
 export type DraftState = {
@@ -33,6 +39,11 @@ export type DraftState = {
   error: string | null;
 };
 
+export type UseDraftUploadReturn = DraftState & {
+  /** Resolves when the in-flight upload finishes (or immediately if ready). */
+  waitUntilReady: () => Promise<DraftResult>;
+};
+
 const IDLE: DraftState = {
   status: "idle",
   progress: 0,
@@ -40,66 +51,101 @@ const IDLE: DraftState = {
   error: null,
 };
 
+type DraftUploadOptions = {
+  enabled?: boolean;
+  mode?: DraftUploadMode;
+};
+
+async function runDraftUpload(
+  file: File,
+  userId: string,
+  mode: DraftUploadMode,
+  onProgress: (pct: number) => void,
+): Promise<DraftResult> {
+  const isVideo = isVideoFile(file);
+
+  if (mode === "story") {
+    if (isVideo) {
+      const { originalUrl, lowUrl, thumbnailUrl } = await uploadStoryVideo(
+        file,
+        userId,
+        onProgress,
+      );
+      return {
+        isVideo: true,
+        originalUrl,
+        lowUrl,
+        thumbnailUrl,
+        photoUrl: thumbnailUrl,
+      };
+    }
+    const photoUrl = await uploadStoryImage(file, userId, onProgress);
+    return {
+      isVideo: false,
+      originalUrl: photoUrl,
+      lowUrl: photoUrl,
+      photoUrl,
+    };
+  }
+
+  if (isVideo) {
+    const { originalUrl, lowUrl, thumbnailUrl } = await uploadVideoPost(
+      file,
+      userId,
+      onProgress,
+    );
+    return { isVideo: true, originalUrl, lowUrl, thumbnailUrl };
+  }
+
+  const { originalUrl, lowUrl } = await uploadImagePost(file, userId, onProgress);
+  return { isVideo: false, originalUrl, lowUrl };
+}
+
 export function useDraftUpload(
   file: File | null,
   userId: string | undefined,
-  /** Set to false to skip background upload (e.g. for story kind). */
-  enabled = true,
-): DraftState {
+  options: boolean | DraftUploadOptions = true,
+): UseDraftUploadReturn {
+  const opts: DraftUploadOptions =
+    typeof options === "boolean" ? { enabled: options } : options;
+  const enabled = opts.enabled ?? true;
+  const mode = opts.mode ?? "post";
+
   const [state, setState] = useState<DraftState>(IDLE);
-  // Abort flag so stale async callbacks don't write to state after unmount or
-  // file change.
   const abortRef = useRef(false);
+  const inflightRef = useRef<Promise<DraftResult> | null>(null);
+  const resultRef = useRef<DraftResult | null>(null);
 
   useEffect(() => {
     if (!file || !userId || !enabled) {
+      inflightRef.current = null;
+      resultRef.current = null;
       setState(IDLE);
       return;
     }
 
     abortRef.current = false;
+    resultRef.current = null;
     setState({ status: "uploading", progress: 0, result: null, error: null });
 
-    const isVideo = isVideoFile(file);
-
-    async function run() {
-      try {
-        if (isVideo) {
-          const { originalUrl, lowUrl, thumbnailUrl } = await uploadVideoPost(
-            file!,
-            userId!,
-            (pct) => {
-              if (!abortRef.current)
-                setState((s) => ({ ...s, progress: pct }));
-            },
-          );
-          if (!abortRef.current) {
-            setState({
-              status: "ready",
-              progress: 100,
-              result: { isVideo: true, originalUrl, lowUrl, thumbnailUrl },
-              error: null,
-            });
-          }
-        } else {
-          const { originalUrl, lowUrl } = await uploadImagePost(
-            file!,
-            userId!,
-            (pct) => {
-              if (!abortRef.current)
-                setState((s) => ({ ...s, progress: pct }));
-            },
-          );
-          if (!abortRef.current) {
-            setState({
-              status: "ready",
-              progress: 100,
-              result: { isVideo: false, originalUrl, lowUrl },
-              error: null,
-            });
-          }
+    const promise = runDraftUpload(file, userId, mode, (pct) => {
+      if (!abortRef.current) {
+        setState((s) => ({ ...s, progress: pct }));
+      }
+    })
+      .then((result) => {
+        if (!abortRef.current) {
+          resultRef.current = result;
+          setState({
+            status: "ready",
+            progress: 100,
+            result,
+            error: null,
+          });
         }
-      } catch (err) {
+        return result;
+      })
+      .catch((err) => {
         if (!abortRef.current) {
           console.error("[DraftUpload]", err);
           setState({
@@ -109,15 +155,22 @@ export function useDraftUpload(
             error: String(err),
           });
         }
-      }
-    }
+        throw err;
+      });
 
-    void run();
+    inflightRef.current = promise;
 
     return () => {
       abortRef.current = true;
     };
-  }, [file, userId, enabled]);
+  }, [file, userId, enabled, mode]);
 
-  return state;
+  const waitUntilReady = useCallback(async (): Promise<DraftResult> => {
+    if (resultRef.current) return resultRef.current;
+    const inflight = inflightRef.current;
+    if (inflight) return inflight;
+    throw new Error("No draft upload in progress");
+  }, []);
+
+  return { ...state, waitUntilReady };
 }
