@@ -129,20 +129,50 @@ async function captureVideoFrame(
   return canvasToBlob(canvas, "image/jpeg", IMAGE_LOW_QUALITY);
 }
 
+export function isImageBlob(blob: Blob): boolean {
+  if (blob.type.startsWith("image/")) return true;
+  if (blob.type.startsWith("video/")) return false;
+  return blob.size < 512 * 1024;
+}
 
-/** İlk kare JPEG poster */
-export async function videoThumbnailFromFile(file: File): Promise<Blob> {
+/** Tiny gray JPEG when frame capture fails — never upload video as thumb.jpg */
+export async function createPlaceholderThumbnail(): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 4;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = "#1a1a1a";
+    ctx.fillRect(0, 0, 4, 4);
+  }
+  return canvasToBlob(canvas, "image/jpeg", 0.6);
+}
+
+/** Capture a JPEG frame from a video file at the given time (seconds). */
+export async function videoThumbnailAtTime(
+  file: File,
+  timeSeconds = 0.1,
+): Promise<Blob> {
   const { video, objectUrl, width, height } = await loadVideoMetadata(file);
   try {
-    video.currentTime = 0;
-    // iOS: onseeked may never fire for t=0 — 3 s timeout fallback
+    const t = Math.max(0.05, Math.min(timeSeconds, Math.max(0.05, video.duration - 0.05)));
+    video.currentTime = t;
     await raceTimeout(
       new Promise<void>((resolve) => { video.onseeked = () => resolve(); }),
-      3000,
-    ).catch(() => { /* timeout — capture whatever frame is ready */ });
+      4000,
+    ).catch(() => { /* capture whatever frame is ready */ });
     return await captureVideoFrame(video, width, height);
   } finally {
     URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/** Default cover — first usable frame (~0.1s, avoids black iOS frame at t=0). */
+export async function videoThumbnailFromFile(file: File): Promise<Blob> {
+  try {
+    return await videoThumbnailAtTime(file, 0.1);
+  } catch {
+    return createPlaceholderThumbnail();
   }
 }
 
@@ -167,11 +197,10 @@ export async function compressVideo(file: File): Promise<CompressedVideoResult> 
       3000,
     ).catch(() => { /* timeout — capture whatever frame is ready */ });
     const thumbnail = await captureVideoFrame(video, width, height);
-    // Return original file — audio preserved. Cloud Function handles low-quality encoding.
     return { video: file, thumbnail };
-  // eslint-disable-next-line no-empty
   } catch {
-    return { video: file, thumbnail: file };
+    const placeholder = await createPlaceholderThumbnail();
+    return { video: file, thumbnail: placeholder };
   } finally {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   }

@@ -22,7 +22,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { videoTranscodeStatusForUpload } from "@/lib/admin/video-transcode";
-import { compressImage, videoThumbnailFromFile } from "@/lib/utils/media-compress";
+import { compressImage, videoThumbnailFromFile, isImageBlob, createPlaceholderThumbnail } from "@/lib/utils/media-compress";
 import { hasPostVideo } from "@/lib/utils/video-sources";
 import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
 import {
@@ -695,6 +695,10 @@ export async function uploadVideoPost(
   file: File,
   userId: string,
   onProgress: (pct: number) => void,
+  options?: {
+    thumbnailBlob?: Blob;
+    getThumbnailBlob?: () => Blob | null | undefined;
+  },
 ): Promise<{ originalUrl: string; lowUrl: string; thumbnailUrl: string }> {
   onProgress(2);
 
@@ -702,38 +706,46 @@ export async function uploadVideoPost(
   const ext = file.name.split(".").pop() || "mp4";
   const basePath = `users/${userId}/uploads/${stamp}`;
 
-  // Upload video immediately; extract thumbnail in parallel (don't block the upload).
-  let videoPct = 0;
-  let thumbDone = false;
-  const report = () => {
-    const thumbPct = thumbDone ? 100 : 0;
-    onProgress(5 + Math.round(videoPct * 0.9 + thumbPct * 0.05));
-  };
-
-  const thumbnailPromise = videoThumbnailFromFile(file)
-    .catch(() => file)
-    .then((thumb) => {
-      thumbDone = true;
-      report();
-      return thumb;
-    });
-
   const originalUrl = await uploadBlob(
     file,
     `${basePath}/original.${ext}`,
-    (pct) => {
-      videoPct = pct;
-      report();
-    },
+    (pct) => onProgress(5 + Math.round(pct * 0.88)),
   );
 
-  const thumbnail = await thumbnailPromise;
+  onProgress(93);
+  const custom =
+    options?.getThumbnailBlob?.() ?? options?.thumbnailBlob ?? null;
+  const thumbnail =
+    custom && isImageBlob(custom)
+      ? custom
+      : await videoThumbnailFromFile(file).catch(() => createPlaceholderThumbnail());
+
   const thumbnailUrl = await uploadBlob(thumbnail, `${basePath}/thumb.jpg`, (pct) => {
-    onProgress(95 + Math.round(pct * 0.05));
+    onProgress(93 + Math.round(pct * 0.07));
   });
 
   onProgress(100);
   return { originalUrl, lowUrl: originalUrl, thumbnailUrl };
+}
+
+/** Re-upload cover after draft video is already in Storage (user picked a new frame). */
+export async function uploadVideoCoverForPost(
+  videoOriginalUrl: string,
+  coverBlob: Blob,
+): Promise<string> {
+  if (!isImageBlob(coverBlob)) {
+    throw new Error("Cover must be an image");
+  }
+  try {
+    const pathname = new URL(videoOriginalUrl).pathname;
+    const encoded = pathname.match(/\/o\/(.+)/)?.[1];
+    if (!encoded) throw new Error("Invalid video URL");
+    const storagePath = decodeURIComponent(encoded.split("?")[0] ?? encoded);
+    const thumbPath = storagePath.replace(/original\.[a-z0-9]+$/i, "thumb.jpg");
+    return uploadBlob(coverBlob, thumbPath);
+  } catch {
+    throw new Error("Cannot upload cover for this video");
+  }
 }
 
 export async function createVideoPost(

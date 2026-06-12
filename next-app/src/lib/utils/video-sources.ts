@@ -49,6 +49,66 @@ function pickPlayableSrc(candidates: string[]): string {
   return unique[0];
 }
 
+const VIDEO_URL_EXTENSIONS = new Set([
+  "mov",
+  "mp4",
+  "webm",
+  "m4v",
+  "avi",
+  "mkv",
+  "m4a",
+]);
+
+const IMAGE_URL_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "heic",
+  "heif",
+]);
+
+/** True when URL path looks like an image (not a video file). */
+export function isImageMediaUrl(url: string): boolean {
+  if (!url) return false;
+  const ext = videoUrlExtension(url);
+  if (!ext) return true;
+  if (VIDEO_URL_EXTENSIONS.has(ext)) return false;
+  return IMAGE_URL_EXTENSIONS.has(ext);
+}
+
+function getRawPosterCandidates(post: UserPostDoc): string[] {
+  const original =
+    post.postVideoURL_original ||
+    post.postVideo ||
+    post.postVideoURL ||
+    "";
+  const low =
+    post.postVideoURL_low ||
+    post.postVideoURL ||
+    post.postVideo ||
+    "";
+  return uniqueUrls(
+    post.postVideothumbnail,
+    post.postPhotoURL,
+    post.postPhoto,
+    inferThumbUrlFromVideo(original),
+    inferThumbUrlFromVideo(low),
+    pickImageSource(post, "grid"),
+  );
+}
+
+/** Ordered poster candidates for profile grid / thumbnails. */
+export function getPostGridThumbnailCandidates(post: UserPostDoc): string[] {
+  return getRawPosterCandidates(post).filter(isImageMediaUrl);
+}
+
+/** Best poster/cover image for a video post (grid, feed, reels). */
+export function getPostVideoPoster(post: UserPostDoc): string | undefined {
+  return getPostGridThumbnailCandidates(post)[0];
+}
+
 export function getPostVideoVariants(post: UserPostDoc): {
   original: string;
   low: string;
@@ -64,8 +124,7 @@ export function getPostVideoVariants(post: UserPostDoc): {
     post.postVideoURL ||
     post.postVideo ||
     "";
-  const poster =
-    post.postVideothumbnail || post.postPhotoURL || post.postPhoto || undefined;
+  const poster = getPostVideoPoster(post);
 
   return { original, low, poster };
 }
@@ -163,18 +222,6 @@ export function hasPostVideo(post: UserPostDoc): boolean {
 export function inferThumbUrlFromVideo(videoUrl: string): string | undefined {
   if (!videoUrl || !/original\.[a-z0-9]+/i.test(videoUrl)) return undefined;
   return videoUrl.replace(/original\.[a-z0-9]+/i, "thumb.jpg");
-}
-
-/** Ordered poster candidates for profile grid / thumbnails. */
-export function getPostGridThumbnailCandidates(post: UserPostDoc): string[] {
-  const { original, low, poster } = getPostVideoVariants(post);
-  return uniqueUrls(
-    post.postVideothumbnail,
-    poster,
-    inferThumbUrlFromVideo(original),
-    inferThumbUrlFromVideo(low),
-    pickImageSource(post, "grid"),
-  );
 }
 
 /** Best video URL for grid frame fallback (iOS-safe). */

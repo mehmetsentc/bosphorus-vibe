@@ -7,7 +7,7 @@
  * publishing only needs a Firestore write when the user taps Share.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { isVideoFile } from "@/lib/utils/media-compress";
 import {
   uploadVideoPost,
@@ -54,6 +54,8 @@ const IDLE: DraftState = {
 type DraftUploadOptions = {
   enabled?: boolean;
   mode?: DraftUploadMode;
+  /** Latest cover frame / custom image — read when uploading thumb.jpg */
+  thumbnailRef?: RefObject<Blob | null>;
 };
 
 async function runDraftUpload(
@@ -61,6 +63,7 @@ async function runDraftUpload(
   userId: string,
   mode: DraftUploadMode,
   onProgress: (pct: number) => void,
+  thumbnailRef?: RefObject<Blob | null>,
 ): Promise<DraftResult> {
   const isVideo = isVideoFile(file);
 
@@ -70,6 +73,9 @@ async function runDraftUpload(
         file,
         userId,
         onProgress,
+        {
+          getThumbnailBlob: () => thumbnailRef?.current ?? null,
+        },
       );
       return {
         isVideo: true,
@@ -93,6 +99,9 @@ async function runDraftUpload(
       file,
       userId,
       onProgress,
+      {
+        getThumbnailBlob: () => thumbnailRef?.current ?? null,
+      },
     );
     return { isVideo: true, originalUrl, lowUrl, thumbnailUrl };
   }
@@ -110,6 +119,7 @@ export function useDraftUpload(
     typeof options === "boolean" ? { enabled: options } : options;
   const enabled = opts.enabled ?? true;
   const mode = opts.mode ?? "post";
+  const thumbnailRef = opts.thumbnailRef;
 
   const [state, setState] = useState<DraftState>(IDLE);
   const abortRef = useRef(false);
@@ -132,7 +142,7 @@ export function useDraftUpload(
       if (!abortRef.current) {
         setState((s) => ({ ...s, progress: pct }));
       }
-    })
+    }, thumbnailRef)
       .then((result) => {
         if (!abortRef.current) {
           resultRef.current = result;

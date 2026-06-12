@@ -11,8 +11,10 @@ import {
   createVideoPost,
   uploadImagePost,
   uploadVideoPost,
+  uploadVideoCoverForPost,
 } from "@/lib/services/firestore";
 import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
+import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
 import {
   createStory,
   uploadStoryImage,
@@ -79,11 +81,13 @@ function CreateUploadFlowInner() {
   const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const coverBlobRef = useRef<Blob | null>(null);
 
   // Start uploading immediately when a file is selected (draft upload).
   const draft = useDraftUpload(file, user?.uid, {
     enabled: Boolean(file && user && kind),
     mode: kind === "story" ? "story" : "post",
+    thumbnailRef: coverBlobRef,
   });
   const [storyCategory, setStoryCategory] = useState<StoryCategory>(initialStoryCategory);
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
@@ -155,6 +159,7 @@ function CreateUploadFlowInner() {
 
       const url = URL.createObjectURL(next);
       const isVideo = isVideoFile(next);
+      coverBlobRef.current = null;
       setFile(next);
       setPreview(url);
       setStep("edit");
@@ -243,12 +248,20 @@ function CreateUploadFlowInner() {
 
     try {
       const media = await resolveDraftOrUpload();
-      setProgress(98);
+      setProgress(95);
+
+      let thumbnailUrl = media.thumbnailUrl;
+      if (media.isVideo && coverBlobRef.current) {
+        thumbnailUrl = await uploadVideoCoverForPost(
+          media.originalUrl,
+          coverBlobRef.current,
+        );
+      }
 
       if (kind === "story") {
         await createStory({
           userId: user.uid,
-          photoUrl: media.photoUrl ?? media.thumbnailUrl ?? media.lowUrl,
+          photoUrl: thumbnailUrl ?? media.photoUrl ?? media.lowUrl,
           videoOriginalUrl: media.isVideo ? media.originalUrl : undefined,
           videoLowUrl: media.isVideo ? media.lowUrl : undefined,
           storyCategory,
@@ -263,7 +276,7 @@ function CreateUploadFlowInner() {
         await createVideoPost(
           media.originalUrl,
           media.lowUrl,
-          media.thumbnailUrl ?? "",
+          thumbnailUrl ?? "",
           fullCaption,
           user.uid,
           taggedPeople,
@@ -633,6 +646,16 @@ function CreateUploadFlowInner() {
                     rows={4}
                     className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40"
                   />
+
+                  {file && isVideoFile(file) && preview && (
+                    <VideoCoverPicker
+                      file={file}
+                      previewUrl={preview}
+                      onCoverChange={(blob) => {
+                        coverBlobRef.current = blob;
+                      }}
+                    />
+                  )}
 
                   <TagPeoplePicker
                     value={taggedPeople}

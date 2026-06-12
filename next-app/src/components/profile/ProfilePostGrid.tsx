@@ -1,70 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { getPostVideoUrl } from "@/lib/services/firestore";
 import {
   getPostGridThumbnailCandidates,
-  pickGridVideoPreviewUrl,
   pickImageSource,
 } from "@/lib/utils/video-sources";
 import { IconLayers, IconMenu, IconPin, IconReels } from "@/components/icons/Icons";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
-
-function GridVideoPreview({
-  src,
-  poster,
-  className,
-}: {
-  src: string;
-  poster?: string;
-  className?: string;
-}) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const [frameReady, setFrameReady] = useState(false);
-
-  useEffect(() => {
-    setFrameReady(false);
-    const video = ref.current;
-    if (!video) return;
-    video.load();
-  }, [src]);
-
-  return (
-    <div className={`relative h-full w-full ${className ?? ""}`}>
-      {poster && !frameReady && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={poster}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      )}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video
-        ref={ref}
-        src={src}
-        poster={poster}
-        preload="metadata"
-        muted
-        playsInline
-        className={`h-full w-full object-cover ${frameReady ? "" : "opacity-0"}`}
-        onLoadedData={() => {
-          const video = ref.current;
-          if (!video) return;
-          try {
-            video.currentTime = 0.1;
-          } catch {
-            setFrameReady(true);
-          }
-        }}
-        onSeeked={() => setFrameReady(true)}
-        onError={() => setFrameReady(false)}
-      />
-    </div>
-  );
-}
 
 function GridMedia({
   post,
@@ -77,10 +22,8 @@ function GridMedia({
 }) {
   const thumbCandidates = getPostGridThumbnailCandidates(post);
   const [thumbIndex, setThumbIndex] = useState(0);
-  const [useVideo, setUseVideo] = useState(thumbCandidates.length === 0);
 
   const thumb = thumbCandidates[thumbIndex];
-  const previewVideo = pickGridVideoPreviewUrl(post);
 
   if (!videoUrl && !thumb) {
     return (
@@ -90,7 +33,7 @@ function GridMedia({
     );
   }
 
-  if (!useVideo && thumb) {
+  if (thumb) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -101,27 +44,15 @@ function GridMedia({
         onError={() => {
           if (thumbIndex + 1 < thumbCandidates.length) {
             setThumbIndex((i) => i + 1);
-            return;
           }
-          if (previewVideo) setUseVideo(true);
         }}
       />
     );
   }
 
-  if (previewVideo) {
-    return (
-      <GridVideoPreview
-        src={previewVideo}
-        poster={thumbCandidates[0]}
-        className="pointer-events-none"
-      />
-    );
-  }
-
   return (
-    <div className="flex h-full items-center justify-center bg-surface-overlay text-xs text-muted">
-      {fallbackLabel}
+    <div className="flex h-full items-center justify-center bg-[#1a1a1a] text-xs text-white/40">
+      ▶
     </div>
   );
 }

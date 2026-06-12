@@ -18,7 +18,7 @@ import {
   followUser,
   unfollowUser,
 } from "@/lib/services/friends";
-import { pickImageSource } from "@/lib/utils/video-sources";
+import { getPostVideoPoster, pickImageSource } from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
 import {
   IconPlay,
@@ -80,17 +80,12 @@ function FeedPostCardInner({
   const caption = getPostCaption(post);
   const {
     src: videoSrc,
-    poster: adaptivePoster,
     tier,
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
   } = useAdaptiveVideoSrc(post, "feed", isActive);
-  const poster =
-    adaptivePoster ||
-    post.postVideothumbnail ||
-    pickImageSource(post, "feed") ||
-    undefined;
+  const poster = getPostVideoPoster(post) || undefined;
   const videoPreload = isActive ? getPreloadStrategy(tier, true) : "none";
 
   useEffect(() => {

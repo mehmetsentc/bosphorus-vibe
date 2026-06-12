@@ -305,9 +305,13 @@ export async function uploadStoryVideo(
   file: File,
   userId: string,
   onProgress: (pct: number) => void,
+  options?: {
+    thumbnailBlob?: Blob;
+    getThumbnailBlob?: () => Blob | null | undefined;
+  },
 ): Promise<{ originalUrl: string; lowUrl: string; thumbnailUrl: string }> {
   const prepared = await prepareStoryVideoFile(file);
-  return uploadVideoPost(prepared, userId, onProgress);
+  return uploadVideoPost(prepared, userId, onProgress, options);
 }
 
 export async function markStoryViewed(

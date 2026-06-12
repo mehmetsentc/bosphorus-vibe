@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { createVideoPost, uploadVideoPost } from "@/lib/services/firestore";
+import {
+  createVideoPost,
+  uploadVideoPost,
+  uploadVideoCoverForPost,
+} from "@/lib/services/firestore";
 import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
+import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
 import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
@@ -33,8 +38,13 @@ export function VideoUploadModal({
   const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const coverBlobRef = useRef<Blob | null>(null);
 
-  const draft = useDraftUpload(file, user?.uid, { enabled: open && Boolean(file) });
+  const draft = useDraftUpload(file, user?.uid, {
+    enabled: open && Boolean(file),
+    thumbnailRef: coverBlobRef,
+  });
 
   async function handleUpload() {
     if (!file || !user) return;
@@ -57,11 +67,18 @@ export function VideoUploadModal({
         const result = await uploadVideoPost(file, user.uid, setProgress);
         media = { isVideo: true, ...result };
       }
-      setProgress(98);
+      setProgress(95);
+      let thumbnailUrl = media.thumbnailUrl ?? "";
+      if (coverBlobRef.current) {
+        thumbnailUrl = await uploadVideoCoverForPost(
+          media.originalUrl,
+          coverBlobRef.current,
+        );
+      }
       await createVideoPost(
         media.originalUrl,
         media.lowUrl,
-        media.thumbnailUrl ?? "",
+        thumbnailUrl,
         caption,
         user.uid,
         taggedPeople,
@@ -110,8 +127,12 @@ export function VideoUploadModal({
                 className="hidden"
                 onChange={(e) => {
                   const next = e.target.files?.[0] ?? null;
+                  setPreviewUrl((prev) => {
+                    if (prev) URL.revokeObjectURL(prev);
+                    return next ? URL.createObjectURL(next) : null;
+                  });
+                  coverBlobRef.current = null;
                   setFile(next);
-                  setError("");
                 }}
               />
               {file ? (
@@ -137,6 +158,17 @@ export function VideoUploadModal({
             )}
             {draft.status === "ready" && (
               <p className="mt-2 text-xs text-gold">{t("draftUploadReady")}</p>
+            )}
+
+            {file && previewUrl && (
+              <VideoCoverPicker
+                file={file}
+                previewUrl={previewUrl}
+                onCoverChange={(blob) => {
+                  coverBlobRef.current = blob;
+                }}
+                className="mt-4"
+              />
             )}
 
             <input
