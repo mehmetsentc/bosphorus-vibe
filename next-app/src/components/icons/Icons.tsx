@@ -282,20 +282,33 @@ export function IconEventBadge({ size, className, ...props }: IconProps) {
   );
 }
 
+/** Theater masks (comedy + tragedy) — Gösteri Saati */
 export function IconEveningShow({ size, className, ...props }: IconProps) {
   return (
     <svg {...baseProps({ size, className, ...props })}>
-      <path d="M12 3c-4 3-6 6-6 9a6 6 0 1012 0c0-3-2-6-6-9z" />
-      <path d="M9 14h6" />
+      {/* Comedy mask (left, smiling) */}
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2 8c0-2.21 1.79-4 4-4h4c2.21 0 4 1.79 4 4v4c0 2.21-1.79 4-4 4H6c-2.21 0-4-1.79-4-4V8z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 10.5c.5.8 1.5 1.5 2.5 1.5s2-.7 2.5-1.5" />
+      <circle cx="6.5" cy="8.5" r="0.5" fill="currentColor" />
+      <circle cx="9.5" cy="8.5" r="0.5" fill="currentColor" />
+      {/* Tragedy mask (right, frowning) */}
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 10c0-2.21 1.79-4 4-4h4c2.21 0 4 1.79 4 4v4c0 2.21-1.79 4-4 4h-4c-2.21 0-4-1.79-4-4v-4z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 15.5c.5-.8 1.5-1.5 2.5-1.5s2 .7 2.5 1.5" />
+      <circle cx="14.5" cy="11.5" r="0.5" fill="currentColor" />
+      <circle cx="17.5" cy="11.5" r="0.5" fill="currentColor" />
     </svg>
   );
 }
 
+/** Football / sports ball — Spor */
 export function IconDailyActivity({ size, className, ...props }: IconProps) {
   return (
     <svg {...baseProps({ size, className, ...props })}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M4 12h16M12 4a12 12 0 010 16M12 4a12 12 0 000 16" />
+      <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Football pentagon pattern */}
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l2.5 3.5-2.5 1.5-2.5-1.5L12 3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8l2.5-1.5 2 3.5-1.5 3H9l-1.5-3 2-3.5L12 8z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 13l-2.5 1M15 13l2.5 1M9 13l1.5 4M15 13l-1.5 4" />
     </svg>
   );
 }
