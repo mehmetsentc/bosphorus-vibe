@@ -101,6 +101,10 @@ body {
   text-shadow: 0 0 20px color-mix(in srgb, var(--vibe) 40%, transparent);
 }
 
+.input-field {
+  @apply w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-gold/60;
+}
+
 .action-icon-btn {
   @apply flex h-12 w-12 items-center justify-center rounded-full border border-border backdrop-blur-md transition;
   background: var(--action-bg);
