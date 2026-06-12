@@ -25,7 +25,11 @@ import {
 } from "@/lib/services/friends";
 import { pickImageSource, pickVideoSource } from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
-import { IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
+import {
+  IconPlay,
+  IconVolumeOff,
+  IconVolumeOn,
+} from "@/components/icons/Icons";
 import { PostActionsBar } from "@/components/post/PostActionsBar";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
 import { useT } from "@/components/providers/I18nProvider";
@@ -40,8 +44,6 @@ const PostCommentModal = dynamic(
 );
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
-
-const DOUBLE_TAP_MS = 280;
 
 type FeedPostCardProps = {
   post: EnrichedPost;
@@ -59,14 +61,14 @@ function FeedPostCardInner({
   const { user } = useAuth();
   const { canLike } = useAccess();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const viewedRef = useRef(false); // fire view count once per mount
+  const viewedRef = useRef(false);
   const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
   const [muteFlash, setMuteFlash] = useState<boolean | null>(null);
-  const [showPoster, setShowPoster] = useState(true);
+  const [showPoster, setShowPoster] = useState(true);   // true = video not yet playing
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(post.numComments);
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
@@ -78,26 +80,15 @@ function FeedPostCardInner({
   });
 
   const video = getPostVideoUrl(post);
-  // Feed always uses low-quality image for fast scrolling
   const image = video ? "" : pickImageSource(post, "feed");
   const caption = getPostCaption(post);
   const videoSrc = video ? pickVideoSource(post, tier, "feed").src : "";
   const poster = post.postVideothumbnail || pickImageSource(post, "feed") || undefined;
-  const videoPreload = getPreloadStrategy(tier, isActive);
+  const videoPreload = isActive ? getPreloadStrategy(tier, true) : "none";
   const isOwn = user?.uid === post.postUserId;
   const isFollowing = post.postUserId
     ? followingIds?.has(post.postUserId)
     : false;
-
-  // iOS Safari autoplay policy: requires HTML `muted` attribute (not just the property).
-  // Set defaultMuted=true once on mount — adds the attribute without going through
-  // React's prop system (which would override our imperative .muted=false on unmute).
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    el.defaultMuted = true;
-    el.muted = true;
-  }, []);
 
   // Global singleton: pause this video when another one starts playing
   useEffect(() => {
@@ -108,15 +99,22 @@ function FeedPostCardInner({
     }
   }, [playingId, video, post.id]);
 
+  // Autoplay when scrolled into view (muted, iOS-safe)
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !video) return;
     if (isActive) {
-      el.muted = true; // always start muted — iOS autoplay requirement
-      el.play().catch(() => {});
+      // iOS Safari requires the HTML `muted` attribute (not just the property)
+      // for autoplay without user gesture. setAttribute is the most direct way.
+      el.setAttribute("muted", "");
+      el.muted = true;
+      el.play().catch(() => {
+        // Autoplay blocked — showPoster stays true, user sees play button
+      });
       requestPlay(post.id);
     } else {
       el.pause();
+      el.setAttribute("muted", "");
       el.muted = true;
       releasePlay(post.id);
       setShowPoster(true);
@@ -132,20 +130,28 @@ function FeedPostCardInner({
     }
   }, [isActive, post.id]);
 
-  // Simple sound toggle — just set .muted directly from click handler
-  // No play(), no pause(), no AudioContext needed
-  const toggleMute = useCallback(() => {
-    const next = !muted;
-    setFeedMuted(next);
+  // Tap on video:
+  //   • If video is paused → play with sound (tap = user gesture, iOS allows)
+  //   • If video is playing → toggle mute
+  const handleVideoTap = useCallback(() => {
     const vid = videoRef.current;
-    if (vid) vid.muted = next;
-    setMuteFlash(!next);
-    setTimeout(() => setMuteFlash(null), 700);
-  }, [muted, setFeedMuted]);
+    if (!vid) return;
 
-  const handleVideoMediaClick = useCallback(() => {
-    toggleMute();
-  }, [toggleMute]);
+    if (vid.paused) {
+      // User explicitly tapping to play → give them sound
+      vid.removeAttribute("muted");
+      vid.muted = false;
+      setFeedMuted(false);
+      vid.play().catch(() => {});
+    } else {
+      const next = !muted;
+      setFeedMuted(next);
+      vid.muted = next;
+      if (next) vid.setAttribute("muted", ""); else vid.removeAttribute("muted");
+      setMuteFlash(!next);
+      setTimeout(() => setMuteFlash(null), 700);
+    }
+  }, [muted, setFeedMuted]);
 
   async function handleFollow() {
     if (!canLike || !user || !post.postUserId || isOwn) return;
@@ -165,6 +171,7 @@ function FeedPostCardInner({
 
   return (
     <article ref={ref} className="border-b border-border bg-background">
+      {/* Header */}
       <div className="flex items-center gap-2.5 px-3 py-2">
         <Link
           href={post.postUserId ? `/user/${post.postUserId}` : `/post/${post.id}`}
@@ -218,15 +225,16 @@ function FeedPostCardInner({
         </Link>
       </div>
 
+      {/* Media */}
       {video ? (
         <button
           type="button"
-          onClick={handleVideoMediaClick}
+          onClick={handleVideoTap}
           className="relative block w-full bg-black"
-          aria-label={t("videoControl")}
+          aria-label={showPoster ? "Oynat" : (muted ? "Sesi aç" : "Sesi kapat")}
         >
           <div className="relative aspect-square w-full overflow-hidden">
-            {/* Poster shown until video starts playing */}
+            {/* Poster image — shown until video starts playing */}
             {showPoster && poster && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -236,6 +244,7 @@ function FeedPostCardInner({
                 className="absolute inset-0 h-full w-full object-cover"
               />
             )}
+
             <video
               ref={videoRef}
               key={videoSrc}
@@ -247,9 +256,31 @@ function FeedPostCardInner({
               className="h-full w-full object-cover"
               onPlaying={() => setShowPoster(false)}
               onPause={() => setShowPoster(true)}
+              onError={() => setShowPoster(true)}
             />
-            {muteFlash !== null && (
+
+            {/* Play button overlay — shown when video is paused */}
+            {showPoster && (
               <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+                  <IconPlay size={22} className="translate-x-0.5 text-white" />
+                </div>
+              </div>
+            )}
+
+            {/* Mute indicator — shown when video is playing */}
+            {!showPoster && (
+              <div className="pointer-events-none absolute bottom-2 right-2 z-[1] flex items-center justify-center rounded-full bg-black/50 p-1.5">
+                {muted
+                  ? <IconVolumeOff size={15} className="text-white" />
+                  : <IconVolumeOn  size={15} className="text-white" />
+                }
+              </div>
+            )}
+
+            {/* Mute flash feedback on toggle */}
+            {muteFlash !== null && (
+              <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center">
                 <div className="action-icon-btn h-16 w-16">
                   {muteFlash ? (
                     <IconVolumeOn size={28} className="text-vibe" />
@@ -277,6 +308,7 @@ function FeedPostCardInner({
         </Link>
       )}
 
+      {/* Actions */}
       <PostActionsBar
         post={{ ...post, numComments: commentCount, likedByIds: post.likedByIds }}
         onCommentClick={() => setCommentOpen(true)}

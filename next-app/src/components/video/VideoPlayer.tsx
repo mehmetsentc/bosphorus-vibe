@@ -66,18 +66,6 @@ export function VideoPlayer({
   const [loading, setLoading] = useState(true);
   const [showPoster, setShowPoster] = useState(true);
 
-  // iOS Safari autoplay policy: play() without user gesture is only allowed when the
-  // HTML `muted` attribute is present. We can't use the React `muted` prop because
-  // React would override our imperative .muted=false when the user unmutes.
-  // Solution: set defaultMuted=true once on mount — adds the HTML attribute without
-  // going through React's reconciliation.
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.defaultMuted = true;
-    video.muted = true;
-  }, []);
-
   // Another video started → pause this one
   useEffect(() => {
     const video = videoRef.current;
@@ -90,13 +78,17 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
-      video.muted = true; // always start muted — iOS autoplay requirement
+      // iOS Safari requires the HTML `muted` attribute for autoplay without gesture.
+      // setAttribute is the most reliable way — works even after element re-mounts.
+      video.setAttribute("muted", "");
+      video.muted = true;
       video.play().catch(() => {});
       requestPlay(post.id);
     } else {
       video.pause();
       if (!isActive) {
         video.currentTime = 0;
+        video.setAttribute("muted", "");
         video.muted = true;
         setShowPoster(true);
         hasPlayedRef.current = false;
@@ -113,7 +105,10 @@ export function VideoPlayer({
     const next = !muted;
     setFeedMuted(next);
     const video = videoRef.current;
-    if (video) video.muted = next;
+    if (video) {
+      video.muted = next;
+      if (next) video.setAttribute("muted", ""); else video.removeAttribute("muted");
+    }
   }, [muted, setFeedMuted]);
 
   // Tap on video = pause / resume
