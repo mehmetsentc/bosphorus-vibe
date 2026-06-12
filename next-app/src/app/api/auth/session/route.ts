@@ -12,6 +12,9 @@ import {
 import { sessionBodySchema } from "@/lib/validation/schemas";
 import { createSessionCookie, getSessionUser } from "@/lib/api/auth";
 
+export const maxDuration = 30;
+export const preferredRegion = ["fra1"];
+
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const limited = rateLimit(rateLimitKey(ip));

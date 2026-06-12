@@ -1,12 +1,32 @@
+const isProd = process.env.NODE_ENV === "production";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   compress: true,
   poweredByHeader: false,
+  productionBrowserSourceMaps: false,
+
+  compiler: isProd
+    ? { removeConsole: { exclude: ["error", "warn"] } }
+    : undefined,
 
   experimental: {
+    // Client router cache — faster back/forward and prefetched navigations (Pro CDN friendly)
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
     // Tree-shake large packages — reduces JS bundle sent to browser
-    optimizePackageImports: ["framer-motion", "firebase/app", "firebase/firestore", "firebase/storage", "firebase/auth"],
+    optimizePackageImports: [
+      "framer-motion",
+      "firebase/app",
+      "firebase/firestore",
+      "firebase/storage",
+      "firebase/auth",
+      "@vercel/analytics",
+      "@vercel/speed-insights",
+    ],
 
     serverComponentsExternalPackages: [
       "firebase-admin",
@@ -31,9 +51,10 @@ const nextConfig = {
     // AVIF is ~50% smaller than WebP, ~80% smaller than JPEG — big bandwidth saving
     formats: ["image/avif", "image/webp"],
     // Vercel Pro: more generous image optimization limits
-    deviceSizes: [390, 430, 768, 1080, 1200],
     imageSizes: [64, 128, 256, 384],
-    minimumCacheTTL: 604800, // 7 days
+    minimumCacheTTL: 604800, // 7 days — matches Vercel Pro image cache
+    dangerouslyAllowSVG: false,
+    deviceSizes: [390, 430, 640, 768, 1080, 1200, 1920],
     remotePatterns: [
       { protocol: "https", hostname: "firebasestorage.googleapis.com" },
       { protocol: "https", hostname: "storage.googleapis.com" },

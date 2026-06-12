@@ -1,5 +1,8 @@
 import { LegalFooter } from "@/components/layout/LegalFooter";
 
+export const dynamic = "force-static";
+export const revalidate = 86400;
+
 export default function LegalLayout({
   children,
 }: {

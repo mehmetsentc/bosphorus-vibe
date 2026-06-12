@@ -1,9 +1,47 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
+  "fluid": true,
+  "regions": ["fra1"],
   "installCommand": "cd next-app && npm install",
   "buildCommand": "cd next-app && npm run build",
   "outputDirectory": "next-app/.next",
+
+  "images": {
+    "formats": ["image/avif", "image/webp"],
+    "minimumCacheTTL": 604800,
+    "qualities": [50, 75, 85],
+    "sizes": [64, 128, 256, 384, 390, 430, 768, 1080, 1200, 1920],
+    "remotePatterns": [
+      {
+        "protocol": "https",
+        "hostname": "firebasestorage.googleapis.com"
+      },
+      {
+        "protocol": "https",
+        "hostname": "storage.googleapis.com"
+      },
+      {
+        "protocol": "https",
+        "hostname": "lh3.googleusercontent.com"
+      }
+    ]
+  },
+
+  "functions": {
+    "next-app/src/app/api/auth/session/route.ts": {
+      "maxDuration": 30
+    },
+    "next-app/src/app/api/user/export/route.ts": {
+      "maxDuration": 60
+    },
+    "next-app/src/app/api/user/delete/route.ts": {
+      "maxDuration": 60
+    },
+    "next-app/src/app/api/admin/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
 
   "headers": [
     {
@@ -25,15 +63,24 @@
       ]
     },
     {
+      "source": "/fonts/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/manifest.json",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]
     },
     {
-      "source": "/(icon.*|apple-icon.*|favicon.*)",
+      "source": "/(icon.*|apple-icon.*|favicon.*|logo.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=604800" }
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {

@@ -6,6 +6,9 @@ import { writeAuditLog } from "@/lib/security/audit-log";
 import { rateLimit, rateLimitKey } from "@/lib/security/rate-limit";
 import { COLLECTIONS } from "@/types";
 
+export const maxDuration = 60;
+export const preferredRegion = ["fra1"];
+
 export async function GET(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 

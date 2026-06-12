@@ -11,6 +11,7 @@ import { MessagesDock } from "@/components/messages/MessagesDock";
 
 /** Main app shell uses client auth — keep dynamic for session-aware rendering. */
 export const dynamic = "force-dynamic";
+export const preferredRegion = ["fra1"];
 
 export default function MainLayout({
   children,

@@ -8,6 +8,9 @@ import { clearServerAuthCookies } from "@/lib/session/server-cookies";
 import { deleteAccountSchema } from "@/lib/validation/schemas";
 import { COLLECTIONS } from "@/types";
 
+export const maxDuration = 60;
+export const preferredRegion = ["fra1"];
+
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
