@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { adminFetch } from "@/lib/admin/client-fetch";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { useAdminFetch } from "@/lib/admin/client-fetch";
 
 type EventRow = {
   id: string;
@@ -30,6 +31,8 @@ const EMPTY_FORM = {
 };
 
 export function AdminEvents() {
+  const { user } = useAuth();
+  const adminFetch = useAdminFetch();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -40,13 +43,14 @@ export function AdminEvents() {
   const [search, setSearch] = useState("");
 
   const load = useCallback(() => {
+    if (!user) return;
     setLoading(true);
     adminFetch("/api/admin/events")
       .then((r) => r.json())
       .then((d) => setEvents(d.events ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [user, adminFetch]);
 
   useEffect(() => { load(); }, [load]);
 

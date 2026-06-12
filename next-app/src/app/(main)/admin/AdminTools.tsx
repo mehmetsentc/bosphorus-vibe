@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { adminFetch } from "@/lib/admin/client-fetch";
+import { useAdminFetch } from "@/lib/admin/client-fetch";
 
 export function AdminTools() {
+  const adminFetch = useAdminFetch();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -26,7 +27,7 @@ export function AdminTools() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [adminFetch]);
 
   return (
     <div className="space-y-4">

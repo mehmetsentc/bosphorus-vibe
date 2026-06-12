@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { adminFetch } from "@/lib/admin/client-fetch";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { useAdminFetch } from "@/lib/admin/client-fetch";
 
 type UserRow = {
   uid: string;
@@ -14,6 +15,8 @@ type UserRow = {
 };
 
 export function AdminUsers() {
+  const { user } = useAuth();
+  const adminFetch = useAdminFetch();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null); // uid of busy user
@@ -21,13 +24,14 @@ export function AdminUsers() {
   const [search, setSearch] = useState("");
 
   const load = useCallback(() => {
+    if (!user) return;
     setLoading(true);
     adminFetch("/api/admin/users")
       .then((r) => r.json())
       .then((d) => setUsers(d.users ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [user, adminFetch]);
 
   useEffect(() => { load(); }, [load]);
 

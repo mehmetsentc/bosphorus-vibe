@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { adminFetch } from "@/lib/admin/client-fetch";
+import { useAdminFetch } from "@/lib/admin/client-fetch";
 import { getFirebaseDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/types";
 
@@ -18,6 +18,7 @@ type PostRow = {
 };
 
 export function AdminPosts() {
+  const adminFetch = useAdminFetch();
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);

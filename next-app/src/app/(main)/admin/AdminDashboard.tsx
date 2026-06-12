@@ -1,21 +1,54 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminFetch } from "@/lib/admin/client-fetch";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { useAdminFetch } from "@/lib/admin/client-fetch";
 
 type Stats = { users: number; posts: number; events: number };
 
 export function AdminDashboard() {
+  const { user } = useAuth();
+  const adminFetch = useAdminFetch();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!user) return;
+
+    let active = true;
+    setLoading(true);
+    setError("");
+
     adminFetch("/api/admin/stats")
-      .then((r) => r.json())
-      .then((d) => setStats(d))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!active) return;
+        if (r.ok) {
+          setStats({
+            users: typeof d.users === "number" ? d.users : 0,
+            posts: typeof d.posts === "number" ? d.posts : 0,
+            events: typeof d.events === "number" ? d.events : 0,
+          });
+        } else {
+          setStats(null);
+          setError(typeof d.message === "string" ? d.message : "İstatistikler alınamadı");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setStats(null);
+          setError("Bağlantı hatası");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user, adminFetch]);
 
   const cards = [
     { label: "Toplam Üye", value: stats?.users, icon: "👥", color: "from-blue-500/20 to-blue-600/10 border-blue-500/20" },
@@ -29,6 +62,12 @@ export function AdminDashboard() {
         <h2 className="text-lg font-bold">Dashboard</h2>
         <p className="text-sm text-muted">Genel bakış</p>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         {cards.map(({ label, value, icon, color }) => (
