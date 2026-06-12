@@ -53,6 +53,31 @@ function getBackfillSecret() {
   );
 }
 
+const ALLOWED_ORIGINS = [
+  "https://bosphorusvibe.com",
+  "https://www.bosphorusvibe.com",
+  "http://localhost:3000",
+];
+
+function applyCors(req, res) {
+  const origin = req.get("origin") || "";
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.set("Access-Control-Allow-Origin", origin);
+  }
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Max-Age", "3600");
+}
+
+function handleCorsPreflight(req, res) {
+  applyCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return true;
+  }
+  return false;
+}
+
 function assertBackfillAuth(req) {
   const secret = getBackfillSecret();
   const header = req.get("authorization") || "";
@@ -237,6 +262,9 @@ exports.runVideoTranscodeBatch = functions
   .region(REGION)
   .runWith(TRANSCODE_RUN_OPTS)
   .https.onRequest(async (req, res) => {
+    if (handleCorsPreflight(req, res)) return;
+    applyCors(req, res);
+
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
@@ -426,6 +454,9 @@ exports.runVideoThumbnailBatch = functions
   .region(REGION)
   .runWith(THUMBNAIL_RUN_OPTS)
   .https.onRequest(async (req, res) => {
+    if (handleCorsPreflight(req, res)) return;
+    applyCors(req, res);
+
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;

@@ -19,8 +19,8 @@ import {
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 import { getAllEvents } from "@/lib/services/firestore";
-import { postNeedsThumbnailRegen, getThumbnailBatchUrl } from "@/lib/admin/video-thumbnail-backfill";
-import { postNeedsVideoTranscode, getTranscodeBatchUrl } from "@/lib/admin/video-transcode";
+import { postNeedsThumbnailRegen } from "@/lib/admin/video-thumbnail-backfill";
+import { postNeedsVideoTranscode } from "@/lib/admin/video-transcode";
 import { COLLECTIONS } from "@/types";
 
 const PAGE_SIZE = 100;
@@ -244,40 +244,47 @@ export function enqueueTranscodeClient(maxMark = 500) {
 }
 
 async function runCloudBatch(
-  url: string,
+  functionName: "runVideoThumbnailBatch" | "runVideoTranscodeBatch",
   idToken: string,
   batchLimit: number,
 ): Promise<{ processed: number; succeeded: number; failed: number }> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ limit: batchLimit }),
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api/admin/functions/${functionName}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ limit: batchLimit }),
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error("Sunucuya bağlanılamadı — sayfayı yenileyip tekrar deneyin");
+  }
 
-  const data = await res.json().catch(() => ({}));
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    throw new Error(typeof data.error === "string" ? data.error : "Batch failed");
+    const message =
+      typeof data.message === "string"
+        ? data.message
+        : typeof data.error === "string"
+          ? data.error
+          : "İşlem başarısız";
+    throw new Error(message);
   }
 
   return {
-    processed: data.processed ?? 0,
-    succeeded: data.succeeded ?? 0,
-    failed: data.failed ?? 0,
+    processed: typeof data.processed === "number" ? data.processed : 0,
+    succeeded: typeof data.succeeded === "number" ? data.succeeded : 0,
+    failed: typeof data.failed === "number" ? data.failed : 0,
   };
 }
 
 export async function runThumbnailBatchClient(idToken: string, batchLimit = 5) {
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-  if (!projectId) throw new Error("NEXT_PUBLIC_FIREBASE_PROJECT_ID missing");
-  return runCloudBatch(getThumbnailBatchUrl(projectId), idToken, batchLimit);
+  return runCloudBatch("runVideoThumbnailBatch", idToken, batchLimit);
 }
 
 export async function runTranscodeBatchClient(idToken: string, batchLimit = 3) {
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-  if (!projectId) throw new Error("NEXT_PUBLIC_FIREBASE_PROJECT_ID missing");
-  return runCloudBatch(getTranscodeBatchUrl(projectId), idToken, batchLimit);
+  return runCloudBatch("runVideoTranscodeBatch", idToken, batchLimit);
 }
