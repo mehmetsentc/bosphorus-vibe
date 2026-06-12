@@ -2,55 +2,44 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { useAdminFetch } from "@/lib/admin/client-fetch";
-
-type UserRow = {
-  uid: string;
-  display_name: string;
-  userName: string;
-  email: string;
-  photo_url: string;
-  role: string;
-  created_time: string | null;
-};
+import {
+  fetchAdminUsersClient,
+  updateUserRoleClient,
+  type AdminUserRow,
+} from "@/lib/admin/client-ops";
 
 export function AdminUsers() {
   const { user } = useAuth();
-  const adminFetch = useAdminFetch();
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<string | null>(null); // uid of busy user
+  const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [search, setSearch] = useState("");
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    adminFetch("/api/admin/users")
-      .then((r) => r.json())
-      .then((d) => setUsers(d.users ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user, adminFetch]);
+    try {
+      setUsers(await fetchAdminUsersClient());
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 3000); };
 
   const changeRole = async (uid: string, role: "user" | "admin") => {
     setBusy(uid);
     try {
-      const res = await adminFetch(`/api/admin/users/${uid}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      });
-      if (res.ok) {
-        setUsers((prev) => prev.map((u) => u.uid === uid ? { ...u, role } : u));
-        flash(`Rol güncellendi → ${role} ✓`);
-      } else {
-        flash("Güncelleme başarısız");
-      }
+      await updateUserRoleClient(uid, role);
+      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role } : u)));
+      flash(`Rol güncellendi → ${role} ✓`);
+    } catch {
+      flash("Güncelleme başarısız");
     } finally {
       setBusy(null);
     }
@@ -66,7 +55,7 @@ export function AdminUsers() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-bold">Üyeler <span className="text-sm font-normal text-muted">({users.length})</span></h2>
-        <button type="button" onClick={load} className="rounded-xl border border-border px-3 py-1.5 text-xs">Yenile</button>
+        <button type="button" onClick={() => void load()} className="rounded-xl border border-border px-3 py-1.5 text-xs">Yenile</button>
       </div>
 
       <input
@@ -115,7 +104,7 @@ export function AdminUsers() {
                   <button
                     type="button"
                     disabled={busy === u.uid}
-                    onClick={() => changeRole(u.uid, "user")}
+                    onClick={() => void changeRole(u.uid, "user")}
                     className="rounded-lg border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-overlay disabled:opacity-50"
                   >
                     {busy === u.uid ? "…" : "Yetkiyi Al"}
@@ -124,7 +113,7 @@ export function AdminUsers() {
                   <button
                     type="button"
                     disabled={busy === u.uid}
-                    onClick={() => changeRole(u.uid, "admin")}
+                    onClick={() => void changeRole(u.uid, "admin")}
                     className="rounded-lg bg-gold/10 px-2.5 py-1 text-xs font-semibold text-gold hover:bg-gold/20 disabled:opacity-50"
                   >
                     {busy === u.uid ? "…" : "Admin Yap"}
@@ -133,7 +122,9 @@ export function AdminUsers() {
               </div>
             </div>
           ))}
-          {filtered.length === 0 && <p className="py-8 text-center text-sm text-muted">Üye bulunamadı</p>}
+          {filtered.length === 0 && !loading && (
+            <p className="py-8 text-center text-sm text-muted">Üye bulunamadı</p>
+          )}
         </div>
       )}
     </div>

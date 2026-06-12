@@ -2,21 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { useAdminFetch } from "@/lib/admin/client-fetch";
-
-type EventRow = {
-  id: string;
-  eventName: string;
-  eventDate: string | null;
-  eventCategory: string;
-  eventLocation: string;
-  eventDescription: string;
-  eventTimeLabel: string;
-  eventImage: string;
-  isHighlight: boolean;
-  eventSortId: number;
-  view: number;
-};
+import {
+  createAdminEventClient,
+  deleteAdminEventClient,
+  fetchAdminEventsClient,
+  updateAdminEventClient,
+  type AdminEventRow,
+} from "@/lib/admin/client-ops";
 
 const EMPTY_FORM = {
   eventName: "",
@@ -32,8 +24,7 @@ const EMPTY_FORM = {
 
 export function AdminEvents() {
   const { user } = useAuth();
-  const adminFetch = useAdminFetch();
-  const [events, setEvents] = useState<EventRow[]>([]);
+  const [events, setEvents] = useState<AdminEventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -42,17 +33,19 @@ export function AdminEvents() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState("");
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    adminFetch("/api/admin/events")
-      .then((r) => r.json())
-      .then((d) => setEvents(d.events ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user, adminFetch]);
+    try {
+      setEvents(await fetchAdminEventsClient());
+    } catch {
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 3000); };
 
@@ -62,13 +55,13 @@ export function AdminEvents() {
     setShowForm(true);
   };
 
-  const openEdit = (ev: EventRow) => {
+  const openEdit = (ev: AdminEventRow) => {
     setEditId(ev.id);
     setForm({
       eventName: ev.eventName,
       eventTimeLabel: ev.eventTimeLabel,
       eventDate: ev.eventDate ? ev.eventDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
-      eventCategory: (ev.eventCategory as "show" | "sports") ?? "show",
+      eventCategory: ev.eventCategory.toLowerCase().includes("sport") ? "sports" : "show",
       eventLocation: ev.eventLocation,
       eventImage: ev.eventImage,
       eventDescription: ev.eventDescription,
@@ -82,27 +75,25 @@ export function AdminEvents() {
     if (!form.eventName.trim()) { flash("Etkinlik adı gerekli"); return; }
     setBusy(true);
     try {
-      const body = {
-        ...form,
-        eventDate: new Date(form.eventDate).toISOString(),
-        eventSortId: Number(form.eventSortId),
-      };
-      const url = editId ? `/api/admin/events/${editId}` : "/api/admin/events";
-      const method = editId ? "PATCH" : "POST";
-      const res = await adminFetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editId
-          ? { eventName: form.eventName, eventDescription: form.eventDescription, eventLocation: form.eventLocation }
-          : body),
-      });
-      if (res.ok) {
-        flash(editId ? "Etkinlik güncellendi ✓" : "Etkinlik oluşturuldu ✓");
-        setShowForm(false);
-        load();
+      if (editId) {
+        await updateAdminEventClient(editId, {
+          eventName: form.eventName,
+          eventDescription: form.eventDescription,
+          eventLocation: form.eventLocation,
+        });
+        flash("Etkinlik güncellendi ✓");
       } else {
-        flash("Hata oluştu");
+        await createAdminEventClient({
+          ...form,
+          eventDate: new Date(form.eventDate).toISOString(),
+          eventSortId: Number(form.eventSortId),
+        });
+        flash("Etkinlik oluşturuldu ✓");
       }
+      setShowForm(false);
+      await load();
+    } catch {
+      flash("Hata oluştu");
     } finally {
       setBusy(false);
     }
@@ -112,9 +103,11 @@ export function AdminEvents() {
     if (!confirm(`"${name}" silinsin mi?`)) return;
     setBusy(true);
     try {
-      const res = await adminFetch(`/api/admin/events/${id}`, { method: "DELETE" });
-      if (res.ok) { flash("Silindi ✓"); load(); }
-      else flash("Silme başarısız");
+      await deleteAdminEventClient(id);
+      flash("Silindi ✓");
+      await load();
+    } catch {
+      flash("Silme başarısız");
     } finally {
       setBusy(false);
     }
@@ -175,7 +168,7 @@ export function AdminEvents() {
 
         {msg && <p className="text-center text-sm text-gold">{msg}</p>}
 
-        <button type="button" onClick={handleSave} disabled={busy} className="w-full rounded-xl bg-gold py-3 font-semibold text-black disabled:opacity-50">
+        <button type="button" onClick={() => void handleSave()} disabled={busy} className="w-full rounded-xl bg-gold py-3 font-semibold text-black disabled:opacity-50">
           {busy ? "Kaydediliyor…" : editId ? "Güncelle" : "Etkinlik Oluştur"}
         </button>
       </div>
@@ -224,13 +217,15 @@ export function AdminEvents() {
                 <button type="button" onClick={() => openEdit(ev)} className="rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-surface-overlay">
                   Düzenle
                 </button>
-                <button type="button" onClick={() => handleDelete(ev.id, ev.eventName)} disabled={busy} className="rounded-lg bg-red-500/10 px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/20">
+                <button type="button" onClick={() => void handleDelete(ev.id, ev.eventName)} disabled={busy} className="rounded-lg bg-red-500/10 px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/20">
                   Sil
                 </button>
               </div>
             </div>
           ))}
-          {filtered.length === 0 && <p className="py-8 text-center text-sm text-muted">Etkinlik bulunamadı</p>}
+          {filtered.length === 0 && !loading && (
+            <p className="py-8 text-center text-sm text-muted">Etkinlik bulunamadı</p>
+          )}
         </div>
       )}
     </div>
