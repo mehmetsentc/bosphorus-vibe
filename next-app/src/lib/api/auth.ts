@@ -40,8 +40,23 @@ export async function requireSession(): Promise<DecodedIdToken> {
   return decoded;
 }
 
-export async function requireAdmin(): Promise<DecodedIdToken> {
-  const decoded = await requireSession();
+async function decodeBearerToken(
+  request?: Pick<Request, "headers">,
+): Promise<DecodedIdToken | null> {
+  const header = request?.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) return null;
+  try {
+    return await getAdminAuth().verifyIdToken(header.slice(7));
+  } catch {
+    return null;
+  }
+}
+
+export async function requireAdmin(
+  request?: Pick<Request, "headers">,
+): Promise<DecodedIdToken> {
+  const decoded = (await getSessionUser()) ?? (await decodeBearerToken(request));
+  if (!decoded) throw new Error("UNAUTHORIZED");
   const role = await getUserRole(decoded.uid);
   if (role !== "admin") throw new Error("FORBIDDEN");
   return decoded;

@@ -20,7 +20,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   let adminUid: string;
   try {
-    const decoded = await requireAdmin();
+    const decoded = await requireAdmin(request);
     adminUid = decoded.uid;
   } catch (e) {
     return apiError(
@@ -71,7 +71,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   let adminUid: string;
   try {
-    const decoded = await requireAdmin();
+    const decoded = await requireAdmin(request);
     adminUid = decoded.uid;
   } catch {
     return apiError(403, "FORBIDDEN", "Admin access required.");

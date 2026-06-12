@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin/client-fetch";
 
 type EventRow = {
   id: string;
@@ -40,7 +41,7 @@ export function AdminEvents() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch("/api/admin/events")
+    adminFetch("/api/admin/events")
       .then((r) => r.json())
       .then((d) => setEvents(d.events ?? []))
       .catch(() => {})
@@ -84,7 +85,7 @@ export function AdminEvents() {
       };
       const url = editId ? `/api/admin/events/${editId}` : "/api/admin/events";
       const method = editId ? "PATCH" : "POST";
-      const res = await fetch(url, {
+      const res = await adminFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editId
@@ -107,7 +108,7 @@ export function AdminEvents() {
     if (!confirm(`"${name}" silinsin mi?`)) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/admin/events/${id}`, { method: "DELETE" });
+      const res = await adminFetch(`/api/admin/events/${id}`, { method: "DELETE" });
       if (res.ok) { flash("Silindi ✓"); load(); }
       else flash("Silme başarısız");
     } finally {

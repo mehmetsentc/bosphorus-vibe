@@ -4,9 +4,9 @@ import { apiError, apiOk, GENERIC_ERROR } from "@/lib/api/errors";
 import { COLLECTIONS } from "@/types";
 
 /** GET /api/admin/users — list users */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    await requireAdmin(request);
   } catch {
     return apiError(403, "FORBIDDEN", "Admin access required.");
   }

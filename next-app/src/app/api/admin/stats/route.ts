@@ -3,9 +3,9 @@ import { requireAdmin } from "@/lib/api/auth";
 import { apiError, apiOk } from "@/lib/api/errors";
 import { COLLECTIONS } from "@/types";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    await requireAdmin(request);
   } catch {
     return apiError(403, "FORBIDDEN", "Admin access required.");
   }

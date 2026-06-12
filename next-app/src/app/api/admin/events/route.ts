@@ -21,9 +21,9 @@ const createEventSchema = z.object({
 });
 
 /** GET /api/admin/events — list all events ordered by date desc */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    await requireAdmin(request);
   } catch {
     return apiError(403, "FORBIDDEN", "Admin access required.");
   }
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
   let adminUid: string;
   try {
-    const decoded = await requireAdmin();
+    const decoded = await requireAdmin(request);
     adminUid = decoded.uid;
   } catch {
     return apiError(403, "FORBIDDEN", "Admin access required.");

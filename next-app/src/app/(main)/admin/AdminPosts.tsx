@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { adminFetch } from "@/lib/admin/client-fetch";
 import { getFirebaseDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/types";
 
@@ -56,7 +57,7 @@ export function AdminPosts() {
     if (!confirm(`Post silinsin mi? (${id})`)) return;
     setBusy(id);
     try {
-      const res = await fetch(`/api/admin/posts/${id}`, { method: "DELETE" });
+      const res = await adminFetch(`/api/admin/posts/${id}`, { method: "DELETE" });
       if (res.ok) {
         setPosts((prev) => prev.filter((p) => p.id !== id));
         flash("Silindi ✓");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { adminFetch } from "@/lib/admin/client-fetch";
 
 export function AdminTools() {
   const [busy, setBusy] = useState(false);
@@ -12,7 +13,7 @@ export function AdminTools() {
     setBusy(true);
     setMsg("");
     try {
-      const res = await fetch(url, {
+      const res = await adminFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

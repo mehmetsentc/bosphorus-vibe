@@ -18,7 +18,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   let adminUid: string;
   try {
-    const decoded = await requireAdmin();
+    const decoded = await requireAdmin(request);
     adminUid = decoded.uid;
   } catch (e) {
     const msg = e instanceof Error && e.message === "FORBIDDEN" ? "Forbidden." : "Unauthorized.";

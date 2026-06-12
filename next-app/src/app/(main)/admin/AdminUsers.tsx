@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin/client-fetch";
 
 type UserRow = {
   uid: string;
@@ -21,7 +22,7 @@ export function AdminUsers() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch("/api/admin/users")
+    adminFetch("/api/admin/users")
       .then((r) => r.json())
       .then((d) => setUsers(d.users ?? []))
       .catch(() => {})
@@ -35,7 +36,7 @@ export function AdminUsers() {
   const changeRole = async (uid: string, role: "user" | "admin") => {
     setBusy(uid);
     try {
-      const res = await fetch(`/api/admin/users/${uid}`, {
+      const res = await adminFetch(`/api/admin/users/${uid}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
