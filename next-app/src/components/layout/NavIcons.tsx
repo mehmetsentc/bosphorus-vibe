@@ -1,5 +1,7 @@
 export function iconClass(active: boolean) {
-  return active ? "text-foreground" : "text-foreground";
+  return active
+    ? "text-[#e50914]"
+    : "text-gray-400 dark:text-gray-500";
 }
 
 export function HomeIcon({ active }: { active: boolean }) {
