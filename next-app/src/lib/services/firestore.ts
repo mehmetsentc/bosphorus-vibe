@@ -21,6 +21,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { videoTranscodeStatusForUpload } from "@/lib/admin/video-transcode";
 import { compressImage, videoThumbnailFromFile } from "@/lib/utils/media-compress";
 import { hasPostVideo } from "@/lib/utils/video-sources";
 import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
@@ -737,6 +738,7 @@ export async function createVideoPost(
     postVideoURL_original: originalUrl,
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
+    videoTranscodeStatus: videoTranscodeStatusForUpload(originalUrl, lowUrl),
     postDescription: caption,
     postTitle: caption.slice(0, 80),
     postUser: userRef,
@@ -936,6 +938,10 @@ export async function createActivityUpload(
     postData.postVideoURL_original = originalUrl;
     postData.postVideoURL_low = lowUrl;
     postData.postVideothumbnail = thumbUrl ?? lowUrl;
+    postData.videoTranscodeStatus = videoTranscodeStatusForUpload(
+      originalUrl,
+      lowUrl,
+    );
   } else {
     postData.postPhoto = originalUrl;
     postData.postPhotoURL = lowUrl;
@@ -1104,6 +1110,7 @@ export async function replaceUserPostVideo(
     postVideoURL_original: originalUrl,
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
+    videoTranscodeStatus: videoTranscodeStatusForUpload(originalUrl, lowUrl),
     DateUpdated: serverTimestamp(),
   });
   await deleteStorageUrls(oldUrls);

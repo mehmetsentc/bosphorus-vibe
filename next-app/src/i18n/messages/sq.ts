@@ -481,6 +481,14 @@ yourStory: "Your story",
   adminEventIdPlaceholder: "Event document ID",
   adminActionSuccess: "Done.",
   adminActionFailed: "Action failed.",
+  adminTranscodeTitle: "Video quality backfill",
+  adminTranscodeDesc:
+    "Queue videos without a 480p copy. Cloud Functions transcode them automatically every 30 minutes.",
+  adminTranscodeEnqueue: "Scan & queue videos",
+  adminTranscodeRun: "Process queue now",
+  adminTranscodeEnqueueResult: "Queued {marked} videos ({scanned} scanned).",
+  adminTranscodeRunResult:
+    "Processed {processed}: {succeeded} succeeded, {failed} failed.",
 };
 
 export default sq;

@@ -44,6 +44,8 @@ export interface UserPostDoc {
   postVideoURL_original?: string;
   postVideoURL_low?: string;
   postVideothumbnail?: string;
+  /** Cloud Function transcode queue state for low.mp4 generation */
+  videoTranscodeStatus?: "pending" | "processing" | "done" | "failed" | "skipped";
   timePosted: Date;
   numComments: number;
   numViews?: number;

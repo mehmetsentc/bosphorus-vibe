@@ -10,6 +10,7 @@
     "firebase:deploy:storage": "cd firebase && firebase deploy --only storage",
     "firebase:deploy:rules": "cd firebase && firebase deploy --only firestore:rules,storage",
     "firebase:deploy:functions": "cd firebase && firebase deploy --only functions:functions",
-    "firebase:deploy:transcode": "cd firebase && firebase deploy --only functions:functions:transcodeVideoPost"
+    "firebase:deploy:transcode": "cd firebase && firebase deploy --only functions:functions:transcodeVideoPost,functions:functions:processPendingVideoTranscodes,functions:functions:runVideoTranscodeBatch",
+    "firebase:deploy:indexes": "cd firebase && firebase deploy --only firestore:indexes"
   }
 }

@@ -139,6 +139,16 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "userPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "videoTranscodeStatus",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ]
 }

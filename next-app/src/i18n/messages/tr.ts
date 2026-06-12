@@ -485,6 +485,14 @@ const tr: Messages = {
   adminEventIdPlaceholder: "Etkinlik belge ID",
   adminActionSuccess: "Tamamlandı.",
   adminActionFailed: "İşlem başarısız.",
+  adminTranscodeTitle: "Video kalite backfill",
+  adminTranscodeDesc:
+    "480p kopyası olmayan videoları kuyruğa alır. Cloud Functions her 30 dakikada otomatik işler.",
+  adminTranscodeEnqueue: "Videoları tara ve kuyruğa al",
+  adminTranscodeRun: "Kuyruğu şimdi işle",
+  adminTranscodeEnqueueResult: "{marked} video kuyruğa alındı ({scanned} tarandı).",
+  adminTranscodeRunResult:
+    "{processed} işlendi: {succeeded} başarılı, {failed} başarısız.",
 };
 
 export default tr;

@@ -8,6 +8,8 @@ export type AuditAction =
   | "export_data"
   | "admin_delete_post"
   | "admin_update_event"
+  | "admin_transcode_enqueue"
+  | "admin_transcode_run"
   | "api_error";
 
 export async function writeAuditLog(
