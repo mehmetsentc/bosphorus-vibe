@@ -161,9 +161,11 @@ export async function compressVideo(file: File): Promise<CompressedVideoResult> 
     const { video, width, height } = loaded;
 
     video.currentTime = 0;
-    await new Promise<void>((resolve) => {
-      video.onseeked = () => resolve();
-    });
+    // iOS: onseeked may never fire for t=0 — 3 s timeout fallback
+    await raceTimeout(
+      new Promise<void>((resolve) => { video.onseeked = () => resolve(); }),
+      3000,
+    ).catch(() => { /* timeout — capture whatever frame is ready */ });
     const thumbnail = await captureVideoFrame(video, width, height);
     // Return original file — audio preserved. Cloud Function handles low-quality encoding.
     return { video: file, thumbnail };

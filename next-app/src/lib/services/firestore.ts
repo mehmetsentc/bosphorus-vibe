@@ -854,7 +854,7 @@ export async function createActivityUpload(
     ),
     uploadBlob(
       input.lowQualityBlob,
-      `${basePath}/low.${isVideo ? "webm" : "jpg"}`,
+      `${basePath}/low.${isVideo ? ext : "jpg"}`,
       (pct) => onProgress(45 + Math.round(pct * 0.35)),
     ),
   ];

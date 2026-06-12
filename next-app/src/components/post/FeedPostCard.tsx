@@ -89,6 +89,16 @@ function FeedPostCardInner({
     ? followingIds?.has(post.postUserId)
     : false;
 
+  // iOS Safari autoplay policy: requires HTML `muted` attribute (not just the property).
+  // Set defaultMuted=true once on mount — adds the attribute without going through
+  // React's prop system (which would override our imperative .muted=false on unmute).
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.defaultMuted = true;
+    el.muted = true;
+  }, []);
+
   // Global singleton: pause this video when another one starts playing
   useEffect(() => {
     const el = videoRef.current;
