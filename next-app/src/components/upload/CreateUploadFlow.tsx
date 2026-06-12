@@ -14,14 +14,14 @@ import {
   uploadVideoCoverForPost,
 } from "@/lib/services/firestore";
 import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
-import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
+import { UploadEditScreen } from "@/components/upload/UploadEditScreen";
+import { UploadShareScreen } from "@/components/upload/UploadShareScreen";
+import { UploadModeSwitcher } from "@/components/upload/UploadModeSwitcher";
 import {
   createStory,
   uploadStoryImage,
   uploadStoryVideo,
 } from "@/lib/services/stories";
-import { StoryCategoryPicker } from "@/components/stories/StoryCategoryPicker";
-import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
@@ -57,7 +57,7 @@ function CreateUploadFlowInner() {
   const searchParams = useSearchParams();
   const initialType = searchParams.get("type") as UploadKind | null;
   const initialStoryCategory = parseStoryCategory(searchParams.get("category"));
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { canUpload } = useAccess();
   const t = useT();
   const { locale } = useI18n();
@@ -81,7 +81,9 @@ function CreateUploadFlowInner() {
   const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [draftMsg, setDraftMsg] = useState("");
   const coverBlobRef = useRef<Blob | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
 
   // Start uploading immediately when a file is selected (draft upload).
   const draft = useDraftUpload(file, user?.uid, {
@@ -160,6 +162,7 @@ function CreateUploadFlowInner() {
       const url = URL.createObjectURL(next);
       const isVideo = isVideoFile(next);
       coverBlobRef.current = null;
+      setCoverPreview(null);
       setFile(next);
       setPreview(url);
       setStep("edit");
@@ -302,10 +305,27 @@ function CreateUploadFlowInner() {
     }
   }
 
-  const photoUrl = profile?.photo_url || user?.photoURL || "";
+  function saveDraft() {
+    setDraftMsg(t("draftSaved"));
+    setTimeout(() => setDraftMsg(""), 2500);
+    setStep("gallery");
+  }
+
+  const shareTitle =
+    kind === "reel"
+      ? t("newReelVideo")
+      : kind === "story"
+        ? t("addToStory")
+        : t("createNewPost");
 
   return (
     <div className="flex h-full min-h-[100dvh] flex-col bg-black text-white">
+      {draftMsg && step === "gallery" && (
+        <div className="fixed left-4 right-4 top-[max(3.5rem,env(safe-area-inset-top))] z-50 rounded-xl bg-white/10 px-4 py-2 text-center text-sm text-white backdrop-blur-md">
+          {draftMsg}
+        </div>
+      )}
+
       <AnimatePresence mode="wait">
         {step === "menu" && (
           <motion.div
@@ -467,16 +487,14 @@ function CreateUploadFlowInner() {
               </div>
             </div>
 
-            {kind === "reel" && (
-              <div className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-0 right-0 flex justify-center px-4">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-full bg-white/15 px-8 py-3 text-xs font-bold tracking-wider backdrop-blur-sm"
-                >
-                  {t("reelsVideoLabel")}
-                </button>
-              </div>
+            {kind && (
+              <UploadModeSwitcher
+                active={kind}
+                onChange={(next) => {
+                  setKind(next);
+                  setError("");
+                }}
+              />
             )}
 
             {error && (
@@ -487,264 +505,61 @@ function CreateUploadFlowInner() {
 
         {(step === "edit" || step === "share") && preview && file && kind && (
           <motion.div
-            key="edit"
+            key={step}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="relative h-full w-full"
           >
-            <button
-              type="button"
-              onClick={() => setStep("gallery")}
-              className="absolute left-4 top-[max(0.75rem,env(safe-area-inset-top))] z-30 text-2xl drop-shadow-lg"
-              aria-label={t("back")}
-            >
-              ✕
-            </button>
-
-            <div className="absolute inset-0 bg-black">
-              {isVideoFile(file) ? (
-                <video
-                  src={preview}
-                  className="h-full w-full object-contain"
-                  autoPlay
-                  loop
-                  playsInline
-                  muted={muted}
-                />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview} alt="" className="h-full w-full object-contain" />
-              )}
-              {showTextTool && textOverlay && (
-                <div className="absolute inset-x-0 top-1/3 z-20 px-8 text-center">
-                  <p className="text-2xl font-bold drop-shadow-lg">{textOverlay}</p>
-                </div>
-              )}
-            </div>
-
             {step === "edit" && (
-              <>
-                {draft.status === "uploading" && (
-                  <div className="absolute left-4 right-4 top-[max(3rem,env(safe-area-inset-top))] z-30">
-                    <div className="flex items-center justify-between text-[10px] text-white/60">
-                      <span>{t("draftUploading")}</span>
-                      <span>{draft.progress}%</span>
-                    </div>
-                    <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full bg-vibe transition-all"
-                        style={{ width: `${draft.progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {draft.status === "ready" && (
-                  <p className="absolute left-4 right-4 top-[max(3rem,env(safe-area-inset-top))] z-30 text-center text-[10px] text-vibe">
-                    {t("draftUploadReady")}
-                  </p>
-                )}
-                <div className="pointer-events-none absolute inset-x-0 bottom-32 z-20 flex flex-col items-center text-white/70">
-                  <span className="text-lg">⌃</span>
-                  <span className="text-xs">{t("swipeToEdit")}</span>
-                </div>
-
-                <div className="absolute bottom-24 left-0 right-0 z-30 flex justify-center gap-2 overflow-x-auto px-4 pb-2">
-                  {[
-                    { label: "Aa", action: () => setShowTextTool((v) => !v) },
-                    { label: "☺", action: () => {} },
-                    { label: "♫", action: () => {} },
-                    { label: muted ? "🔇" : "🔊", action: () => setMuted((m) => !m) },
-                  ].map((tool) => (
-                    <button
-                      key={tool.label}
-                      type="button"
-                      onClick={tool.action}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-black/50 text-sm backdrop-blur-sm"
-                    >
-                      {tool.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-between gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
-                  <span className="text-xs text-white/50">{t("openInEdits")}</span>
-                  <button
-                    type="button"
-                    onClick={() => setStep("share")}
-                    className="rounded-full bg-vibe px-5 py-2.5 text-sm font-semibold text-white"
-                  >
-                    {t("next")} →
-                  </button>
-                </div>
-              </>
+              <UploadEditScreen
+                preview={preview}
+                isVideo={isVideoFile(file)}
+                muted={muted}
+                textOverlay={textOverlay}
+                showTextTool={showTextTool}
+                draftStatus={draft.status}
+                draftProgress={draft.progress}
+                onClose={() => setStep("gallery")}
+                onNext={() => setStep("share")}
+                onToggleMute={() => setMuted((m) => !m)}
+                onToggleTextTool={() => setShowTextTool((v) => !v)}
+                onTextOverlayChange={setTextOverlay}
+              />
             )}
 
             {step === "share" && (
-              <div className="absolute inset-0 z-40 flex flex-col bg-black/95">
-                <header className="flex items-center justify-between px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-                  <button
-                    type="button"
-                    onClick={() => setStep("edit")}
-                    className="text-2xl"
-                    aria-label={t("back")}
-                  >
-                    ←
-                  </button>
-                  <h2 className="text-base font-semibold">{t("shareAction")}</h2>
-                  <div className="w-8" />
-                </header>
-
-                {/* Draft upload progress — starts as soon as media is selected */}
-                {draft.status === "uploading" && (
-                  <div className="px-4 pb-2">
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[11px] text-white/50">
-                        {t("draftUploading")}
-                      </span>
-                      <span className="text-[11px] text-white/50">
-                        {draft.progress}%
-                      </span>
-                    </div>
-                    <div className="h-0.5 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full bg-vibe transition-all duration-300"
-                        style={{ width: `${draft.progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {draft.status === "ready" && (
-                  <p className="px-4 pb-2 text-[11px] text-vibe">
-                    {t("draftUploadReady")}
-                  </p>
-                )}
-
-                <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
-                  <div className="mx-auto h-40 w-28 overflow-hidden rounded-lg bg-white/5">
-                    {isVideoFile(file) ? (
-                      <video
-                        src={preview}
-                        className="h-full w-full object-cover"
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={preview}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    )}
-                  </div>
-
-                  <textarea
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    placeholder={t("writeCaption")}
-                    rows={4}
-                    className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40"
-                  />
-
-                  {file && isVideoFile(file) && preview && (
-                    <VideoCoverPicker
-                      file={file}
-                      previewUrl={preview}
-                      onCoverChange={(blob) => {
-                        coverBlobRef.current = blob;
-                      }}
-                    />
-                  )}
-
-                  <TagPeoplePicker
-                    value={taggedPeople}
-                    onChange={setTaggedPeople}
-                    variant="dark"
-                  />
-
-                  {showTextTool && (
-                    <input
-                      type="text"
-                      value={textOverlay}
-                      onChange={(e) => setTextOverlay(e.target.value)}
-                      placeholder={t("storyTextPlaceholder")}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40"
-                    />
-                  )}
-                </div>
-
-                <div className="border-t border-white/10 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-                  {kind === "story" && (
-                    <StoryCategoryPicker
-                      value={storyCategory}
-                      onChange={setStoryCategory}
-                      labels={storyCategoryLabels}
-                      disabled={uploading}
-                      className="mb-3"
-                    />
-                  )}
-                  {kind === "story" ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={uploading}
-                        onClick={handlePublish}
-                        className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white/15 py-2 pl-2 pr-3 disabled:opacity-50"
-                      >
-                        {photoUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={photoUrl}
-                            alt=""
-                            className="h-8 w-8 rounded-full object-cover ring-2 ring-vibe"
-                          />
-                        ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-vibe text-xs font-bold text-black">
-                            +
-                          </div>
-                        )}
-                        <span className="truncate text-xs font-semibold">
-                          {t("storyYourStories")}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={uploading}
-                        onClick={handlePublish}
-                        className="flex h-11 w-11 items-center justify-center rounded-full bg-vibe disabled:opacity-40"
-                      >
-                        {uploading ? (
-                          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        ) : (
-                          "→"
-                        )}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={uploading}
-                      onClick={handlePublish}
-                      className="w-full rounded-xl gold-gradient py-3.5 text-sm font-bold text-black disabled:opacity-40"
-                    >
-                      {uploading ? t("uploading") : t("shareAction")}
-                    </button>
-                  )}
-
-                  {uploading && (
-                    <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/20">
-                      <div
-                        className="h-full bg-vibe transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  )}
-                  {error && (
-                    <p className="mt-2 text-center text-sm text-red-400">{error}</p>
-                  )}
-                </div>
-              </div>
+              <UploadShareScreen
+                kind={kind}
+                title={shareTitle}
+                preview={preview}
+                coverPreview={coverPreview}
+                isVideo={isVideoFile(file)}
+                file={file}
+                caption={caption}
+                onCaptionChange={setCaption}
+                taggedPeople={taggedPeople}
+                onTaggedPeopleChange={setTaggedPeople}
+                onCoverChange={(blob) => {
+                  coverBlobRef.current = blob;
+                  const url = URL.createObjectURL(blob);
+                  setCoverPreview((prev) => {
+                    if (prev) URL.revokeObjectURL(prev);
+                    return url;
+                  });
+                }}
+                storyCategory={storyCategory}
+                onStoryCategoryChange={setStoryCategory}
+                storyCategoryLabels={storyCategoryLabels}
+                draftStatus={draft.status}
+                draftProgress={draft.progress}
+                uploading={uploading}
+                uploadProgress={progress}
+                error={error}
+                onBack={() => setStep("edit")}
+                onSaveDraft={saveDraft}
+                onPublish={handlePublish}
+              />
             )}
           </motion.div>
         )}
