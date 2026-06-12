@@ -4,6 +4,10 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { uploadVideoPost, createVideoPost } from "@/lib/services/firestore";
 import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
+import {
+  invalidateFeedCaches,
+  markReelsRefreshPending,
+} from "@/lib/utils/invalidate-feed-cache";
 import { useI18n } from "@/components/providers/I18nProvider";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -49,6 +53,8 @@ export function VideoUploadModal({
         setProgress,
       );
       await createVideoPost(originalUrl, lowUrl, thumbnailUrl, caption, user.uid, taggedPeople);
+      invalidateFeedCaches();
+      markReelsRefreshPending();
       setFile(null);
       setCaption("");
       setTaggedPeople([]);

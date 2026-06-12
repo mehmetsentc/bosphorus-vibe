@@ -1,9 +1,8 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
@@ -14,13 +13,11 @@ import {
 import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
 import {
   getPostCaption,
-  getPostImageUrl,
   getPostVideoUrl,
   incrementPostViews,
 } from "@/lib/services/firestore";
 import {
   followUser,
-  getFollowingSet,
   unfollowUser,
 } from "@/lib/services/friends";
 import { pickImageSource, pickVideoSource } from "@/lib/utils/video-sources";
@@ -57,13 +54,12 @@ function FeedPostCardInner({
   onFollowChange,
 }: FeedPostCardProps) {
   const t = useT();
-  const router = useRouter();
   const { user } = useAuth();
   const { canLike } = useAccess();
   const videoRef = useRef<HTMLVideoElement>(null);
   const viewedRef = useRef(false);
-  const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
+  const [isMuted, setIsMuted] = useState(true);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
@@ -82,7 +78,24 @@ function FeedPostCardInner({
   const video = getPostVideoUrl(post);
   const image = video ? "" : pickImageSource(post, "feed");
   const caption = getPostCaption(post);
-  const videoSrc = video ? pickVideoSource(post, tier, "feed").src : "";
+  const videoPick = useMemo(
+    () => (video ? pickVideoSource(post, tier, "feed") : null),
+    [video, post, tier],
+  );
+  const [videoSrc, setVideoSrc] = useState("");
+  const videoFallbacksRef = useRef<string[]>([]);
+  const fallbackIndexRef = useRef(0);
+
+  useEffect(() => {
+    if (!videoPick) {
+      setVideoSrc("");
+      return;
+    }
+    setVideoSrc(videoPick.src);
+    videoFallbacksRef.current = videoPick.fallbacks;
+    fallbackIndexRef.current = 0;
+    setIsMuted(true);
+  }, [videoPick]);
   const poster = post.postVideothumbnail || pickImageSource(post, "feed") || undefined;
   const videoPreload = isActive ? getPreloadStrategy(tier, true) : "none";
   const isOwn = user?.uid === post.postUserId;
@@ -102,20 +115,22 @@ function FeedPostCardInner({
   // Autoplay when scrolled into view (muted, iOS-safe)
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || !video) return;
+    if (!el || !video || !videoSrc) return;
     if (isActive) {
-      // iOS Safari requires the HTML `muted` attribute (not just the property)
-      // for autoplay without user gesture. setAttribute is the most direct way.
       el.setAttribute("muted", "");
       el.muted = true;
+      setIsMuted(true);
+      // play() may fail if data not yet loaded → retry on canplay
       el.play().catch(() => {
-        // Autoplay blocked — showPoster stays true, user sees play button
+        const onCanPlay = () => el.play().catch(() => {});
+        el.addEventListener("canplay", onCanPlay, { once: true });
       });
       requestPlay(post.id);
     } else {
       el.pause();
       el.setAttribute("muted", "");
       el.muted = true;
+      setIsMuted(true);
       releasePlay(post.id);
       setShowPoster(true);
     }
@@ -130,28 +145,30 @@ function FeedPostCardInner({
     }
   }, [isActive, post.id]);
 
-  // Tap on video:
-  //   • If video is paused → play with sound (tap = user gesture, iOS allows)
-  //   • If video is playing → toggle mute
+  // Tap on video = play / pause
   const handleVideoTap = useCallback(() => {
     const vid = videoRef.current;
     if (!vid) return;
-
     if (vid.paused) {
-      // User explicitly tapping to play → give them sound
-      vid.removeAttribute("muted");
-      vid.muted = false;
-      setFeedMuted(false);
       vid.play().catch(() => {});
     } else {
-      const next = !muted;
-      setFeedMuted(next);
-      vid.muted = next;
-      if (next) vid.setAttribute("muted", ""); else vid.removeAttribute("muted");
-      setMuteFlash(!next);
-      setTimeout(() => setMuteFlash(null), 700);
+      vid.pause();
     }
-  }, [muted, setFeedMuted]);
+  }, []);
+
+  // Mute button (top-right corner) — toggle sound only
+  const handleMuteToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const vid = videoRef.current;
+    if (!vid) return;
+    const next = !isMuted;
+    setIsMuted(next);
+    setFeedMuted(next);
+    vid.muted = next;
+    if (next) vid.setAttribute("muted", ""); else vid.removeAttribute("muted");
+    setMuteFlash(!next);
+    setTimeout(() => setMuteFlash(null), 700);
+  }, [isMuted, setFeedMuted]);
 
   async function handleFollow() {
     if (!canLike || !user || !post.postUserId || isOwn) return;
@@ -227,12 +244,7 @@ function FeedPostCardInner({
 
       {/* Media */}
       {video ? (
-        <button
-          type="button"
-          onClick={handleVideoTap}
-          className="relative block w-full bg-black"
-          aria-label={showPoster ? "Oynat" : (muted ? "Sesi aç" : "Sesi kapat")}
-        >
+        <div className="relative w-full bg-black">
           <div className="relative aspect-square w-full overflow-hidden">
             {/* Poster image — shown until video starts playing */}
             {showPoster && poster && (
@@ -256,42 +268,62 @@ function FeedPostCardInner({
               className="h-full w-full object-cover"
               onPlaying={() => setShowPoster(false)}
               onPause={() => setShowPoster(true)}
-              onError={() => setShowPoster(true)}
+              onError={() => {
+                const next = fallbackIndexRef.current + 1;
+                const fallbacks = videoFallbacksRef.current;
+                if (next <= fallbacks.length) {
+                  fallbackIndexRef.current = next;
+                  setVideoSrc(fallbacks[next - 1]);
+                  setShowPoster(true);
+                  return;
+                }
+                setShowPoster(true);
+              }}
             />
 
-            {/* Play button overlay — shown when video is paused */}
+            {/* Play/pause tap area — covers full video */}
+            <button
+              type="button"
+              onClick={handleVideoTap}
+              className="absolute inset-0 z-[1] bg-transparent"
+              aria-label={showPoster ? "Oynat" : "Duraklat"}
+            />
+
+            {/* Play icon — shown when paused */}
             {showPoster && (
-              <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+              <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
                   <IconPlay size={22} className="translate-x-0.5 text-white" />
                 </div>
               </div>
             )}
 
-            {/* Mute indicator — shown when video is playing */}
-            {!showPoster && (
-              <div className="pointer-events-none absolute bottom-2 right-2 z-[1] flex items-center justify-center rounded-full bg-black/50 p-1.5">
-                {muted
-                  ? <IconVolumeOff size={15} className="text-white" />
-                  : <IconVolumeOn  size={15} className="text-white" />
-                }
-              </div>
-            )}
+            {/* Mute button — top-right, above tap area */}
+            <button
+              type="button"
+              onClick={handleMuteToggle}
+              className="absolute right-2 top-2 z-[10] flex h-9 w-9 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm"
+              aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
+            >
+              {isMuted
+                ? <IconVolumeOff size={18} className="text-white" />
+                : <IconVolumeOn  size={18} className="text-white" />
+              }
+            </button>
 
-            {/* Mute flash feedback on toggle */}
+            {/* Mute flash feedback */}
             {muteFlash !== null && (
-              <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center">
-                <div className="action-icon-btn h-16 w-16">
-                  {muteFlash ? (
-                    <IconVolumeOn size={28} className="text-vibe" />
-                  ) : (
-                    <IconVolumeOff size={28} className="text-muted" />
-                  )}
+              <div className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/60">
+                  {muteFlash
+                    ? <IconVolumeOn  size={28} className="text-white" />
+                    : <IconVolumeOff size={28} className="text-white" />
+                  }
                 </div>
               </div>
             )}
           </div>
-        </button>
+        </div>
       ) : (
         <Link href={`/post/${post.id}`} className="relative block w-full bg-black">
           <div className="relative aspect-square w-full overflow-hidden">

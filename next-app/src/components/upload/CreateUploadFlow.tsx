@@ -21,6 +21,10 @@ import {
 import { StoryCategoryPicker } from "@/components/stories/StoryCategoryPicker";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
+import {
+  invalidateFeedCaches,
+  markReelsRefreshPending,
+} from "@/lib/utils/invalidate-feed-cache";
 import { parseStoryCategory } from "@/lib/utils/story-categories";
 import { BRAND_NAME } from "@/lib/brand";
 import { IconGrid, IconPlus, IconReels } from "@/components/icons/Icons";
@@ -265,6 +269,8 @@ function CreateUploadFlowInner() {
         await createImagePost(originalUrl, lowUrl, fullCaption, user.uid, taggedPeople);
       }
 
+      invalidateFeedCaches();
+      if (kind === "reel") markReelsRefreshPending();
       router.push(kind === "reel" ? "/reels" : "/home");
     } catch (err) {
       console.error("[CreateUpload]", err);

@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { ReelFeed } from "@/components/reels/ReelFeed";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useReelsPosts } from "@/lib/hooks/usePosts";
 import { useAccess } from "@/lib/hooks/useAccess";
+import { consumeReelsRefreshPending } from "@/lib/utils/invalidate-feed-cache";
 
 export default function ReelsPage() {
   const { isGuest } = useAccess();
@@ -19,6 +21,12 @@ export default function ReelsPage() {
     refresh,
     deletePost,
   } = useReelsPosts();
+
+  useEffect(() => {
+    if (consumeReelsRefreshPending()) {
+      void refresh();
+    }
+  }, [refresh]);
 
   if (loading) {
     return (

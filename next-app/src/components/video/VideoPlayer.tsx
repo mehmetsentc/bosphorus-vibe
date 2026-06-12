@@ -38,6 +38,12 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function applyMuted(video: HTMLVideoElement, muted: boolean) {
+  video.muted = muted;
+  if (muted) video.setAttribute("muted", "");
+  else video.removeAttribute("muted");
+}
+
 export function VideoPlayer({
   post,
   isActive = true,
@@ -50,21 +56,32 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasPlayedRef = useRef(false);
+  const fallbackIndexRef = useRef(0);
 
   const networkTier = useEffectiveNetworkTier();
-  const { src, poster } = pickVideoSource(post, networkTier, "feed");
+  const picked = pickVideoSource(post, networkTier, "detail");
   const preload = isActive ? getPreloadStrategy(networkTier, true) : isNext ? "metadata" : "none";
 
-  const muted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
 
+  const [videoSrc, setVideoSrc] = useState(picked.src);
+  const [isMuted, setIsMuted] = useState(true);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showPoster, setShowPoster] = useState(true);
+
+  const allSources = [picked.src, ...picked.fallbacks].filter(Boolean);
+
+  useEffect(() => {
+    setVideoSrc(picked.src);
+    fallbackIndexRef.current = 0;
+    setShowPoster(true);
+    hasPlayedRef.current = false;
+  }, [picked.src, post.id, networkTier]);
 
   // Another video started → pause this one
   useEffect(() => {
@@ -78,18 +95,17 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
-      // iOS Safari requires the HTML `muted` attribute for autoplay without gesture.
-      // setAttribute is the most reliable way — works even after element re-mounts.
-      video.setAttribute("muted", "");
-      video.muted = true;
+      // iOS requires muted autoplay; icon reflects actual element state.
+      setIsMuted(true);
+      applyMuted(video, true);
       video.play().catch(() => {});
       requestPlay(post.id);
     } else {
       video.pause();
       if (!isActive) {
         video.currentTime = 0;
-        video.setAttribute("muted", "");
-        video.muted = true;
+        setIsMuted(true);
+        applyMuted(video, true);
         setShowPoster(true);
         hasPlayedRef.current = false;
       }
@@ -97,31 +113,44 @@ export function VideoPlayer({
     }
     return () => { releasePlay(post.id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, autoPlay, src, post.id, requestPlay, releasePlay]);
+  }, [isActive, autoPlay, videoSrc, post.id, requestPlay, releasePlay]);
 
-  // Sound toggle — just set .muted directly (no play/pause needed)
   const toggleMute = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    const next = !muted;
-    setFeedMuted(next);
     const video = videoRef.current;
-    if (video) {
-      video.muted = next;
-      if (next) video.setAttribute("muted", ""); else video.removeAttribute("muted");
-    }
-  }, [muted, setFeedMuted]);
+    const next = !isMuted;
+    setIsMuted(next);
+    setFeedMuted(next);
+    if (video) applyMuted(video, next);
+  }, [isMuted, setFeedMuted]);
 
-  // Tap on video = pause / resume
+  // Tap: paused → play with sound; playing → pause/play toggle
   const handleVideoTap = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+
     if (video.paused) {
-      video.muted = muted;
+      setIsMuted(false);
+      setFeedMuted(false);
+      applyMuted(video, false);
       video.play().catch(() => {});
-    } else {
-      video.pause();
+      return;
     }
-  }, [muted]);
+
+    video.pause();
+  }, [setFeedMuted]);
+
+  const handleVideoError = useCallback(() => {
+    const nextIndex = fallbackIndexRef.current + 1;
+    if (nextIndex < allSources.length) {
+      fallbackIndexRef.current = nextIndex;
+      setVideoSrc(allSources[nextIndex]);
+      setShowPoster(true);
+      setLoading(true);
+      return;
+    }
+    setLoading(false);
+  }, [allSources]);
 
   const seekBy = useCallback((delta: number) => {
     const video = videoRef.current;
@@ -129,28 +158,28 @@ export function VideoPlayer({
     video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration || Infinity);
   }, []);
 
-  if (!src) return null;
+  if (!videoSrc) return null;
 
   return (
     <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-black">
-      {/* Poster until video starts */}
-      {showPoster && poster && (
+      {showPoster && picked.poster && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={picked.poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
       )}
 
       <video
         ref={videoRef}
-        key={`${post.id}-${networkTier}`}
-        src={src}
-        poster={poster}
+        key={`${post.id}-${videoSrc}`}
+        src={videoSrc}
+        poster={picked.poster}
         loop
         playsInline
+        muted={isMuted}
         preload={preload}
         className={className}
         onLoadStart={() => setLoading(true)}
         onCanPlay={() => { setLoading(false); onReady?.(); }}
-        onError={() => setLoading(false)}
+        onError={handleVideoError}
         onWaiting={() => setLoading(true)}
         onPlaying={() => {
           hasPlayedRef.current = true;
@@ -168,7 +197,6 @@ export function VideoPlayer({
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
       />
 
-      {/* Tap area for pause/play */}
       <button
         type="button"
         aria-label="Duraklat / Oynat"
@@ -176,14 +204,13 @@ export function VideoPlayer({
         onClick={handleVideoTap}
       />
 
-      {/* Sound toggle button — always visible, top-right (TikTok style) */}
       <button
         type="button"
         onClick={toggleMute}
         className="absolute right-3 top-4 z-[10] flex h-10 w-10 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm"
-        aria-label={muted ? "Sesi aç" : "Sesi kapat"}
+        aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
       >
-        {muted
+        {isMuted
           ? <IconVolumeOff size={20} className="text-white" />
           : <IconVolumeOn  size={20} className="text-white" />
         }

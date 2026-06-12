@@ -74,21 +74,28 @@ function formatTimeLabel(date: Date): string {
   });
 }
 
+function sanitizeMediaUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '""' || trimmed === "''") return undefined;
+  return trimmed;
+}
+
 function mapPost(id: string, data: Record<string, unknown>): UserPostDoc {
   const likedByIds = refsToIds(data.Post_liked_by ?? data.likedBy);
   const savedByIds = refsToIds(data.post_saved_by);
   return {
     id,
-    postPhoto: (data.postPhoto as string) ?? undefined,
-    postPhotoURL: (data.postPhotoURL as string) ?? undefined,
+    postPhoto: sanitizeMediaUrl(data.postPhoto),
+    postPhotoURL: sanitizeMediaUrl(data.postPhotoURL),
     postTitle: (data.postTitle as string) ?? undefined,
     postDescription: (data.postDescription as string) ?? undefined,
     postUserId: refToId(data.postUser),
-    postVideo: (data.postVideo as string) ?? undefined,
-    postVideoURL: (data.postVideoURL as string) ?? undefined,
-    postVideoURL_original: (data.postVideoURL_original as string) ?? undefined,
-    postVideoURL_low: (data.postVideoURL_low as string) ?? undefined,
-    postVideothumbnail: (data.postVideothumbnail as string) ?? undefined,
+    postVideo: sanitizeMediaUrl(data.postVideo),
+    postVideoURL: sanitizeMediaUrl(data.postVideoURL),
+    postVideoURL_original: sanitizeMediaUrl(data.postVideoURL_original),
+    postVideoURL_low: sanitizeMediaUrl(data.postVideoURL_low),
+    postVideothumbnail: sanitizeMediaUrl(data.postVideothumbnail),
     timePosted: toDate(data.timePosted ?? data.createdAt),
     numComments: (data.numComments as number) ?? 0,
     numViews: (data.numViews as number) ?? 0,

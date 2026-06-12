@@ -12,6 +12,43 @@ function uniqueUrls(...urls: (string | undefined)[]): string[] {
   return out;
 }
 
+export function isSafariOrIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (ua.includes("Safari") && !ua.includes("Chrome") && !ua.includes("CriOS"))
+  );
+}
+
+function videoUrlExtension(url: string): string {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    const match = pathname.match(/\.([a-z0-9]+)$/);
+    return match?.[1] ?? "";
+  } catch {
+    const match = url.toLowerCase().match(/\.([a-z0-9]+)(?:\?|$)/);
+    return match?.[1] ?? "";
+  }
+}
+
+/** iOS Safari cannot play WebM; prefer MP4/MOV when available. */
+export function isSafariPlayableVideoUrl(url: string): boolean {
+  const ext = videoUrlExtension(url);
+  if (!ext) return true;
+  if (ext === "webm") return !isSafariOrIOS();
+  return true;
+}
+
+function pickPlayableSrc(candidates: string[]): string {
+  const unique = uniqueUrls(...candidates);
+  if (!unique.length) return "";
+  if (isSafariOrIOS()) {
+    return unique.find(isSafariPlayableVideoUrl) ?? unique[0];
+  }
+  return unique[0];
+}
+
 export function getPostVideoVariants(post: UserPostDoc): {
   original: string;
   low: string;
@@ -36,36 +73,36 @@ export function getPostVideoVariants(post: UserPostDoc): {
 /**
  * Returns the best video URL for the given context.
  *
- * - `"feed"` → always low quality (fast scroll; 480p after Cloud Function runs)
+ * - `"feed"` → low quality first (fast scroll)
  * - `"detail"` → tier-aware: slow=low, fast=original
  *
- * Falls back to whichever variant is available.
+ * On iOS/Safari, skips WebM when an MP4/MOV alternative exists.
  */
 export function pickVideoSource(
   post: UserPostDoc,
   tier: NetworkTier,
   context: "feed" | "detail" = "feed",
-): { src: string; poster?: string } {
+): { src: string; poster?: string; fallbacks: string[] } {
   const { original, low, poster } = getPostVideoVariants(post);
 
+  let ordered: string[];
   if (context === "feed") {
-    // Always prefer low quality in feed for faster playback
-    return { src: low || original, poster };
+    ordered = [low, original];
+  } else if (tier === "slow") {
+    ordered = [low, original];
+  } else {
+    ordered = [original, low];
   }
 
-  // Detail / Reels full-screen: use tier
-  if (tier === "slow") {
-    return { src: low || original, poster };
-  }
-  return { src: original || low, poster };
+  const candidates = uniqueUrls(...ordered);
+  const src = pickPlayableSrc(candidates);
+  const fallbacks = candidates.filter((url) => url !== src);
+
+  return { src, poster, fallbacks };
 }
 
 /**
  * Returns the best image URL for a given context.
- *
- * - `"feed"` / `"grid"` → always low quality (fast scroll)
- * - `"detail"` → original quality (full-screen / post page)
- * - Falls back to whatever is available.
  */
 export function pickImageSource(
   post: UserPostDoc,
@@ -73,7 +110,7 @@ export function pickImageSource(
 ): string {
   const low =
     post.postPhotoURL_low ||
-    post.postPhotoURL ||    // postPhotoURL is the compressed version in new posts
+    post.postPhotoURL ||
     post.postPhoto ||
     "";
   const original =

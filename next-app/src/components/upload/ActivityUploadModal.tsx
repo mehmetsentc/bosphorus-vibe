@@ -11,6 +11,7 @@ import {
   isVideoFile,
   validateMediaSize,
 } from "@/lib/utils/media-compress";
+import { invalidateFeedCaches } from "@/lib/utils/invalidate-feed-cache";
 import { useI18n, useT } from "@/components/providers/I18nProvider";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import type { EventDoc, PostTag } from "@/types";
@@ -98,6 +99,7 @@ export function ActivityUploadModal({
         setProgress,
       );
 
+      invalidateFeedCaches();
       await refreshProfile();
       onSuccess();
       onClose();

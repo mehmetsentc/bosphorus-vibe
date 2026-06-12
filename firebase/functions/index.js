@@ -11,6 +11,21 @@ admin.initializeApp();
 
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
+function getPostUserId(data) {
+  const ref = data.postUser;
+  if (!ref) return null;
+  if (typeof ref === "string") {
+    const parts = ref.split("/").filter(Boolean);
+    return parts[parts.length - 1] || null;
+  }
+  if (ref.id) return ref.id;
+  if (ref.path) {
+    const parts = ref.path.split("/").filter(Boolean);
+    return parts[parts.length - 1] || null;
+  }
+  return null;
+}
+
 /**
  * Triggered when a new userPost is created.
  * If it has a video, downloads the original, transcodes to 480p with
@@ -57,9 +72,11 @@ exports.transcodeVideoPost = functions
 
       // 3. Upload low.mp4 to Firebase Storage
       const bucket = admin.storage().bucket();
-      const userId = data.postUser
-        ? (typeof data.postUser === "string" ? data.postUser.split("/").pop() : data.postUser.id)
-        : postId;
+      const userId = getPostUserId(data);
+      if (!userId) {
+        functions.logger.error(`transcodeVideoPost: missing postUser postId=${postId}`);
+        return null;
+      }
       const storagePath = `users/${userId}/videos/${postId}/low.mp4`;
       const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
 
