@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
-import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
 import {
   IconVolumeOff,
   IconVolumeOn,
@@ -63,8 +62,8 @@ export function VideoPlayer({
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "detail", isActive);
-  const preload = isActive ? getPreloadStrategy(networkTier, true) : isNext ? "metadata" : "none";
+  } = useAdaptiveVideoSrc(post, "feed", isActive);
+  const preload = isActive || isNext ? "auto" : "none";
 
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
@@ -94,10 +93,14 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
-      // iOS requires muted autoplay; icon reflects actual element state.
       setIsMuted(true);
       applyMuted(video, true);
-      video.play().catch(() => {});
+      if (video.readyState === 0) video.load();
+      video.play().catch(() => {
+        const onCanPlay = () => video.play().catch(() => {});
+        video.addEventListener("canplay", onCanPlay, { once: true });
+        video.addEventListener("loadeddata", onCanPlay, { once: true });
+      });
       requestPlay(post.id);
     } else {
       video.pause();
@@ -175,6 +178,11 @@ export function VideoPlayer({
         preload={preload}
         className={className}
         onLoadStart={() => setLoading(true)}
+        onLoadedData={() => {
+          if (isActive && autoPlay && videoRef.current?.paused) {
+            videoRef.current.play().catch(() => {});
+          }
+        }}
         onCanPlay={() => { setLoading(false); onReady?.(); }}
         onError={handleVideoError}
         onWaiting={() => {

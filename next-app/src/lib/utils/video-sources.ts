@@ -160,7 +160,7 @@ export function pickVideoSource(
   let ordered: string[];
   if (options?.preferHighQuality && original) {
     ordered = distinctLow ? [original, low] : [original];
-  } else if (context === "feed" || tier === "slow" || distinctLow) {
+  } else if (distinctLow || context === "feed" || context === "detail" || tier === "slow") {
     ordered = [low, original];
   } else {
     ordered = [original, low];

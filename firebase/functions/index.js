@@ -34,14 +34,24 @@ function getOriginalVideoUrl(data) {
   return data.postVideoURL_original || data.postVideo || data.postVideoURL || "";
 }
 
-function needsVideoTranscode(data) {
+function hasServerTranscodedLow(data, postId) {
+  const low = data.postVideoURL_low || "";
+  const original = getOriginalVideoUrl(data);
+  if (!low || low === original) return false;
+
+  const decoded = decodeStoragePathFromUrl(low);
+  if (decoded && decoded.includes(`/videos/${postId}/low.mp4`)) return true;
+  return low.includes(`/videos/${postId}/`);
+}
+
+function needsVideoTranscode(data, postId) {
   const originalUrl = getOriginalVideoUrl(data);
   if (!originalUrl) return false;
-  if (data.videoTranscodeStatus === "done" || data.videoTranscodeStatus === "skipped") {
+  if (data.videoTranscodeStatus === "done" && hasServerTranscodedLow(data, postId)) {
     return false;
   }
-  const low = data.postVideoURL_low;
-  if (low && low !== originalUrl) return false;
+  if (data.videoTranscodeStatus === "skipped") return false;
+  if (hasServerTranscodedLow(data, postId)) return false;
   return true;
 }
 
@@ -123,7 +133,7 @@ async function transcodeVideoForPost(postId, data, docRef) {
   }
 
   const low = data.postVideoURL_low;
-  if (low && low !== originalUrl) {
+  if (hasServerTranscodedLow(data, postId)) {
     await docRef.update({
       videoTranscodeStatus: "done",
       videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -241,7 +251,7 @@ exports.transcodeVideoPost = functions
   .firestore.document("userPosts/{postId}")
   .onCreate(async (snap) => {
     const data = snap.data();
-    if (!needsVideoTranscode(data)) return null;
+    if (!needsVideoTranscode(data, snap.id)) return null;
     await transcodeVideoForPost(snap.id, data, snap.ref);
     return null;
   });

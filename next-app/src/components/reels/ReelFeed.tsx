@@ -150,12 +150,15 @@ export function ReelFeed({
     [hasMore, loadingMore, onLoadMore, onActiveChange, visiblePosts.length],
   );
 
-  // Prefetch the next reel's lighter stream while the current one plays
+  // Prefetch current + next reel streams for instant playback
   useEffect(() => {
+    const current = visiblePosts[activeIndex];
     const next = visiblePosts[activeIndex + 1];
-    if (!next) return;
-    const { src } = pickVideoSource(next, networkTier, "detail");
-    if (src) prefetchVideoUrl(src);
+    for (const post of [current, next]) {
+      if (!post) continue;
+      const { src } = pickVideoSource(post, networkTier, "feed");
+      if (src) prefetchVideoUrl(src);
+    }
   }, [activeIndex, visiblePosts, networkTier]);
 
   const openComment = useCallback((postId: string) => setCommentPostId(postId), []);

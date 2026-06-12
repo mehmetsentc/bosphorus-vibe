@@ -176,6 +176,100 @@ export async function videoThumbnailFromFile(file: File): Promise<Blob> {
   }
 }
 
+/**
+ * Lightweight playback preview (≈1 Mbps) via video.captureStream + MediaRecorder.
+ * Runs in parallel with original upload so Reels can start quickly; Cloud Function
+ * later replaces this with a proper FFmpeg transcode.
+ */
+export async function createPlaybackPreviewBlob(
+  file: File,
+  options?: { videoBitsPerSecond?: number; playbackRate?: number; maxDurationSec?: number },
+): Promise<Blob | null> {
+  if (typeof document === "undefined" || typeof MediaRecorder === "undefined") {
+    return null;
+  }
+
+  const video = document.createElement("video");
+  video.playsInline = true;
+  video.muted = false;
+  const objectUrl = URL.createObjectURL(file);
+  video.src = objectUrl;
+
+  try {
+    await raceTimeout(
+      new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error("metadata"));
+      }),
+      8000,
+    );
+
+    const maxDuration = options?.maxDurationSec ?? 180;
+    if (!Number.isFinite(video.duration) || video.duration <= 0 || video.duration > maxDuration) {
+      return null;
+    }
+
+    const captureStream = (
+      video as HTMLVideoElement & { captureStream?: () => MediaStream }
+    ).captureStream;
+    if (!captureStream) return null;
+
+    const stream = captureStream.call(video);
+    if (!stream.getVideoTracks().length) return null;
+
+    const mimeCandidates = [
+      'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+      "video/mp4",
+      'video/webm;codecs="vp9,opus"',
+      "video/webm",
+    ];
+    const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m));
+    if (!mimeType) return null;
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: options?.videoBitsPerSecond ?? 900_000,
+      audioBitsPerSecond: 64_000,
+    });
+
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    const blobPromise = new Promise<Blob>((resolve, reject) => {
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType.split(";")[0] ?? "video/mp4" });
+        if (blob.size < 8_000) reject(new Error("preview too small"));
+        else resolve(blob);
+      };
+      recorder.onerror = () => reject(new Error("record failed"));
+    });
+
+    const rate = options?.playbackRate ?? 2;
+    video.playbackRate = rate;
+    recorder.start(500);
+    await video.play();
+
+    await raceTimeout(
+      new Promise<void>((resolve) => {
+        video.onended = () => resolve();
+      }),
+      Math.ceil((video.duration / rate) * 1000) + 20_000,
+    );
+
+    recorder.stop();
+    stream.getTracks().forEach((t) => t.stop());
+    return await blobPromise;
+  } catch {
+    return null;
+  } finally {
+    video.pause();
+    video.src = "";
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 /** Thumbnail üret + orijinal videoyu döndür.
  *
  * Client-side video re-encoding kaldırıldı: canvas-based recorder ses kanalını

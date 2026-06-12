@@ -706,13 +706,34 @@ export async function uploadVideoPost(
   const ext = file.name.split(".").pop() || "mp4";
   const basePath = `users/${userId}/uploads/${stamp}`;
 
-  const originalUrl = await uploadBlob(
-    file,
-    `${basePath}/original.${ext}`,
-    (pct) => onProgress(5 + Math.round(pct * 0.88)),
-  );
+  const { createPlaybackPreviewBlob } = await import("@/lib/utils/media-compress");
 
-  onProgress(93);
+  let previewPct = 0;
+  let originalPct = 0;
+  const reportUpload = () => {
+    onProgress(5 + Math.round(originalPct * 0.72 + previewPct * 0.08));
+  };
+
+  const [originalUrl, previewBlob] = await Promise.all([
+    uploadBlob(file, `${basePath}/original.${ext}`, (pct) => {
+      originalPct = pct;
+      reportUpload();
+    }),
+    createPlaybackPreviewBlob(file).catch(() => null),
+  ]);
+
+  previewPct = previewBlob ? 100 : 0;
+  reportUpload();
+
+  let lowUrl = originalUrl;
+  if (previewBlob) {
+    lowUrl = await uploadBlob(previewBlob, `${basePath}/preview.mp4`, (pct) => {
+      previewPct = pct;
+      reportUpload();
+    });
+  }
+
+  onProgress(88);
   const custom =
     options?.getThumbnailBlob?.() ?? options?.thumbnailBlob ?? null;
   const thumbnail =
@@ -721,11 +742,11 @@ export async function uploadVideoPost(
       : await videoThumbnailFromFile(file).catch(() => createPlaceholderThumbnail());
 
   const thumbnailUrl = await uploadBlob(thumbnail, `${basePath}/thumb.jpg`, (pct) => {
-    onProgress(93 + Math.round(pct * 0.07));
+    onProgress(88 + Math.round(pct * 0.12));
   });
 
   onProgress(100);
-  return { originalUrl, lowUrl: originalUrl, thumbnailUrl };
+  return { originalUrl, lowUrl, thumbnailUrl };
 }
 
 /** Re-upload cover after draft video is already in Storage (user picked a new frame). */
@@ -763,7 +784,7 @@ export async function createVideoPost(
     postVideoURL_original: originalUrl,
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
-    videoTranscodeStatus: videoTranscodeStatusForUpload(originalUrl, lowUrl),
+    videoTranscodeStatus: videoTranscodeStatusForUpload(),
     videoThumbnailStatus: "done",
     postDescription: caption,
     postTitle: caption.slice(0, 80),
@@ -1007,10 +1028,7 @@ export async function createActivityPostFromMedia(
     postData.postVideoURL_original = urls.originalUrl;
     postData.postVideoURL_low = urls.lowUrl;
     postData.postVideothumbnail = urls.thumbUrl ?? urls.lowUrl;
-    postData.videoTranscodeStatus = videoTranscodeStatusForUpload(
-      urls.originalUrl,
-      urls.lowUrl,
-    );
+    postData.videoTranscodeStatus = videoTranscodeStatusForUpload();
     if (urls.thumbUrl) {
       postData.videoThumbnailStatus = "done";
     }
@@ -1202,7 +1220,7 @@ export async function replaceUserPostVideo(
     postVideoURL_original: originalUrl,
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
-    videoTranscodeStatus: videoTranscodeStatusForUpload(originalUrl, lowUrl),
+    videoTranscodeStatus: videoTranscodeStatusForUpload(),
     videoThumbnailStatus: "done",
     DateUpdated: serverTimestamp(),
   });
