@@ -131,3 +131,27 @@ export function hasPostVideo(post: UserPostDoc): boolean {
     post.postVideo,
   ).length > 0;
 }
+
+/** Guess thumb.jpg beside original.mov/mp4 in Firebase Storage URLs. */
+export function inferThumbUrlFromVideo(videoUrl: string): string | undefined {
+  if (!videoUrl || !/original\.[a-z0-9]+/i.test(videoUrl)) return undefined;
+  return videoUrl.replace(/original\.[a-z0-9]+/i, "thumb.jpg");
+}
+
+/** Ordered poster candidates for profile grid / thumbnails. */
+export function getPostGridThumbnailCandidates(post: UserPostDoc): string[] {
+  const { original, low, poster } = getPostVideoVariants(post);
+  return uniqueUrls(
+    post.postVideothumbnail,
+    poster,
+    inferThumbUrlFromVideo(original),
+    inferThumbUrlFromVideo(low),
+    pickImageSource(post, "grid"),
+  );
+}
+
+/** Best video URL for grid frame fallback (iOS-safe). */
+export function pickGridVideoPreviewUrl(post: UserPostDoc): string {
+  const { original, low } = getPostVideoVariants(post);
+  return pickPlayableSrc([original, low]);
+}

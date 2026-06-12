@@ -1,32 +1,128 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getPostVideoUrl } from "@/lib/services/firestore";
-import { pickImageSource } from "@/lib/utils/video-sources";
+import {
+  getPostGridThumbnailCandidates,
+  pickGridVideoPreviewUrl,
+  pickImageSource,
+} from "@/lib/utils/video-sources";
 import { IconLayers, IconMenu, IconPin, IconReels } from "@/components/icons/Icons";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
 
-/**
- * Renders a muted video and seeks to 0.1s on metadata load so mobile
- * browsers (especially iOS Safari) show the first real frame instead of black.
- */
-function VideoThumb({ src, className }: { src: string; className?: string }) {
+function GridVideoPreview({
+  src,
+  poster,
+  className,
+}: {
+  src: string;
+  poster?: string;
+  className?: string;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [frameReady, setFrameReady] = useState(false);
+
+  useEffect(() => {
+    setFrameReady(false);
+    const video = ref.current;
+    if (!video) return;
+    video.load();
+  }, [src]);
+
   return (
-    // eslint-disable-next-line jsx-a11y/media-has-caption
-    <video
-      ref={ref}
-      src={src}
-      preload="metadata"
-      muted
-      playsInline
-      onLoadedMetadata={() => {
-        if (ref.current) ref.current.currentTime = 0.1;
-      }}
-      className={className}
-    />
+    <div className={`relative h-full w-full ${className ?? ""}`}>
+      {poster && !frameReady && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={poster}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={ref}
+        src={src}
+        poster={poster}
+        preload="metadata"
+        muted
+        playsInline
+        className={`h-full w-full object-cover ${frameReady ? "" : "opacity-0"}`}
+        onLoadedData={() => {
+          const video = ref.current;
+          if (!video) return;
+          try {
+            video.currentTime = 0.1;
+          } catch {
+            setFrameReady(true);
+          }
+        }}
+        onSeeked={() => setFrameReady(true)}
+        onError={() => setFrameReady(false)}
+      />
+    </div>
+  );
+}
+
+function GridMedia({
+  post,
+  videoUrl,
+  fallbackLabel,
+}: {
+  post: UserPostDoc;
+  videoUrl: string;
+  fallbackLabel: string;
+}) {
+  const thumbCandidates = getPostGridThumbnailCandidates(post);
+  const [thumbIndex, setThumbIndex] = useState(0);
+  const [useVideo, setUseVideo] = useState(thumbCandidates.length === 0);
+
+  const thumb = thumbCandidates[thumbIndex];
+  const previewVideo = pickGridVideoPreviewUrl(post);
+
+  if (!videoUrl && !thumb) {
+    return (
+      <div className="flex h-full items-center justify-center bg-surface-overlay text-xs text-muted">
+        {fallbackLabel}
+      </div>
+    );
+  }
+
+  if (!useVideo && thumb) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={thumb}
+        alt=""
+        loading="lazy"
+        className="h-full w-full object-cover"
+        onError={() => {
+          if (thumbIndex + 1 < thumbCandidates.length) {
+            setThumbIndex((i) => i + 1);
+            return;
+          }
+          if (previewVideo) setUseVideo(true);
+        }}
+      />
+    );
+  }
+
+  if (previewVideo) {
+    return (
+      <GridVideoPreview
+        src={previewVideo}
+        poster={thumbCandidates[0]}
+        className="pointer-events-none"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center bg-surface-overlay text-xs text-muted">
+      {fallbackLabel}
+    </div>
   );
 }
 
@@ -66,8 +162,6 @@ export function ProfilePostGrid({
     <div className="grid grid-cols-3 gap-px bg-border">
       {posts.map((post, index) => {
         const videoUrl = getPostVideoUrl(post);
-        // Grid always uses low quality thumbnail for fast scrolling
-        const thumb = post.postVideothumbnail || pickImageSource(post, "grid");
         const isPinned = aspect === "square" && index < pinnedCount;
         const hasCarousel =
           Boolean(pickImageSource(post, "grid")) && Boolean(videoUrl);
@@ -86,25 +180,11 @@ export function ProfilePostGrid({
               href={href}
               className="relative block h-full overflow-hidden bg-background"
             >
-              {thumb ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={thumb}
-                  alt=""
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
-              ) : videoUrl ? (
-                // No thumbnail stored — seek to first frame via JS
-                <VideoThumb
-                  src={videoUrl}
-                  className="pointer-events-none h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center bg-surface-overlay text-xs text-muted">
-                  {t("postFallback")}
-                </div>
-              )}
+              <GridMedia
+                post={post}
+                videoUrl={videoUrl}
+                fallbackLabel={t("postFallback")}
+              />
 
               {isPinned && (
                 <span className="absolute right-1.5 top-1.5 text-white drop-shadow-md">
