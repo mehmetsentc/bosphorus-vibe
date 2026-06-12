@@ -13,7 +13,7 @@ async function buildAuthHeaders(
   const user = firebaseUser ?? (await ensureAuthReady()).currentUser;
 
   if (user) {
-    const token = await user.getIdToken();
+    const token = await user.getIdToken(true);
     headers.set("Authorization", `Bearer ${token}`);
   }
 

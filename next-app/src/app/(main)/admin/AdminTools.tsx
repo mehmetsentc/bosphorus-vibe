@@ -1,33 +1,39 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useAdminFetch } from "@/lib/admin/client-fetch";
+import { useAuth } from "@/components/providers/AuthProvider";
+import {
+  enqueueThumbnailRegenClient,
+  enqueueTranscodeClient,
+  runThumbnailBatchClient,
+  runTranscodeBatchClient,
+} from "@/lib/admin/client-ops";
 
 export function AdminTools() {
-  const adminFetch = useAdminFetch();
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 5000); };
 
-  const run = useCallback(async (url: string, body: unknown, onSuccess: (d: Record<string, unknown>) => string) => {
-    setBusy(true);
-    setMsg("");
-    try {
-      const res = await adminFetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) flash(onSuccess(data));
-      else flash(data.message ?? "Hata oluştu");
-    } catch {
-      flash("Bağlantı hatası");
-    } finally {
-      setBusy(false);
-    }
-  }, [adminFetch]);
+  const withBusy = useCallback(
+    async (fn: () => Promise<string>) => {
+      if (!user) {
+        flash("Oturum gerekli");
+        return;
+      }
+      setBusy(true);
+      setMsg("");
+      try {
+        flash(await fn());
+      } catch (e) {
+        flash(e instanceof Error ? e.message : "Hata oluştu");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [user],
+  );
 
   return (
     <div className="space-y-4">
@@ -53,9 +59,10 @@ export function AdminTools() {
             type="button"
             disabled={busy}
             onClick={() =>
-              run("/api/admin/transcode/enqueue", { limit: 500 }, (d) =>
-                `✓ ${d.marked ?? 0} video sıraya alındı (${d.scanned ?? 0} tarandı)`
-              )
+              withBusy(async () => {
+                const d = await enqueueTranscodeClient(500);
+                return `✓ ${d.marked} video sıraya alındı (${d.scanned} tarandı)`;
+              })
             }
             className="w-full rounded-xl bg-gold py-2.5 text-sm font-semibold text-black disabled:opacity-50"
           >
@@ -65,9 +72,11 @@ export function AdminTools() {
             type="button"
             disabled={busy}
             onClick={() =>
-              run("/api/admin/transcode/run", { limit: 3 }, (d) =>
-                `✓ ${d.processed ?? 0} işlendi — ${d.succeeded ?? 0} başarılı, ${d.failed ?? 0} başarısız`
-              )
+              withBusy(async () => {
+                const token = await user!.getIdToken(true);
+                const d = await runTranscodeBatchClient(token, 3);
+                return `✓ ${d.processed} işlendi — ${d.succeeded} başarılı, ${d.failed} başarısız`;
+              })
             }
             className="w-full rounded-xl border border-border py-2.5 text-sm font-semibold disabled:opacity-50"
           >
@@ -89,9 +98,10 @@ export function AdminTools() {
             type="button"
             disabled={busy}
             onClick={() =>
-              run("/api/admin/thumbnails/enqueue", { limit: 500 }, (d) =>
-                `✓ ${d.marked ?? 0} video sıraya alındı (${d.scanned ?? 0} tarandı)`
-              )
+              withBusy(async () => {
+                const d = await enqueueThumbnailRegenClient(500);
+                return `✓ ${d.marked} video sıraya alındı (${d.scanned} tarandı)`;
+              })
             }
             className="w-full rounded-xl bg-gold py-2.5 text-sm font-semibold text-black disabled:opacity-50"
           >
@@ -101,9 +111,11 @@ export function AdminTools() {
             type="button"
             disabled={busy}
             onClick={() =>
-              run("/api/admin/thumbnails/run", { limit: 5 }, (d) =>
-                `✓ ${d.processed ?? 0} işlendi — ${d.succeeded ?? 0} başarılı, ${d.failed ?? 0} başarısız`
-              )
+              withBusy(async () => {
+                const token = await user!.getIdToken(true);
+                const d = await runThumbnailBatchClient(token, 5);
+                return `✓ ${d.processed} işlendi — ${d.succeeded} başarılı, ${d.failed} başarısız`;
+              })
             }
             className="w-full rounded-xl border border-border py-2.5 text-sm font-semibold disabled:opacity-50"
           >

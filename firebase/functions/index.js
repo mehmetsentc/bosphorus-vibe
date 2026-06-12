@@ -55,16 +55,33 @@ function getBackfillSecret() {
 
 function assertBackfillAuth(req) {
   const secret = getBackfillSecret();
-  if (!secret) {
-    throw new Error("TRANSCODE_BACKFILL_SECRET is not configured");
-  }
   const header = req.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (token !== secret) {
-    const err = new Error("Unauthorized");
-    err.status = 401;
-    throw err;
+  if (secret && token === secret) return;
+  const err = new Error("Unauthorized");
+  err.status = 401;
+  throw err;
+}
+
+async function assertBackfillOrAdminAuth(req) {
+  const secret = getBackfillSecret();
+  const header = req.get("authorization") || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (secret && token === secret) return;
+
+  if (token) {
+    try {
+      const decoded = await admin.auth().verifyIdToken(token);
+      const userDoc = await admin.firestore().collection("users").doc(decoded.uid).get();
+      if (userDoc.data()?.role === "admin") return;
+    } catch {
+      // fall through
+    }
   }
+
+  const err = new Error("Unauthorized");
+  err.status = 401;
+  throw err;
 }
 
 /**
@@ -226,7 +243,7 @@ exports.runVideoTranscodeBatch = functions
     }
 
     try {
-      assertBackfillAuth(req);
+      await assertBackfillOrAdminAuth(req);
       const limit = Math.min(
         Math.max(parseInt(req.body?.limit, 10) || BATCH_SIZE, 1),
         5,
@@ -415,7 +432,7 @@ exports.runVideoThumbnailBatch = functions
     }
 
     try {
-      assertBackfillAuth(req);
+      await assertBackfillOrAdminAuth(req);
       const limit = Math.min(
         Math.max(parseInt(req.body?.limit, 10) || THUMBNAIL_BATCH_SIZE, 1),
         8,
