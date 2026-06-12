@@ -9,7 +9,8 @@ import { VideoFeedSideActions } from "@/components/video/VideoFeedSideActions";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
-import { useNetworkQuality } from "@/lib/hooks/useNetworkQuality";
+import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
+import { pickVideoSource, prefetchVideoUrl } from "@/lib/utils/video-sources";
 import { REELS_VIDEO_WINDOW_RADIUS } from "@/lib/performance/app-state";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { UserPostDoc } from "@/types";
@@ -103,7 +104,7 @@ export function ReelFeed({
 }: ReelFeedProps) {
   const t = useT();
   const router = useRouter();
-  const networkTier = useNetworkQuality();
+  const networkTier = useEffectiveNetworkTier();
   const containerRef = useRef<HTMLDivElement>(null);
   useReelsViewportHeight(containerRef);
   const [posts, setPosts] = useState(initialPosts);
@@ -149,6 +150,14 @@ export function ReelFeed({
     [hasMore, loadingMore, onLoadMore, onActiveChange, visiblePosts.length],
   );
 
+  // Prefetch the next reel's lighter stream while the current one plays
+  useEffect(() => {
+    const next = visiblePosts[activeIndex + 1];
+    if (!next) return;
+    const { src } = pickVideoSource(next, networkTier, "detail");
+    if (src) prefetchVideoUrl(src);
+  }, [activeIndex, visiblePosts, networkTier]);
+
   const openComment = useCallback((postId: string) => setCommentPostId(postId), []);
   const closeComment = useCallback(() => setCommentPostId(null), []);
 
@@ -191,7 +200,7 @@ export function ReelFeed({
           key={post.id}
           post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
           isActive={i === activeIndex}
-          isNext={i === activeIndex + 1 && networkTier === "fast"}
+          isNext={i === activeIndex + 1}
           mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
           onBecameActive={() => handleActive(i)}
           onPostDeleted={() => handlePostDeleted(post.id)}

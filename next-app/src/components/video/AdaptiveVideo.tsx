@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
+import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
 import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
-import { pickVideoSource } from "@/lib/utils/video-sources";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
 import type { UserPostDoc } from "@/types";
 
@@ -26,8 +25,14 @@ export function AdaptiveVideo({
   playsInline = true,
   isActive = false,
 }: AdaptiveVideoProps) {
-  const tier = useEffectiveNetworkTier();
-  const { src, poster } = pickVideoSource(post, tier, "detail");
+  const {
+    src,
+    poster,
+    tier,
+    onWaiting,
+    onPlaying: handleAdaptivePlaying,
+    onError,
+  } = useAdaptiveVideoSrc(post, "feed", isActive);
   const preload = getPreloadStrategy(tier, isActive);
   const videoRef = useRef<HTMLVideoElement>(null);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
@@ -70,7 +75,7 @@ export function AdaptiveVideo({
       )}
       <video
         ref={videoRef}
-        key={`${post.id}-${tier}`}
+        key={`${post.id}-${src}`}
         src={src}
         poster={poster}
         loop={loop}
@@ -80,10 +85,15 @@ export function AdaptiveVideo({
         preload={preload}
         className={className}
         onPlaying={() => {
+          handleAdaptivePlaying();
           setShowPoster(false);
           requestPlay(post.id);
         }}
         onPause={() => setShowPoster(true)}
+        onWaiting={onWaiting}
+        onError={() => {
+          if (onError()) setShowPoster(true);
+        }}
       />
     </div>
   );

@@ -7,9 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
+import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
 import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
-import { pickVideoSource } from "@/lib/utils/video-sources";
 import {
   IconVolumeOff,
   IconVolumeOn,
@@ -56,10 +55,15 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasPlayedRef = useRef(false);
-  const fallbackIndexRef = useRef(0);
 
-  const networkTier = useEffectiveNetworkTier();
-  const picked = pickVideoSource(post, networkTier, "detail");
+  const {
+    src: videoSrc,
+    poster,
+    tier: networkTier,
+    onWaiting: handleAdaptiveWaiting,
+    onPlaying: handleAdaptivePlaying,
+    onError: handleAdaptiveError,
+  } = useAdaptiveVideoSrc(post, "detail", isActive);
   const preload = isActive ? getPreloadStrategy(networkTier, true) : isNext ? "metadata" : "none";
 
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
@@ -67,21 +71,16 @@ export function VideoPlayer({
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
 
-  const [videoSrc, setVideoSrc] = useState(picked.src);
   const [isMuted, setIsMuted] = useState(true);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showPoster, setShowPoster] = useState(true);
 
-  const allSources = [picked.src, ...picked.fallbacks].filter(Boolean);
-
   useEffect(() => {
-    setVideoSrc(picked.src);
-    fallbackIndexRef.current = 0;
     setShowPoster(true);
     hasPlayedRef.current = false;
-  }, [picked.src, post.id, networkTier]);
+  }, [videoSrc, post.id, networkTier]);
 
   // Another video started → pause this one
   useEffect(() => {
@@ -141,16 +140,14 @@ export function VideoPlayer({
   }, [setFeedMuted]);
 
   const handleVideoError = useCallback(() => {
-    const nextIndex = fallbackIndexRef.current + 1;
-    if (nextIndex < allSources.length) {
-      fallbackIndexRef.current = nextIndex;
-      setVideoSrc(allSources[nextIndex]);
+    const downgraded = handleAdaptiveError();
+    if (downgraded) {
       setShowPoster(true);
       setLoading(true);
-      return;
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [allSources]);
+  }, [handleAdaptiveError]);
 
   const seekBy = useCallback((delta: number) => {
     const video = videoRef.current;
@@ -162,16 +159,16 @@ export function VideoPlayer({
 
   return (
     <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-black">
-      {showPoster && picked.poster && (
+      {showPoster && poster && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={picked.poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
       )}
 
       <video
         ref={videoRef}
         key={`${post.id}-${videoSrc}`}
         src={videoSrc}
-        poster={picked.poster}
+        poster={poster}
         loop
         playsInline
         muted={isMuted}
@@ -180,8 +177,12 @@ export function VideoPlayer({
         onLoadStart={() => setLoading(true)}
         onCanPlay={() => { setLoading(false); onReady?.(); }}
         onError={handleVideoError}
-        onWaiting={() => setLoading(true)}
+        onWaiting={() => {
+          setLoading(true);
+          handleAdaptiveWaiting();
+        }}
         onPlaying={() => {
+          handleAdaptivePlaying();
           hasPlayedRef.current = true;
           setLoading(false);
           setShowPoster(false);

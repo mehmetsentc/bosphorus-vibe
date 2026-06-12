@@ -70,11 +70,22 @@ export function getPostVideoVariants(post: UserPostDoc): {
   return { original, low, poster };
 }
 
+export function hasDistinctLowQuality(post: UserPostDoc): boolean {
+  const { original, low } = getPostVideoVariants(post);
+  return Boolean(low && original && low !== original);
+}
+
+type PickVideoSourceOptions = {
+  /** User chose "Yüksek kalite" in settings — prefer original when available. */
+  preferHighQuality?: boolean;
+};
+
 /**
  * Returns the best video URL for the given context.
  *
- * - `"feed"` → low quality first (fast scroll)
- * - `"detail"` → tier-aware: slow=low, fast=original
+ * - `"feed"` / slow network / auto → low quality first (faster start)
+ * - `"detail"` + fast + high quality setting → original first
+ * - Otherwise low first when a distinct low.mp4 exists (Cloud Function transcode)
  *
  * On iOS/Safari, skips WebM when an MP4/MOV alternative exists.
  */
@@ -82,13 +93,15 @@ export function pickVideoSource(
   post: UserPostDoc,
   tier: NetworkTier,
   context: "feed" | "detail" = "feed",
+  options?: PickVideoSourceOptions,
 ): { src: string; poster?: string; fallbacks: string[] } {
   const { original, low, poster } = getPostVideoVariants(post);
+  const distinctLow = low && original && low !== original;
 
   let ordered: string[];
-  if (context === "feed") {
-    ordered = [low, original];
-  } else if (tier === "slow") {
+  if (options?.preferHighQuality && original) {
+    ordered = distinctLow ? [original, low] : [original];
+  } else if (context === "feed" || tier === "slow" || distinctLow) {
     ordered = [low, original];
   } else {
     ordered = [original, low];
@@ -99,6 +112,20 @@ export function pickVideoSource(
   const fallbacks = candidates.filter((url) => url !== src);
 
   return { src, poster, fallbacks };
+}
+
+/** Hint the browser to fetch the next clip while the user watches the current one. */
+export function prefetchVideoUrl(url: string): void {
+  if (!url || typeof document === "undefined") return;
+  const existing = document.querySelector(
+    `link[rel="prefetch"][as="video"][href="${CSS.escape(url)}"]`,
+  );
+  if (existing) return;
+  const link = document.createElement("link");
+  link.rel = "prefetch";
+  link.as = "video";
+  link.href = url;
+  document.head.appendChild(link);
 }
 
 /**

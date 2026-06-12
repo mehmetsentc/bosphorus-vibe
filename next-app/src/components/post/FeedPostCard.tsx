@@ -1,15 +1,13 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
-import {
-  useEffectiveNetworkTier,
-  useHideLikeCounts,
-} from "@/lib/hooks/useSettingsEffects";
+import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
+import { useHideLikeCounts } from "@/lib/hooks/useSettingsEffects";
 import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
 import {
   getPostCaption,
@@ -20,7 +18,7 @@ import {
   followUser,
   unfollowUser,
 } from "@/lib/services/friends";
-import { pickImageSource, pickVideoSource } from "@/lib/utils/video-sources";
+import { pickImageSource } from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
 import {
   IconPlay,
@@ -72,7 +70,6 @@ function FeedPostCardInner({
   const [commentCount, setCommentCount] = useState(post.numComments);
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
   const [followBusy, setFollowBusy] = useState(false);
-  const tier = useEffectiveNetworkTier();
   const hideLikeCounts = useHideLikeCounts();
   const { ref, isActive } = useIntersectionActive<HTMLElement>({
     threshold: 0.55,
@@ -81,26 +78,24 @@ function FeedPostCardInner({
   const video = getPostVideoUrl(post);
   const image = video ? "" : pickImageSource(post, "feed");
   const caption = getPostCaption(post);
-  const videoPick = useMemo(
-    () => (video ? pickVideoSource(post, tier, "feed") : null),
-    [video, post, tier],
-  );
-  // Derive src synchronously — no extra render cycle, no key="" on first mount
-  const primarySrc = videoPick?.src ?? "";
-  const [fallbackSrc, setFallbackSrc] = useState<string | null>(null);
-  const videoSrc = fallbackSrc ?? primarySrc;
-  const videoFallbacksRef = useRef<string[]>([]);
-  const fallbackIndexRef = useRef(0);
-
-  // Keep fallback refs in sync; reset on source change
-  useEffect(() => {
-    videoFallbacksRef.current = videoPick?.fallbacks ?? [];
-    fallbackIndexRef.current = 0;
-    setFallbackSrc(null);
-    setIsMuted(true);
-  }, [videoPick]);
-  const poster = post.postVideothumbnail || pickImageSource(post, "feed") || undefined;
+  const {
+    src: videoSrc,
+    poster: adaptivePoster,
+    tier,
+    onWaiting: handleAdaptiveWaiting,
+    onPlaying: handleAdaptivePlaying,
+    onError: handleAdaptiveError,
+  } = useAdaptiveVideoSrc(post, "feed", isActive);
+  const poster =
+    adaptivePoster ||
+    post.postVideothumbnail ||
+    pickImageSource(post, "feed") ||
+    undefined;
   const videoPreload = isActive ? getPreloadStrategy(tier, true) : "none";
+
+  useEffect(() => {
+    setIsMuted(true);
+  }, [videoSrc]);
   const isOwn = user?.uid === post.postUserId;
   const isFollowing = post.postUserId
     ? followingIds?.has(post.postUserId)
@@ -273,18 +268,14 @@ function FeedPostCardInner({
               playsInline
               preload={videoPreload}
               className="h-full w-full object-cover"
-              onPlaying={() => setShowPoster(false)}
+              onPlaying={() => {
+                handleAdaptivePlaying();
+                setShowPoster(false);
+              }}
               onPause={() => setShowPoster(true)}
+              onWaiting={handleAdaptiveWaiting}
               onError={() => {
-                const next = fallbackIndexRef.current + 1;
-                const fallbacks = videoFallbacksRef.current;
-                if (next <= fallbacks.length) {
-                  fallbackIndexRef.current = next;
-                  setFallbackSrc(fallbacks[next - 1]);
-                  setShowPoster(true);
-                  return;
-                }
-                setShowPoster(true);
+                if (handleAdaptiveError()) setShowPoster(true);
               }}
             />
 

@@ -24,15 +24,24 @@ function detectTier(): NetworkTier {
 
   if (conn.saveData) return "slow";
 
-  if (typeof conn.downlink === "number") {
-    if (conn.downlink < 1.5) return "slow";
-    if (conn.downlink >= 4) return "fast";
+  const effectiveType = conn.effectiveType ?? "";
+  if (
+    effectiveType === "slow-2g" ||
+    effectiveType === "2g" ||
+    effectiveType === "3g"
+  ) {
+    return "slow";
   }
 
-  if (typeof conn.rtt === "number" && conn.rtt > 450) return "slow";
+  if (typeof conn.downlink === "number") {
+    if (conn.downlink < 2.5) return "slow";
+    if (conn.downlink >= 5) return "fast";
+  }
 
-  const effectiveType = conn.effectiveType ?? "";
-  if (effectiveType === "slow-2g" || effectiveType === "2g" || effectiveType === "3g") {
+  if (typeof conn.rtt === "number" && conn.rtt > 350) return "slow";
+
+  // 4g with moderate throughput — still prefer lighter streams
+  if (effectiveType === "4g" && typeof conn.downlink === "number" && conn.downlink < 5) {
     return "slow";
   }
 
@@ -40,7 +49,7 @@ function detectTier(): NetworkTier {
 }
 
 export function useNetworkQuality(): NetworkTier {
-  const [tier, setTier] = useState<NetworkTier>("fast");
+  const [tier, setTier] = useState<NetworkTier>(() => detectTier());
 
   useEffect(() => {
     setTier(detectTier());

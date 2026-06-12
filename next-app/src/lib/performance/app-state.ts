@@ -21,3 +21,6 @@ export const PROFILE_POSTS_LIMIT = 40;
 /** Reels / feed first-page sizes (keep in sync with hooks) */
 export const FEED_PAGE_SIZE = 10;
 export const REELS_PAGE_SIZE = 12;
+
+/** Buffering longer than this → switch to lower-quality URL if available */
+export const VIDEO_STALL_DOWNGRADE_MS = 2_000;
