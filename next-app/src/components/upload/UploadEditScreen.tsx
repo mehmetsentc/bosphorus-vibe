@@ -2,7 +2,7 @@
 
 import { type RefObject } from "react";
 import { useT } from "@/components/providers/I18nProvider";
-import { StoryMediaDisplay } from "@/components/stories/StoryMediaDisplay";
+import { LocalVideoPreview } from "@/components/upload/LocalVideoPreview";
 import type { DraftStatus } from "@/lib/hooks/useDraftUpload";
 
 type UploadEditScreenProps = {
@@ -18,6 +18,7 @@ type UploadEditScreenProps = {
   videoRef?: RefObject<HTMLVideoElement>;
   onClose: () => void;
   onNext: () => void;
+  onDurationKnown?: (seconds: number) => void;
   onToggleMute: () => void;
   onToggleTextTool: () => void;
 };
@@ -46,6 +47,7 @@ export function UploadEditScreen({
   videoRef,
   onClose,
   onNext,
+  onDurationKnown,
   onToggleMute,
   onToggleTextTool,
 }: UploadEditScreenProps) {
@@ -90,20 +92,20 @@ export function UploadEditScreen({
         </p>
       )}
 
-      <div className="absolute inset-0 z-0">
-        <StoryMediaDisplay
-          src={preview}
-          isVideo={isVideo}
-          poster={poster ?? undefined}
-          autoPlay={isVideo}
-          loop={isVideo}
-          muted={muted}
-          playsInline
-          preload="auto"
-          mediaKey={preview}
-          videoRef={videoRef}
-          className="h-full w-full object-cover"
-        />
+      <div className="absolute inset-0 z-0 bg-black">
+        {isVideo ? (
+          <LocalVideoPreview
+            src={preview}
+            poster={poster ?? undefined}
+            videoRef={videoRef}
+            className="h-full w-full"
+            objectFit="cover"
+            onDurationKnown={onDurationKnown}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview} alt="" className="h-full w-full object-cover" />
+        )}
         {showTextTool && textOverlay && (
           <div className="absolute inset-x-0 top-1/3 z-20 px-8 text-center">
             <p className="text-2xl font-bold text-white drop-shadow-lg">{textOverlay}</p>

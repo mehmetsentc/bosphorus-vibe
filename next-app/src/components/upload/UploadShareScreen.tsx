@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import { StoryCategoryPicker } from "@/components/stories/StoryCategoryPicker";
 import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
+import { LocalVideoPreview } from "@/components/upload/LocalVideoPreview";
 import { UploadSettingRow } from "@/components/upload/UploadSettingRow";
+import { captureVideoFrameAtTime } from "@/lib/utils/media-compress";
 import { useT } from "@/components/providers/I18nProvider";
 import { BRAND_NAME } from "@/lib/brand";
 import type { UploadKind } from "@/components/upload/CreateUploadFlow";
@@ -71,31 +73,30 @@ export function UploadShareScreen({
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
-
-  const thumbSrc = coverPreview ?? preview;
-  const showCoverImage = Boolean(coverPreview);
+  const coverCapturedRef = useRef(false);
 
   useEffect(() => {
-    setVideoReady(false);
+    coverCapturedRef.current = false;
+  }, [preview]);
+
+  useEffect(() => {
+    if (!isVideo || coverPreview || coverCapturedRef.current) return;
     const video = shareVideoRef.current;
-    if (!video || !isVideo || showCoverImage) return;
+    if (!video) return;
 
-    const markReady = () => setVideoReady(true);
-    video.muted = true;
-    video.setAttribute("muted", "");
-    if (video.readyState === 0) video.load();
-    video.addEventListener("loadeddata", markReady);
-    video.addEventListener("canplay", markReady);
-    void video.play().then(() => video.pause()).catch(() => {});
-    const timer = window.setTimeout(markReady, 6000);
-
-    return () => {
-      video.removeEventListener("loadeddata", markReady);
-      video.removeEventListener("canplay", markReady);
-      window.clearTimeout(timer);
+    const snapCover = () => {
+      if (coverCapturedRef.current) return;
+      coverCapturedRef.current = true;
+      void captureVideoFrameAtTime(video, 0.1)
+        .then((blob) => onCoverChange(blob))
+        .catch(() => {
+          coverCapturedRef.current = false;
+        });
     };
-  }, [preview, isVideo, showCoverImage, thumbSrc]);
+
+    video.addEventListener("loadeddata", snapCover, { once: true });
+    return () => video.removeEventListener("loadeddata", snapCover);
+  }, [isVideo, coverPreview, preview, onCoverChange]);
 
   return (
     <div className="flex h-full min-h-[100dvh] flex-col bg-black text-white">
@@ -125,29 +126,17 @@ export function UploadShareScreen({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         <div className="flex flex-col items-center pb-5 pt-1">
           <div className="relative aspect-[9/16] w-full max-w-[min(58vw,240px)] overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10">
-            {showCoverImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={thumbSrc} alt="" className="h-full w-full object-cover" />
-            ) : isVideo ? (
-              <video
-                ref={shareVideoRef}
-                key={preview}
+            {isVideo ? (
+              <LocalVideoPreview
                 src={preview}
-                className={`h-full w-full object-cover ${videoReady ? "opacity-100" : "opacity-0"}`}
-                muted
-                playsInline
-                autoPlay
-                loop
-                preload="auto"
+                poster={coverPreview ?? undefined}
+                videoRef={shareVideoRef}
+                className="h-full w-full"
+                objectFit="cover"
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={thumbSrc} alt="" className="h-full w-full object-cover" />
-            )}
-            {isVideo && !videoReady && !showCoverImage && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black">
-                <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              </div>
+              <img src={preview} alt="" className="h-full w-full object-cover" />
             )}
             {isVideo && (
               <>
@@ -295,7 +284,11 @@ export function UploadShareScreen({
             ✕
           </button>
           {isVideo ? (
-            <video src={preview} className="max-h-full max-w-full" autoPlay loop playsInline controls />
+            <LocalVideoPreview
+              src={preview}
+              className="max-h-full max-w-full"
+              objectFit="contain"
+            />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={preview} alt="" className="max-h-full max-w-full object-contain" />

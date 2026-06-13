@@ -22,7 +22,7 @@ import {
   uploadStoryImage,
   uploadStoryVideo,
 } from "@/lib/services/stories";
-import { isVideoFile, validateMediaSize, captureVideoFrameAtTime } from "@/lib/utils/media-compress";
+import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
   markReelsRefreshPending,
@@ -175,20 +175,6 @@ function CreateUploadFlowInner() {
         const filtered = prev.filter((p) => p.file.name !== next.name);
         return [{ file: next, url, isVideo }, ...filtered].slice(0, 20);
       });
-
-      if (isVideo) {
-        const video = document.createElement("video");
-        video.preload = "metadata";
-        video.src = url;
-        video.onloadedmetadata = () => {
-          const duration = formatDuration(video.duration);
-          setRecentItems((prev) =>
-            prev.map((item) =>
-              item.url === url ? { ...item, duration } : item,
-            ),
-          );
-        };
-      }
     },
     [kind, locale, t],
   );
@@ -201,22 +187,23 @@ function CreateUploadFlowInner() {
     setLocation(null);
   }
 
-  async function goToShareStep() {
-    if (file && isVideoFile(file) && editVideoRef.current) {
-      try {
-        const blob = await captureVideoFrameAtTime(editVideoRef.current, 0.1);
-        coverBlobRef.current = blob;
-        setCoverPreview((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return URL.createObjectURL(blob);
-        });
-      } catch {
-        // cover can still be picked on share screen
-      }
-    }
+  function goToShareStep() {
     setStep("share");
-    setDraftUploadEnabled(true);
+    window.setTimeout(() => setDraftUploadEnabled(true), 2000);
   }
+
+  const handleDurationKnown = useCallback(
+    (seconds: number) => {
+      if (!preview) return;
+      const duration = formatDuration(seconds);
+      setRecentItems((prev) =>
+        prev.map((item) =>
+          item.url === preview ? { ...item, duration } : item,
+        ),
+      );
+    },
+    [preview],
+  );
 
   function closeFlow() {
     router.push("/home");
@@ -470,13 +457,12 @@ function CreateUploadFlowInner() {
                     key={item.url}
                     type="button"
                     onClick={() => {
+                      coverBlobRef.current = null;
+                      setCoverPreview(null);
+                      setDraftUploadEnabled(false);
                       setFile(item.file);
                       setPreview(item.url);
-                      setDraftUploadEnabled(!item.isVideo);
                       setStep("edit");
-                      if (item.isVideo) {
-                        window.setTimeout(() => setDraftUploadEnabled(true), 1200);
-                      }
                     }}
                     className="relative aspect-[3/4] overflow-hidden bg-white/5"
                   >
@@ -551,7 +537,8 @@ function CreateUploadFlowInner() {
                 draftProgress={draft.progress}
                 videoRef={editVideoRef}
                 onClose={() => setStep("gallery")}
-                onNext={() => void goToShareStep()}
+                onNext={() => goToShareStep()}
+                onDurationKnown={handleDurationKnown}
                 onToggleMute={() => setMuted((m) => !m)}
                 onToggleTextTool={() => setShowTextTool((v) => !v)}
                 onTextOverlayChange={setTextOverlay}

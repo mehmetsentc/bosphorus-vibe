@@ -5,6 +5,7 @@ import {
   captureVideoFrameAtTime,
   isImageFile,
 } from "@/lib/utils/media-compress";
+import { LocalVideoPreview } from "@/components/upload/LocalVideoPreview";
 import { useT } from "@/components/providers/I18nProvider";
 
 type VideoCoverPickerProps = {
@@ -25,7 +26,6 @@ export function VideoCoverPicker({
   const [duration, setDuration] = useState(1);
   const [coverTime, setCoverTime] = useState(0.1);
   const [busy, setBusy] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
 
   const captureAt = useCallback(
     async (time: number) => {
@@ -47,33 +47,15 @@ export function VideoCoverPicker({
   const captureAtRef = useRef(captureAt);
   captureAtRef.current = captureAt;
 
+  const onDurationKnown = useCallback((seconds: number) => {
+    setDuration(seconds);
+    void captureAtRef.current(0.1);
+  }, []);
+
   useEffect(() => {
-    setVideoReady(false);
     const video = videoRef.current;
     if (!video) return;
-
-    let done = false;
-    const onReady = () => {
-      if (done) return;
-      done = true;
-      const d = video.duration || 1;
-      setDuration(d);
-      setVideoReady(true);
-      void captureAtRef.current(0.1);
-    };
-
-    video.muted = true;
-    video.setAttribute("muted", "");
-    if (video.readyState === 0) video.load();
-
-    video.addEventListener("loadedmetadata", onReady);
-    video.addEventListener("loadeddata", onReady);
-    void video.play().then(() => video.pause()).catch(() => {});
-
-    return () => {
-      video.removeEventListener("loadedmetadata", onReady);
-      video.removeEventListener("loadeddata", onReady);
-    };
+    video.pause();
   }, [previewUrl]);
 
   async function handleScrub(next: number) {
@@ -81,6 +63,7 @@ export function VideoCoverPicker({
     const video = videoRef.current;
     if (video) {
       try {
+        video.pause();
         video.currentTime = next;
         await new Promise<void>((resolve) => {
           video.onseeked = () => resolve();
@@ -104,21 +87,16 @@ export function VideoCoverPicker({
       <p className="text-xs font-medium text-white/70">{t("videoCoverTitle")}</p>
 
       <div className="relative mx-auto aspect-[9/16] w-full max-w-[140px] overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
-        <video
-          ref={videoRef}
-          key={previewUrl}
+        <LocalVideoPreview
           src={previewUrl}
-          className={`h-full w-full object-cover ${videoReady ? "opacity-100" : "opacity-0"}`}
-          muted
-          playsInline
-          preload="auto"
+          videoRef={videoRef}
+          className="h-full w-full"
+          objectFit="cover"
+          loop={false}
+          autoPlay={false}
+          onDurationKnown={onDurationKnown}
         />
-        {!videoReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black text-[10px] text-white/50">
-            …
-          </div>
-        )}
-        {busy && videoReady && (
+        {busy && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-[10px] text-white">
             …
           </div>
@@ -135,7 +113,7 @@ export function VideoCoverPicker({
           max={Math.max(0.1, duration - 0.05)}
           step={0.05}
           value={coverTime}
-          disabled={busy || !videoReady}
+          disabled={busy}
           onChange={(e) => void handleScrub(Number(e.target.value))}
           className="h-1 w-full accent-vibe"
         />
