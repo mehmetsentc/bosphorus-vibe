@@ -22,7 +22,7 @@ import {
   uploadStoryImage,
   uploadStoryVideo,
 } from "@/lib/services/stories";
-import { isVideoFile, validateMediaSize, videoThumbnailAtTime } from "@/lib/utils/media-compress";
+import { isVideoFile, validateMediaSize, captureVideoFrameAtTime } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
   markReelsRefreshPending,
@@ -64,6 +64,7 @@ function CreateUploadFlowInner() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const editVideoRef = useRef<HTMLVideoElement>(null);
 
   const [kind, setKind] = useState<UploadKind | null>(
     initialType === "post" || initialType === "reel" || initialType === "story"
@@ -94,6 +95,7 @@ function CreateUploadFlowInner() {
   });
   const [storyCategory, setStoryCategory] = useState<StoryCategory>(initialStoryCategory);
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
+  const [location, setLocation] = useState<string | null>(null);
 
   useEffect(() => {
     if (kind === "story") {
@@ -186,19 +188,6 @@ function CreateUploadFlowInner() {
             ),
           );
         };
-
-        requestAnimationFrame(() => {
-          void videoThumbnailAtTime(next, 0.1)
-            .then((blob) => {
-              coverBlobRef.current = blob;
-              setCoverPreview(URL.createObjectURL(blob));
-            })
-            .catch(() => {});
-        });
-
-        window.setTimeout(() => setDraftUploadEnabled(true), 1200);
-      } else {
-        setDraftUploadEnabled(true);
       }
     },
     [kind, locale, t],
@@ -209,6 +198,24 @@ function CreateUploadFlowInner() {
     setStep("gallery");
     setError("");
     setTaggedPeople([]);
+    setLocation(null);
+  }
+
+  async function goToShareStep() {
+    if (file && isVideoFile(file) && editVideoRef.current) {
+      try {
+        const blob = await captureVideoFrameAtTime(editVideoRef.current, 0.1);
+        coverBlobRef.current = blob;
+        setCoverPreview((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
+      } catch {
+        // cover can still be picked on share screen
+      }
+    }
+    setStep("share");
+    setDraftUploadEnabled(true);
   }
 
   function closeFlow() {
@@ -298,6 +305,7 @@ function CreateUploadFlowInner() {
           fullCaption,
           user.uid,
           taggedPeople,
+          location ?? undefined,
         );
       } else {
         await createImagePost(
@@ -306,6 +314,7 @@ function CreateUploadFlowInner() {
           fullCaption,
           user.uid,
           taggedPeople,
+          location ?? undefined,
         );
       }
 
@@ -540,8 +549,9 @@ function CreateUploadFlowInner() {
                 showTextTool={showTextTool}
                 draftStatus={draft.status}
                 draftProgress={draft.progress}
+                videoRef={editVideoRef}
                 onClose={() => setStep("gallery")}
-                onNext={() => setStep("share")}
+                onNext={() => void goToShareStep()}
                 onToggleMute={() => setMuted((m) => !m)}
                 onToggleTextTool={() => setShowTextTool((v) => !v)}
                 onTextOverlayChange={setTextOverlay}
@@ -560,6 +570,8 @@ function CreateUploadFlowInner() {
                 onCaptionChange={setCaption}
                 taggedPeople={taggedPeople}
                 onTaggedPeopleChange={setTaggedPeople}
+                location={location}
+                onLocationChange={setLocation}
                 onCoverChange={(blob) => {
                   coverBlobRef.current = blob;
                   const url = URL.createObjectURL(blob);

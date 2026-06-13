@@ -55,12 +55,22 @@ export function StoryMediaDisplay({
     });
   }, [src, isVideo, autoPlay, muted, mediaKey, resolvedRef]);
 
+  useEffect(() => {
+    if (!isVideo) return;
+    const el = resolvedRef.current;
+    if (!el) return;
+    const timer = window.setTimeout(() => {
+      if (el.videoWidth > 0 || el.readyState >= 2) setReady(true);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [src, isVideo, mediaKey, resolvedRef]);
+
   const markReady = useCallback(() => setReady(true), []);
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-black">
+    <div className="relative flex h-full w-full items-center justify-center bg-black">
       {!ready && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 z-10 flex items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
         </div>
       )}
@@ -76,7 +86,9 @@ export function StoryMediaDisplay({
           playsInline={playsInline}
           preload={preload}
           className={`${className} ${ready ? "opacity-100" : "opacity-0"}`}
+          onLoadedMetadata={markReady}
           onLoadedData={markReady}
+          onCanPlay={markReady}
           onTimeUpdate={onTimeUpdate}
           onEnded={onEnded}
         />

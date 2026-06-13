@@ -17,6 +17,8 @@ type TagPeoplePickerProps = {
   onChange: (tags: PostTag[]) => void;
   className?: string;
   variant?: "light" | "dark";
+  /** When true, show the contact list immediately (no outer toggle). */
+  embedded?: boolean;
 };
 
 function toTag(user: PublicUser): PostTag {
@@ -32,6 +34,7 @@ export function TagPeoplePicker({
   onChange,
   className = "",
   variant = "light",
+  embedded = false,
 }: TagPeoplePickerProps) {
   const { user } = useAuth();
   const t = useT();
@@ -40,10 +43,11 @@ export function TagPeoplePicker({
   const [followers, setFollowers] = useState<PublicUser[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(embedded);
 
   const isDark = variant === "dark";
   const selectedIds = useMemo(() => new Set(value.map((v) => v.uid)), [value]);
+  const panelOpen = embedded || open;
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -58,8 +62,8 @@ export function TagPeoplePicker({
   }, [user]);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (panelOpen) load();
+  }, [panelOpen, load]);
 
   const activeList = tab === "following" ? following : followers;
 
@@ -97,18 +101,20 @@ export function TagPeoplePicker({
 
   return (
     <div className={className}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm ${shell}`}
-      >
-        <span className={isDark ? "text-white/80" : "text-foreground"}>
-          {value.length
-            ? t("tagPeopleCount").replace("{count}", String(value.length))
-            : t("tagPeople")}
-        </span>
-        <span className={isDark ? "text-white/40" : "text-muted"}>{open ? "▴" : "▾"}</span>
-      </button>
+      {!embedded && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm ${shell}`}
+        >
+          <span className={isDark ? "text-white/80" : "text-foreground"}>
+            {value.length
+              ? t("tagPeopleCount").replace("{count}", String(value.length))
+              : t("tagPeople")}
+          </span>
+          <span className={isDark ? "text-white/40" : "text-muted"}>{open ? "▴" : "▾"}</span>
+        </button>
+      )}
 
       {value.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -133,7 +139,7 @@ export function TagPeoplePicker({
         </div>
       )}
 
-      {open && (
+      {panelOpen && (
         <div className={`mt-3 rounded-xl border p-3 ${shell}`}>
           <p className={`mb-3 text-xs ${isDark ? "text-white/50" : "text-muted"}`}>
             {t("tagPeopleDesc")}

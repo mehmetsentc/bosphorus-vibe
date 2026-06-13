@@ -1,5 +1,6 @@
 "use client";
 
+import { type RefObject } from "react";
 import { useT } from "@/components/providers/I18nProvider";
 import { StoryMediaDisplay } from "@/components/stories/StoryMediaDisplay";
 import type { DraftStatus } from "@/lib/hooks/useDraftUpload";
@@ -14,6 +15,7 @@ type UploadEditScreenProps = {
   showTextTool: boolean;
   draftStatus: DraftStatus;
   draftProgress: number;
+  videoRef?: RefObject<HTMLVideoElement>;
   onClose: () => void;
   onNext: () => void;
   onToggleMute: () => void;
@@ -41,6 +43,7 @@ export function UploadEditScreen({
   showTextTool,
   draftStatus,
   draftProgress,
+  videoRef,
   onClose,
   onNext,
   onToggleMute,
@@ -98,6 +101,7 @@ export function UploadEditScreen({
           playsInline
           preload="auto"
           mediaKey={preview}
+          videoRef={videoRef}
           className="h-full w-full object-cover"
         />
         {showTextTool && textOverlay && (

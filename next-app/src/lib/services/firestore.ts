@@ -733,7 +733,9 @@ export async function uploadVideoPost(
   const thumbnail =
     custom && isImageBlob(custom)
       ? custom
-      : await videoThumbnailFromFile(file).catch(() => createPlaceholderThumbnail());
+      : options?.skipClientPreview
+        ? await createPlaceholderThumbnail()
+        : await videoThumbnailFromFile(file).catch(() => createPlaceholderThumbnail());
 
   const thumbnailUrl = await uploadBlob(thumbnail, `${basePath}/thumb.jpg`, (pct) => {
     onProgress(88 + Math.round(pct * 0.12));
@@ -770,6 +772,7 @@ export async function createVideoPost(
   caption: string,
   userId: string,
   tags: PostTag[] = [],
+  location?: string,
 ): Promise<string> {
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const docRef = await addDoc(collection(getFirebaseDb(), COLLECTIONS.userPosts), {
@@ -789,6 +792,7 @@ export async function createVideoPost(
     Post_liked_by: [],
     allowComments: true,
     isPrivate: false,
+    ...(location ? { location } : {}),
     ...buildPostTagFields(tags),
   });
   return docRef.id;
@@ -843,6 +847,7 @@ export async function createImagePost(
   caption: string,
   userId: string,
   tags: PostTag[] = [],
+  location?: string,
 ): Promise<string> {
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const docRef = await addDoc(collection(getFirebaseDb(), COLLECTIONS.userPosts), {
@@ -859,6 +864,7 @@ export async function createImagePost(
     Post_liked_by: [],
     allowComments: true,
     isPrivate: false,
+    ...(location ? { location } : {}),
     ...buildPostTagFields(tags),
   });
   return docRef.id;

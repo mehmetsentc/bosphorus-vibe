@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import { StoryCategoryPicker } from "@/components/stories/StoryCategoryPicker";
 import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
@@ -10,6 +10,8 @@ import { BRAND_NAME } from "@/lib/brand";
 import type { UploadKind } from "@/components/upload/CreateUploadFlow";
 import type { DraftStatus } from "@/lib/hooks/useDraftUpload";
 import type { PostTag, StoryCategory } from "@/types";
+
+const LOCATION_OPTIONS = [BRAND_NAME, "Bosphorus Sorgun Hotel"] as const;
 
 type UploadShareScreenProps = {
   kind: UploadKind;
@@ -22,6 +24,8 @@ type UploadShareScreenProps = {
   onCaptionChange: (value: string) => void;
   taggedPeople: PostTag[];
   onTaggedPeopleChange: (tags: PostTag[]) => void;
+  location: string | null;
+  onLocationChange: (location: string | null) => void;
   onCoverChange: (blob: Blob) => void;
   storyCategory?: StoryCategory;
   onStoryCategoryChange?: (cat: StoryCategory) => void;
@@ -47,6 +51,8 @@ export function UploadShareScreen({
   onCaptionChange,
   taggedPeople,
   onTaggedPeopleChange,
+  location,
+  onLocationChange,
   onCoverChange,
   storyCategory,
   onStoryCategoryChange,
@@ -61,11 +67,35 @@ export function UploadShareScreen({
   onPublish,
 }: UploadShareScreenProps) {
   const t = useT();
+  const shareVideoRef = useRef<HTMLVideoElement>(null);
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
   const thumbSrc = coverPreview ?? preview;
+  const showCoverImage = Boolean(coverPreview);
+
+  useEffect(() => {
+    setVideoReady(false);
+    const video = shareVideoRef.current;
+    if (!video || !isVideo || showCoverImage) return;
+
+    const markReady = () => setVideoReady(true);
+    video.muted = true;
+    video.setAttribute("muted", "");
+    if (video.readyState === 0) video.load();
+    video.addEventListener("loadeddata", markReady);
+    video.addEventListener("canplay", markReady);
+    void video.play().then(() => video.pause()).catch(() => {});
+    const timer = window.setTimeout(markReady, 6000);
+
+    return () => {
+      video.removeEventListener("loadeddata", markReady);
+      video.removeEventListener("canplay", markReady);
+      window.clearTimeout(timer);
+    };
+  }, [preview, isVideo, showCoverImage, thumbSrc]);
 
   return (
     <div className="flex h-full min-h-[100dvh] flex-col bg-black text-white">
@@ -95,10 +125,15 @@ export function UploadShareScreen({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         <div className="flex flex-col items-center pb-5 pt-1">
           <div className="relative aspect-[9/16] w-full max-w-[min(58vw,240px)] overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10">
-            {isVideo ? (
+            {showCoverImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={thumbSrc} alt="" className="h-full w-full object-cover" />
+            ) : isVideo ? (
               <video
-                src={thumbSrc}
-                className="h-full w-full object-cover"
+                ref={shareVideoRef}
+                key={preview}
+                src={preview}
+                className={`h-full w-full object-cover ${videoReady ? "opacity-100" : "opacity-0"}`}
                 muted
                 playsInline
                 autoPlay
@@ -108,6 +143,11 @@ export function UploadShareScreen({
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={thumbSrc} alt="" className="h-full w-full object-cover" />
+            )}
+            {isVideo && !videoReady && !showCoverImage && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black">
+                <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              </div>
             )}
             {isVideo && (
               <>
@@ -168,21 +208,34 @@ export function UploadShareScreen({
                 value={taggedPeople}
                 onChange={onTaggedPeopleChange}
                 variant="dark"
+                embedded
               />
             </div>
           )}
 
-          <UploadSettingRow icon="📍" label={t("uploadAddLocation")} onClick={() => {}} />
+          <UploadSettingRow
+            icon="📍"
+            label={t("uploadAddLocation")}
+            value={location ?? undefined}
+          />
           <div className="mb-3 flex gap-2 overflow-x-auto pl-9">
-            {[BRAND_NAME, "Bosphorus Sorgun Hotel"].map((loc) => (
-              <button
-                key={loc}
-                type="button"
-                className="shrink-0 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs text-white/75"
-              >
-                {loc}
-              </button>
-            ))}
+            {LOCATION_OPTIONS.map((loc) => {
+              const selected = location === loc;
+              return (
+                <button
+                  key={loc}
+                  type="button"
+                  onClick={() => onLocationChange(selected ? null : loc)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
+                    selected
+                      ? "bg-[#0095f6] text-white"
+                      : "bg-white/[0.08] text-white/75"
+                  }`}
+                >
+                  {loc}
+                </button>
+              );
+            })}
           </div>
 
           <UploadSettingRow
