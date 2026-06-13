@@ -5,66 +5,65 @@ import { useT } from "@/components/providers/I18nProvider";
 import { LocalVideoPreview } from "@/components/upload/LocalVideoPreview";
 import type { DraftStatus } from "@/lib/hooks/useDraftUpload";
 
+const STICKER_OPTIONS = ["❤️", "🔥", "✨", "😂", "🙌", "👏", "💯", "🎉", "📍", "☀️", "🌊", "🎵"] as const;
+
+const TOOLS = [
+  { key: "text" as const, icon: "Aa" },
+  { key: "sticker" as const, icon: "☺" },
+];
+
 type UploadEditScreenProps = {
   file: File;
   preview: string;
   poster?: string | null;
   isVideo: boolean;
-  muted: boolean;
   textOverlay: string;
   onTextOverlayChange: (value: string) => void;
   showTextTool: boolean;
+  sticker: string | null;
+  onStickerChange: (value: string | null) => void;
+  showStickerTool: boolean;
   draftStatus: DraftStatus;
   draftProgress: number;
   videoRef?: RefObject<HTMLVideoElement>;
   onClose: () => void;
   onNext: () => void;
   onDurationKnown?: (seconds: number) => void;
-  onToggleMute: () => void;
   onToggleTextTool: () => void;
+  onToggleStickerTool: () => void;
 };
-
-const TOOLS = [
-  { key: "text", icon: "Aa" },
-  { key: "sticker", icon: "☺" },
-  { key: "audio", icon: "♫" },
-  { key: "clips", icon: "▣" },
-  { key: "effects", icon: "✦" },
-  { key: "photo", icon: "🖼" },
-  { key: "overlay", icon: "▢" },
-  { key: "captions", icon: "Cc" },
-] as const;
 
 export function UploadEditScreen({
   file,
   preview,
   poster,
   isVideo,
-  muted,
   textOverlay,
   onTextOverlayChange,
   showTextTool,
+  sticker,
+  onStickerChange,
+  showStickerTool,
   draftStatus,
   draftProgress,
   videoRef,
   onClose,
   onNext,
   onDurationKnown,
-  onToggleMute,
   onToggleTextTool,
+  onToggleStickerTool,
 }: UploadEditScreenProps) {
   const t = useT();
 
   const toolLabels: Record<(typeof TOOLS)[number]["key"], string> = {
     text: t("uploadToolText"),
     sticker: t("uploadToolSticker"),
-    audio: t("uploadToolAudio"),
-    clips: t("uploadToolClips"),
-    effects: t("uploadToolEffects"),
-    photo: t("uploadToolPhoto"),
-    overlay: t("uploadToolOverlay"),
-    captions: t("uploadToolCaptions"),
   };
+
+  function handleToolClick(key: (typeof TOOLS)[number]["key"]) {
+    if (key === "text") onToggleTextTool();
+    else onToggleStickerTool();
+  }
 
   return (
     <div className="relative h-full min-h-[100dvh] w-full bg-black">
@@ -108,35 +107,20 @@ export function UploadEditScreen({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt="" className="h-full w-full object-cover" />
         )}
-        {showTextTool && textOverlay && (
-          <div className="absolute inset-x-0 top-1/3 z-20 px-8 text-center">
-            <p className="text-2xl font-bold text-white drop-shadow-lg">{textOverlay}</p>
+
+        {textOverlay && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/3 z-20 px-8 text-center">
+            <p className="text-2xl font-bold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+              {textOverlay}
+            </p>
           </div>
         )}
-      </div>
 
-      <div className="absolute left-4 right-4 top-[max(3.5rem,env(safe-area-inset-top))] z-20">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-xl bg-black/45 px-3 py-2 backdrop-blur-md"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-lg">
-            ♫
-          </span>
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block truncate text-xs font-semibold text-white">
-              {t("uploadRecommendedSound")}
-            </span>
-            <span className="block truncate text-[10px] text-white/55">
-              {t("uploadTapToApplySound")}
-            </span>
-          </span>
-        </button>
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-[11.5rem] z-20 flex flex-col items-center text-white/60">
-        <span className="text-lg">⌃</span>
-        <span className="text-xs">{t("swipeToEdit")}</span>
+        {sticker && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <span className="text-6xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">{sticker}</span>
+          </div>
+        )}
       </div>
 
       <div className="absolute bottom-[5.5rem] left-0 right-0 z-30">
@@ -147,43 +131,68 @@ export function UploadEditScreen({
               value={textOverlay}
               onChange={(e) => onTextOverlayChange(e.target.value)}
               placeholder={t("storyTextPlaceholder")}
+              autoFocus
               className="w-full rounded-xl border border-white/20 bg-black/50 px-4 py-3 text-center text-lg font-semibold text-white outline-none backdrop-blur-md placeholder:text-white/40"
             />
           </div>
         )}
-        <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none">
-          {TOOLS.map((tool) => (
-            <button
-              key={tool.key}
-              type="button"
-              onClick={() => {
-                if (tool.key === "text") onToggleTextTool();
-                else if (tool.key === "audio") onToggleMute();
-              }}
-              className="flex w-[72px] shrink-0 flex-col items-center gap-1.5"
-            >
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/55 text-sm text-white backdrop-blur-sm ring-1 ring-white/10">
-                {tool.key === "audio" ? (muted ? "🔇" : "🔊") : tool.icon}
-              </span>
-              <span className="max-w-[72px] truncate text-[10px] text-white/75">
-                {tool.key === "audio" ? t("uploadToolAudio") : toolLabels[tool.key]}
-              </span>
-            </button>
-          ))}
+
+        {showStickerTool && (
+          <div className="mb-3 px-4">
+            <div className="flex gap-2 overflow-x-auto rounded-xl bg-black/50 p-3 backdrop-blur-md scrollbar-none">
+              {STICKER_OPTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onStickerChange(sticker === emoji ? null : emoji)}
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl transition ${
+                    sticker === emoji
+                      ? "bg-white/20 ring-2 ring-[#0095f6]"
+                      : "bg-white/10 hover:bg-white/15"
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-center gap-6 px-4 pb-2">
+          {TOOLS.map((tool) => {
+            const active =
+              (tool.key === "text" && showTextTool) ||
+              (tool.key === "sticker" && showStickerTool);
+            return (
+              <button
+                key={tool.key}
+                type="button"
+                onClick={() => handleToolClick(tool.key)}
+                className="flex w-[72px] flex-col items-center gap-1.5"
+              >
+                <span
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl text-sm text-white backdrop-blur-sm ring-1 transition ${
+                    active
+                      ? "bg-white/20 ring-[#0095f6]"
+                      : "bg-black/55 ring-white/10"
+                  }`}
+                >
+                  {tool.icon}
+                </span>
+                <span className="max-w-[72px] truncate text-[10px] text-white/75">
+                  {toolLabels[tool.key]}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-between gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
-        <button
-          type="button"
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80"
-        >
-          {t("openInEdits")}
-        </button>
+      <div className="absolute bottom-0 left-0 right-0 z-30 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
         <button
           type="button"
           onClick={onNext}
-          className="rounded-full bg-[#0095f6] px-6 py-2.5 text-sm font-semibold text-white"
+          className="w-full rounded-full bg-[#0095f6] py-3.5 text-sm font-semibold text-white"
         >
           {t("next")} →
         </button>

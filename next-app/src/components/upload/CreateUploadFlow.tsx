@@ -77,7 +77,8 @@ function CreateUploadFlowInner() {
   const [caption, setCaption] = useState("");
   const [textOverlay, setTextOverlay] = useState("");
   const [showTextTool, setShowTextTool] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [sticker, setSticker] = useState<string | null>(null);
+  const [showStickerTool, setShowStickerTool] = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -171,6 +172,10 @@ function CreateUploadFlowInner() {
       coverBlobRef.current = null;
       setCoverPreview(null);
       setDraftUploadEnabled(false);
+      setTextOverlay("");
+      setShowTextTool(false);
+      setSticker(null);
+      setShowStickerTool(false);
       setFile(next);
       setPreview(url);
       setStep("edit");
@@ -260,7 +265,7 @@ function CreateUploadFlowInner() {
     setError("");
     setProgress(0);
 
-    const fullCaption = [textOverlay, caption].filter(Boolean).join("\n").trim();
+    const fullCaption = [textOverlay, sticker, caption].filter(Boolean).join("\n").trim();
 
     try {
       const media = await resolveDraftOrUpload();
@@ -535,17 +540,31 @@ function CreateUploadFlowInner() {
                 preview={preview}
                 poster={coverPreview}
                 isVideo={isVideoFile(file)}
-                muted={muted}
                 textOverlay={textOverlay}
                 showTextTool={showTextTool}
+                sticker={sticker}
+                onStickerChange={setSticker}
+                showStickerTool={showStickerTool}
                 draftStatus={draft.status}
                 draftProgress={draft.progress}
                 videoRef={editVideoRef}
                 onClose={() => setStep("gallery")}
                 onNext={() => goToShareStep()}
                 onDurationKnown={handleDurationKnown}
-                onToggleMute={() => setMuted((m) => !m)}
-                onToggleTextTool={() => setShowTextTool((v) => !v)}
+                onToggleTextTool={() => {
+                  setShowTextTool((v) => {
+                    const next = !v;
+                    if (next) setShowStickerTool(false);
+                    return next;
+                  });
+                }}
+                onToggleStickerTool={() => {
+                  setShowStickerTool((v) => {
+                    const next = !v;
+                    if (next) setShowTextTool(false);
+                    return next;
+                  });
+                }}
                 onTextOverlayChange={setTextOverlay}
               />
             )}
