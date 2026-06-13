@@ -22,6 +22,11 @@ export const WORLD_CUP_POPUP_DAYS: WorldCupPopupDay[] = [
     imageSrc: "/events/world-cup/2026-06-13.png",
     alt: "FIFA World Cup 2026 — Bosphorus Sorgun günlük özet (13 Haziran)",
   },
+  {
+    date: "2026-06-14",
+    imageSrc: "/events/world-cup/2026-06-14.png",
+    alt: "FIFA World Cup 2026 — Bosphorus Sorgun günlük özet (14 Haziran)",
+  },
 ];
 
 export function getIstanbulDateKey(now = new Date()): string {
