@@ -101,6 +101,7 @@ async function runDraftUpload(
       onProgress,
       {
         getThumbnailBlob: () => thumbnailRef?.current ?? null,
+        skipClientPreview: true,
       },
     );
     return { isVideo: true, originalUrl, lowUrl, thumbnailUrl };

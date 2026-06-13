@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { useT } from "@/components/providers/I18nProvider";
+import { StoryMediaDisplay } from "@/components/stories/StoryMediaDisplay";
 import type { DraftStatus } from "@/lib/hooks/useDraftUpload";
 
 type UploadEditScreenProps = {
@@ -47,38 +47,6 @@ export function UploadEditScreen({
   onToggleTextTool,
 }: UploadEditScreenProps) {
   const t = useT();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoReady, setVideoReady] = useState(false);
-
-  useEffect(() => {
-    setVideoReady(false);
-    const el = videoRef.current;
-    if (!el || !isVideo) return;
-
-    el.muted = true;
-    el.setAttribute("muted", "");
-    if (el.readyState === 0) el.load();
-
-    const play = () => {
-      void el.play().catch(() => {});
-    };
-    play();
-    el.addEventListener("canplay", play, { once: true });
-    el.addEventListener("loadeddata", play, { once: true });
-
-    return () => {
-      el.removeEventListener("canplay", play);
-      el.removeEventListener("loadeddata", play);
-    };
-  }, [preview, isVideo]);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || !isVideo) return;
-    el.muted = muted;
-    if (muted) el.setAttribute("muted", "");
-    else el.removeAttribute("muted");
-  }, [muted, isVideo]);
 
   const toolLabels: Record<(typeof TOOLS)[number]["key"], string> = {
     text: t("uploadToolText"),
@@ -92,7 +60,7 @@ export function UploadEditScreen({
   };
 
   return (
-    <div className="relative h-full w-full bg-black">
+    <div className="relative h-full min-h-[100dvh] w-full bg-black">
       <button
         type="button"
         onClick={onClose}
@@ -119,35 +87,19 @@ export function UploadEditScreen({
         </p>
       )}
 
-      <div className="absolute inset-0 overflow-hidden bg-black">
-        {isVideo ? (
-          <>
-            {poster && !videoReady && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={poster}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-            )}
-            <video
-              ref={videoRef}
-              key={preview}
-              src={preview}
-              poster={poster ?? undefined}
-              className="absolute inset-0 h-full w-full object-cover"
-              autoPlay
-              loop
-              playsInline
-              muted
-              preload="auto"
-              onPlaying={() => setVideoReady(true)}
-            />
-          </>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="" className="h-full w-full object-cover" />
-        )}
+      <div className="absolute inset-0 z-0">
+        <StoryMediaDisplay
+          src={preview}
+          isVideo={isVideo}
+          poster={poster ?? undefined}
+          autoPlay={isVideo}
+          loop={isVideo}
+          muted={muted}
+          playsInline
+          preload="auto"
+          mediaKey={preview}
+          className="h-full w-full object-cover"
+        />
         {showTextTool && textOverlay && (
           <div className="absolute inset-x-0 top-1/3 z-20 px-8 text-center">
             <p className="text-2xl font-bold text-white drop-shadow-lg">{textOverlay}</p>

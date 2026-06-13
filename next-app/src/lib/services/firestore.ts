@@ -698,6 +698,8 @@ export async function uploadVideoPost(
   options?: {
     thumbnailBlob?: Blob;
     getThumbnailBlob?: () => Blob | null | undefined;
+    /** Skip client-side preview encode — avoids iOS decoder conflict during edit preview */
+    skipClientPreview?: boolean;
   },
 ): Promise<{ originalUrl: string; lowUrl: string; thumbnailUrl: string }> {
   onProgress(2);
@@ -706,31 +708,23 @@ export async function uploadVideoPost(
   const ext = file.name.split(".").pop() || "mp4";
   const basePath = `users/${userId}/uploads/${stamp}`;
 
-  const { createPlaybackPreviewBlob } = await import("@/lib/utils/media-compress");
-
-  let previewPct = 0;
   let originalPct = 0;
-  const reportUpload = () => {
-    onProgress(5 + Math.round(originalPct * 0.72 + previewPct * 0.08));
-  };
-
-  const [originalUrl, previewBlob] = await Promise.all([
-    uploadBlob(file, `${basePath}/original.${ext}`, (pct) => {
-      originalPct = pct;
-      reportUpload();
-    }),
-    createPlaybackPreviewBlob(file).catch(() => null),
-  ]);
-
-  previewPct = previewBlob ? 100 : 0;
-  reportUpload();
+  const originalUrl = await uploadBlob(file, `${basePath}/original.${ext}`, (pct) => {
+    originalPct = pct;
+    onProgress(5 + Math.round(originalPct * 0.72));
+  });
 
   let lowUrl = originalUrl;
-  if (previewBlob) {
-    lowUrl = await uploadBlob(previewBlob, `${basePath}/preview.mp4`, (pct) => {
-      previewPct = pct;
-      reportUpload();
-    });
+  if (!options?.skipClientPreview) {
+    const { createPlaybackPreviewBlob } = await import("@/lib/utils/media-compress");
+    let previewPct = 0;
+    const previewBlob = await createPlaybackPreviewBlob(file).catch(() => null);
+    if (previewBlob) {
+      lowUrl = await uploadBlob(previewBlob, `${basePath}/preview.mp4`, (pct) => {
+        previewPct = pct;
+        onProgress(77 + Math.round(previewPct * 0.08));
+      });
+    }
   }
 
   onProgress(88);

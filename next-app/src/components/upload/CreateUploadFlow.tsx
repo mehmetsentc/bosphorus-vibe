@@ -84,10 +84,11 @@ function CreateUploadFlowInner() {
   const [draftMsg, setDraftMsg] = useState("");
   const coverBlobRef = useRef<Blob | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [draftUploadEnabled, setDraftUploadEnabled] = useState(false);
 
-  // Start uploading immediately when a file is selected (draft upload).
+  // Defer background upload so the edit-screen video can decode first (iOS).
   const draft = useDraftUpload(file, user?.uid, {
-    enabled: Boolean(file && user && kind),
+    enabled: Boolean(file && user && kind && draftUploadEnabled),
     mode: kind === "story" ? "story" : "post",
     thumbnailRef: coverBlobRef,
   });
@@ -163,6 +164,7 @@ function CreateUploadFlowInner() {
       const isVideo = isVideoFile(next);
       coverBlobRef.current = null;
       setCoverPreview(null);
+      setDraftUploadEnabled(false);
       setFile(next);
       setPreview(url);
       setStep("edit");
@@ -185,12 +187,18 @@ function CreateUploadFlowInner() {
           );
         };
 
-        void videoThumbnailAtTime(next, 0.1)
-          .then((blob) => {
-            coverBlobRef.current = blob;
-            setCoverPreview(URL.createObjectURL(blob));
-          })
-          .catch(() => {});
+        requestAnimationFrame(() => {
+          void videoThumbnailAtTime(next, 0.1)
+            .then((blob) => {
+              coverBlobRef.current = blob;
+              setCoverPreview(URL.createObjectURL(blob));
+            })
+            .catch(() => {});
+        });
+
+        window.setTimeout(() => setDraftUploadEnabled(true), 1200);
+      } else {
+        setDraftUploadEnabled(true);
       }
     },
     [kind, locale, t],
@@ -455,7 +463,11 @@ function CreateUploadFlowInner() {
                     onClick={() => {
                       setFile(item.file);
                       setPreview(item.url);
+                      setDraftUploadEnabled(!item.isVideo);
                       setStep("edit");
+                      if (item.isVideo) {
+                        window.setTimeout(() => setDraftUploadEnabled(true), 1200);
+                      }
                     }}
                     className="relative aspect-[3/4] overflow-hidden bg-white/5"
                   >

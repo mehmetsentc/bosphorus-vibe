@@ -35,10 +35,25 @@ export function StoryMediaDisplay({
   onEnded,
 }: StoryMediaDisplayProps) {
   const [ready, setReady] = useState(false);
+  const internalRef = useRef<HTMLVideoElement>(null);
+  const resolvedRef = videoRef ?? internalRef;
 
   useEffect(() => {
     setReady(false);
   }, [src, isVideo, mediaKey]);
+
+  useEffect(() => {
+    const el = resolvedRef.current;
+    if (!el || !isVideo || !autoPlay) return;
+    el.muted = Boolean(muted);
+    if (muted) el.setAttribute("muted", "");
+    if (el.readyState === 0) el.load();
+    el.play().catch(() => {
+      const retry = () => void el.play().catch(() => {});
+      el.addEventListener("canplay", retry, { once: true });
+      el.addEventListener("loadeddata", retry, { once: true });
+    });
+  }, [src, isVideo, autoPlay, muted, mediaKey, resolvedRef]);
 
   const markReady = useCallback(() => setReady(true), []);
 
@@ -52,7 +67,7 @@ export function StoryMediaDisplay({
       {isVideo ? (
         <video
           key={mediaKey}
-          ref={videoRef}
+          ref={resolvedRef}
           src={src}
           poster={poster}
           autoPlay={autoPlay}
