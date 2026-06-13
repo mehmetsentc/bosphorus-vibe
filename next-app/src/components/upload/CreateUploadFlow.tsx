@@ -22,7 +22,7 @@ import {
   uploadStoryImage,
   uploadStoryVideo,
 } from "@/lib/services/stories";
-import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
+import { isVideoFile, validateMediaSize, videoThumbnailAtTime } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
   markReelsRefreshPending,
@@ -184,6 +184,13 @@ function CreateUploadFlowInner() {
             ),
           );
         };
+
+        void videoThumbnailAtTime(next, 0.1)
+          .then((blob) => {
+            coverBlobRef.current = blob;
+            setCoverPreview(URL.createObjectURL(blob));
+          })
+          .catch(() => {});
       }
     },
     [kind, locale, t],
@@ -509,11 +516,12 @@ function CreateUploadFlowInner() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="relative h-full w-full"
+            className="relative h-full min-h-[100dvh] w-full"
           >
             {step === "edit" && (
               <UploadEditScreen
                 preview={preview}
+                poster={coverPreview}
                 isVideo={isVideoFile(file)}
                 muted={muted}
                 textOverlay={textOverlay}

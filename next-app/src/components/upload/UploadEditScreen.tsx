@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useT } from "@/components/providers/I18nProvider";
 import type { DraftStatus } from "@/lib/hooks/useDraftUpload";
 
 type UploadEditScreenProps = {
   preview: string;
+  poster?: string | null;
   isVideo: boolean;
   muted: boolean;
   textOverlay: string;
@@ -31,6 +33,7 @@ const TOOLS = [
 
 export function UploadEditScreen({
   preview,
+  poster,
   isVideo,
   muted,
   textOverlay,
@@ -44,6 +47,38 @@ export function UploadEditScreen({
   onToggleTextTool,
 }: UploadEditScreenProps) {
   const t = useT();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoReady, setVideoReady] = useState(false);
+
+  useEffect(() => {
+    setVideoReady(false);
+    const el = videoRef.current;
+    if (!el || !isVideo) return;
+
+    el.muted = true;
+    el.setAttribute("muted", "");
+    if (el.readyState === 0) el.load();
+
+    const play = () => {
+      void el.play().catch(() => {});
+    };
+    play();
+    el.addEventListener("canplay", play, { once: true });
+    el.addEventListener("loadeddata", play, { once: true });
+
+    return () => {
+      el.removeEventListener("canplay", play);
+      el.removeEventListener("loadeddata", play);
+    };
+  }, [preview, isVideo]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !isVideo) return;
+    el.muted = muted;
+    if (muted) el.setAttribute("muted", "");
+    else el.removeAttribute("muted");
+  }, [muted, isVideo]);
 
   const toolLabels: Record<(typeof TOOLS)[number]["key"], string> = {
     text: t("uploadToolText"),
@@ -84,19 +119,34 @@ export function UploadEditScreen({
         </p>
       )}
 
-      <div className="absolute inset-0">
+      <div className="absolute inset-0 overflow-hidden bg-black">
         {isVideo ? (
-          <video
-            src={preview}
-            className="h-full w-full object-contain"
-            autoPlay
-            loop
-            playsInline
-            muted={muted}
-          />
+          <>
+            {poster && !videoReady && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={poster}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
+            <video
+              ref={videoRef}
+              key={preview}
+              src={preview}
+              poster={poster ?? undefined}
+              className="absolute inset-0 h-full w-full object-cover"
+              autoPlay
+              loop
+              playsInline
+              muted
+              preload="auto"
+              onPlaying={() => setVideoReady(true)}
+            />
+          </>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="" className="h-full w-full object-contain" />
+          <img src={preview} alt="" className="h-full w-full object-cover" />
         )}
         {showTextTool && textOverlay && (
           <div className="absolute inset-x-0 top-1/3 z-20 px-8 text-center">

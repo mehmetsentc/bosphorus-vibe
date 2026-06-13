@@ -64,8 +64,6 @@ export function UploadShareScreen({
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
-  const [aiLabel, setAiLabel] = useState(false);
-  const [trialReel, setTrialReel] = useState(false);
 
   const thumbSrc = coverPreview ?? preview;
 
@@ -179,50 +177,12 @@ export function UploadShareScreen({
             ))}
           </div>
 
-          {isVideo && (
-            <UploadSettingRow
-              icon="♫"
-              label={t("uploadChangeAudio")}
-              value={t("uploadOriginalAudio")}
-              onClick={() => {}}
-            />
-          )}
-
-          <UploadSettingRow
-            icon="✦"
-            label={t("uploadAiLabel")}
-            description={t("uploadAiLabelDesc")}
-            toggle
-            toggleValue={aiLabel}
-            onToggle={setAiLabel}
-          />
-
-          <UploadSettingRow
-            icon="👁"
-            label={t("uploadAudience")}
-            value={t("uploadEveryone")}
-            onClick={() => {}}
-          />
-
-          {kind === "reel" && (
-            <UploadSettingRow
-              icon="▶"
-              label={t("uploadTrial")}
-              description={t("uploadTrialDesc")}
-              toggle
-              toggleValue={trialReel}
-              onToggle={setTrialReel}
-            />
-          )}
-
           <UploadSettingRow
             icon="↗"
             label={t("uploadShareElsewhere")}
             value={BRAND_NAME}
             onClick={() => {}}
           />
-
-          <UploadSettingRow icon="⚙" label={t("uploadOtherOptions")} badge onClick={() => {}} />
         </div>
 
         {kind === "story" && storyCategory && onStoryCategoryChange && storyCategoryLabels && (
