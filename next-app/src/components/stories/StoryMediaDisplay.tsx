@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { STORY_MEDIA_CLASS } from "@/lib/utils/story-media";
 
 type StoryMediaDisplayProps = {

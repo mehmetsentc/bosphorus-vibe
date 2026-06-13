@@ -129,6 +129,44 @@ async function captureVideoFrame(
   return canvasToBlob(canvas, "image/jpeg", IMAGE_LOW_QUALITY);
 }
 
+function videoFrameDimensions(video: HTMLVideoElement): { width: number; height: number } {
+  const scale = Math.min(1, VIDEO_LOW_MAX_WIDTH / (video.videoWidth || 640));
+  return {
+    width: Math.max(2, Math.round((video.videoWidth || 640) * scale)),
+    height: Math.max(2, Math.round((video.videoHeight || 360) * scale)),
+  };
+}
+
+/** Seek a mounted <video> and capture a JPEG without opening a second decoder. */
+export async function captureVideoFrameAtTime(
+  video: HTMLVideoElement,
+  timeSeconds = 0.1,
+): Promise<Blob> {
+  if (!video.videoWidth) {
+    await raceTimeout(
+      new Promise<void>((resolve, reject) => {
+        if (video.readyState >= 1) resolve();
+        else video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error("Video metadata failed"));
+      }),
+      8000,
+    );
+  }
+
+  const duration = video.duration || 1;
+  const t = Math.max(0.05, Math.min(timeSeconds, Math.max(0.05, duration - 0.05)));
+  if (Math.abs(video.currentTime - t) > 0.04) {
+    video.currentTime = t;
+    await raceTimeout(
+      new Promise<void>((resolve) => { video.onseeked = () => resolve(); }),
+      4000,
+    ).catch(() => {});
+  }
+
+  const { width, height } = videoFrameDimensions(video);
+  return captureVideoFrame(video, width, height);
+}
+
 export function isImageBlob(blob: Blob): boolean {
   if (blob.type.startsWith("image/")) return true;
   if (blob.type.startsWith("video/")) return false;

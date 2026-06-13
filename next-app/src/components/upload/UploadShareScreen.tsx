@@ -93,10 +93,18 @@ export function UploadShareScreen({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-        <div className="flex gap-4">
-          <div className="relative h-[120px] w-[90px] shrink-0 overflow-hidden rounded-xl bg-white/5">
+        <div className="flex flex-col items-center pb-5 pt-1">
+          <div className="relative aspect-[9/16] w-full max-w-[min(58vw,240px)] overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10">
             {isVideo ? (
-              <video src={thumbSrc} className="h-full w-full object-cover" muted playsInline />
+              <video
+                src={thumbSrc}
+                className="h-full w-full object-cover"
+                muted
+                playsInline
+                autoPlay
+                loop
+                preload="auto"
+              />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={thumbSrc} alt="" className="h-full w-full object-cover" />
@@ -106,31 +114,31 @@ export function UploadShareScreen({
                 <button
                   type="button"
                   onClick={() => setShowPreview(true)}
-                  className="absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-black/55 px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm"
+                  className="absolute left-1/2 top-3 -translate-x-1/2 rounded-lg bg-black/60 px-3 py-1 text-[11px] font-semibold backdrop-blur-sm"
                 >
                   {t("uploadPreview")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCoverEditor(true)}
-                  className="absolute bottom-2 left-1/2 w-[calc(100%-8px)] -translate-x-1/2 rounded-md bg-black/55 py-1 text-[10px] font-semibold backdrop-blur-sm"
+                  className="absolute bottom-3 left-1/2 w-[calc(100%-16px)] -translate-x-1/2 rounded-lg bg-black/60 py-1.5 text-[11px] font-semibold backdrop-blur-sm"
                 >
                   {t("uploadEditCover")}
                 </button>
               </>
             )}
           </div>
-
-          <textarea
-            value={caption}
-            onChange={(e) => onCaptionChange(e.target.value)}
-            placeholder={t("addCaptionPlaceholder")}
-            rows={5}
-            className="min-h-[120px] flex-1 resize-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-white/35"
-          />
         </div>
 
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <textarea
+          value={caption}
+          onChange={(e) => onCaptionChange(e.target.value)}
+          placeholder={t("addCaptionPlaceholder")}
+          rows={4}
+          className="mb-4 w-full resize-none bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-white/35"
+        />
+
+        <div className="flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
             className="shrink-0 rounded-lg bg-white/[0.08] px-3 py-2 text-xs font-medium text-white/85"
@@ -147,7 +155,7 @@ export function UploadShareScreen({
           )}
         </div>
 
-        <div className="mt-2">
+        <div className="mt-1">
           <UploadSettingRow
             icon="👤"
             label={t("uploadTagPeople")}
