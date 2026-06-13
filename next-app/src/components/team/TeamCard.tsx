@@ -43,13 +43,17 @@ export function TeamCard({
           </span>
         )}
       </div>
-      <div className="p-4">
-        <h3 className="font-display font-semibold">{member.name}</h3>
-        <p className="text-sm text-gold">
+      <div className="bg-[#1a1a1a] p-4">
+        <h3 className="font-display text-base font-semibold text-white">
+          {member.name}
+        </h3>
+        <p className="text-sm font-medium text-gold">
           {formatBrandText(member.title || member.role)}
         </p>
         {member.bio && (
-          <p className="mt-2 line-clamp-3 text-sm text-white/50">{member.bio}</p>
+          <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-white/65">
+            {member.bio}
+          </p>
         )}
       </div>
     </motion.article>

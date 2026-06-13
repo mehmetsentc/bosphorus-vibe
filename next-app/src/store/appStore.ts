@@ -12,7 +12,7 @@ import {
   reviveStories,
 } from "@/lib/cache/revive";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
-import type { EventDoc, StoryDoc, UserPostDoc } from "@/types";
+import type { EventDoc, StoryDoc, TeamMemberDoc, UserPostDoc } from "@/types";
 
 export type EnrichedPost = UserPostDoc & {
   userName?: string;
@@ -48,6 +48,7 @@ export type LastFetched = {
   events: number;
   posts: number;
   reels: number;
+  team: number;
 };
 
 type AppStoreState = {
@@ -55,6 +56,7 @@ type AppStoreState = {
   events: EventsCache | null;
   posts: PostsCache | null;
   reels: ReelsCache | null;
+  team: TeamMemberDoc[] | null;
   lastFetched: LastFetched;
   setProfileData: (data: ProfileCache) => void;
   clearProfileCache: () => void;
@@ -67,6 +69,8 @@ type AppStoreState = {
   appendReelsPosts: (posts: EnrichedPost[], hasMore?: boolean) => void;
   removeReelPost: (postId: string) => void;
   clearReelsCache: () => void;
+  setTeamCache: (members: TeamMemberDoc[]) => void;
+  clearTeamCache: () => void;
   resetStore: () => void;
 };
 
@@ -75,6 +79,7 @@ const emptyLastFetched: LastFetched = {
   events: 0,
   posts: 0,
   reels: 0,
+  team: 0,
 };
 
 const initialState = {
@@ -82,6 +87,7 @@ const initialState = {
   events: null as EventsCache | null,
   posts: null as PostsCache | null,
   reels: null as ReelsCache | null,
+  team: null as TeamMemberDoc[] | null,
   lastFetched: { ...emptyLastFetched },
 };
 
@@ -158,6 +164,16 @@ export const useAppStore = create<AppStoreState>()(
           reels: null,
           lastFetched: { ...state.lastFetched, reels: 0 },
         })),
+      setTeamCache: (members) =>
+        set((state) => ({
+          team: members,
+          lastFetched: { ...state.lastFetched, team: Date.now() },
+        })),
+      clearTeamCache: () =>
+        set((state) => ({
+          team: null,
+          lastFetched: { ...state.lastFetched, team: 0 },
+        })),
       resetStore: () => set({ ...initialState }),
     }),
     {
@@ -174,6 +190,7 @@ export const useAppStore = create<AppStoreState>()(
         events: state.events,
         posts: slimPostsCache(state.posts),
         reels: slimReelsCache(state.reels),
+        team: state.team,
         lastFetched: state.lastFetched,
       }),
       onRehydrateStorage: () => (state) => {
