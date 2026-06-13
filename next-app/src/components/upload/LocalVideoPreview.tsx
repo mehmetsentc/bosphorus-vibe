@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 type LocalVideoPreviewProps = {
-  /** Local blob URL from URL.createObjectURL(file) */
-  src: string;
+  /** Prefer `file` — creates a stable blob URL that cannot be revoked elsewhere */
+  file?: File;
+  /** Fallback blob URL (legacy) */
+  src?: string;
   poster?: string;
   className?: string;
   videoRef?: RefObject<HTMLVideoElement>;
@@ -19,6 +21,7 @@ type LocalVideoPreviewProps = {
  * Always muted for iOS autoplay; never hides the element behind opacity-0.
  */
 export function LocalVideoPreview({
+  file,
   src,
   poster,
   className = "h-full w-full object-cover",
@@ -30,10 +33,21 @@ export function LocalVideoPreview({
 }: LocalVideoPreviewProps) {
   const internalRef = useRef<HTMLVideoElement>(null);
   const resolvedRef = videoRef ?? internalRef;
+  const [playSrc, setPlaySrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setPlaySrc(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setPlaySrc(src ?? null);
+    return undefined;
+  }, [file, src]);
 
   useEffect(() => {
     const el = resolvedRef.current;
-    if (!el) return;
+    if (!el || !playSrc) return;
 
     el.muted = true;
     el.defaultMuted = true;
@@ -65,12 +79,16 @@ export function LocalVideoPreview({
       el.removeEventListener("canplay", tryPlay);
       el.removeEventListener("loadeddata", tryPlay);
     };
-  }, [src, resolvedRef, onDurationKnown, autoPlay]);
+  }, [playSrc, resolvedRef, onDurationKnown, autoPlay]);
+
+  if (!playSrc) {
+    return <div className={`bg-black ${className}`} style={{ objectFit }} />;
+  }
 
   return (
     <video
       ref={resolvedRef}
-      src={src}
+      src={playSrc}
       poster={poster}
       className={className}
       style={{ objectFit }}

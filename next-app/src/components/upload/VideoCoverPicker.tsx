@@ -16,6 +16,7 @@ type VideoCoverPickerProps = {
 };
 
 export function VideoCoverPicker({
+  file,
   previewUrl,
   onCoverChange,
   className = "",
@@ -56,7 +57,7 @@ export function VideoCoverPicker({
     const video = videoRef.current;
     if (!video) return;
     video.pause();
-  }, [previewUrl]);
+  }, [file, previewUrl]);
 
   async function handleScrub(next: number) {
     setCoverTime(next);
@@ -88,7 +89,7 @@ export function VideoCoverPicker({
 
       <div className="relative mx-auto aspect-[9/16] w-full max-w-[140px] overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
         <LocalVideoPreview
-          src={previewUrl}
+          file={file}
           videoRef={videoRef}
           className="h-full w-full"
           objectFit="cover"

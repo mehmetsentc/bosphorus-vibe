@@ -118,11 +118,14 @@ function CreateUploadFlowInner() {
     }
   }, [canUpload, router]);
 
+  const recentUrlsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     return () => {
-      recentItems.forEach((item) => URL.revokeObjectURL(item.url));
+      recentUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      recentUrlsRef.current.clear();
     };
-  }, [recentItems]);
+  }, []);
 
   const accept =
     kind === "reel" ? "video/*" : "image/*,video/*";
@@ -164,6 +167,7 @@ function CreateUploadFlowInner() {
 
       const url = URL.createObjectURL(next);
       const isVideo = isVideoFile(next);
+      recentUrlsRef.current.add(url);
       coverBlobRef.current = null;
       setCoverPreview(null);
       setDraftUploadEnabled(false);
@@ -527,6 +531,7 @@ function CreateUploadFlowInner() {
           >
             {step === "edit" && (
               <UploadEditScreen
+                file={file}
                 preview={preview}
                 poster={coverPreview}
                 isVideo={isVideoFile(file)}

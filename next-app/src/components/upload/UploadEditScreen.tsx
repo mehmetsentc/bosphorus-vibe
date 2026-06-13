@@ -6,6 +6,7 @@ import { LocalVideoPreview } from "@/components/upload/LocalVideoPreview";
 import type { DraftStatus } from "@/lib/hooks/useDraftUpload";
 
 type UploadEditScreenProps = {
+  file: File;
   preview: string;
   poster?: string | null;
   isVideo: boolean;
@@ -35,6 +36,7 @@ const TOOLS = [
 ] as const;
 
 export function UploadEditScreen({
+  file,
   preview,
   poster,
   isVideo,
@@ -95,7 +97,7 @@ export function UploadEditScreen({
       <div className="absolute inset-0 z-0 bg-black">
         {isVideo ? (
           <LocalVideoPreview
-            src={preview}
+            file={file}
             poster={poster ?? undefined}
             videoRef={videoRef}
             className="h-full w-full"

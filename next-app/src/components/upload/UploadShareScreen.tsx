@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import { StoryCategoryPicker } from "@/components/stories/StoryCategoryPicker";
 import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
 import { LocalVideoPreview } from "@/components/upload/LocalVideoPreview";
 import { UploadSettingRow } from "@/components/upload/UploadSettingRow";
-import { captureVideoFrameAtTime } from "@/lib/utils/media-compress";
 import { useT } from "@/components/providers/I18nProvider";
 import { BRAND_NAME } from "@/lib/brand";
 import type { UploadKind } from "@/components/upload/CreateUploadFlow";
@@ -73,30 +72,6 @@ export function UploadShareScreen({
   const [showCoverEditor, setShowCoverEditor] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
-  const coverCapturedRef = useRef(false);
-
-  useEffect(() => {
-    coverCapturedRef.current = false;
-  }, [preview]);
-
-  useEffect(() => {
-    if (!isVideo || coverPreview || coverCapturedRef.current) return;
-    const video = shareVideoRef.current;
-    if (!video) return;
-
-    const snapCover = () => {
-      if (coverCapturedRef.current) return;
-      coverCapturedRef.current = true;
-      void captureVideoFrameAtTime(video, 0.1)
-        .then((blob) => onCoverChange(blob))
-        .catch(() => {
-          coverCapturedRef.current = false;
-        });
-    };
-
-    video.addEventListener("loadeddata", snapCover, { once: true });
-    return () => video.removeEventListener("loadeddata", snapCover);
-  }, [isVideo, coverPreview, preview, onCoverChange]);
 
   return (
     <div className="flex h-full min-h-[100dvh] flex-col bg-black text-white">
@@ -128,8 +103,7 @@ export function UploadShareScreen({
           <div className="relative aspect-[9/16] w-full max-w-[min(58vw,240px)] overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10">
             {isVideo ? (
               <LocalVideoPreview
-                src={preview}
-                poster={coverPreview ?? undefined}
+                file={file}
                 videoRef={shareVideoRef}
                 className="h-full w-full"
                 objectFit="cover"
@@ -285,7 +259,7 @@ export function UploadShareScreen({
           </button>
           {isVideo ? (
             <LocalVideoPreview
-              src={preview}
+              file={file}
               className="max-h-full max-w-full"
               objectFit="contain"
             />
