@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useT } from "@/components/providers/I18nProvider";
 import {
   dismissWorldCupPopup,
   getActiveWorldCupPopup,
-  getIstanbulDateKey,
+  getWorldCupPopupDismissKey,
   isWorldCupPopupDismissed,
   type WorldCupPopupDay,
 } from "@/lib/events/world-cup-popup";
@@ -15,28 +16,35 @@ export function WorldCupDailyPopup() {
   const t = useT();
   const [popup, setPopup] = useState<WorldCupPopupDay | null>(null);
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const active = getActiveWorldCupPopup();
     if (!active) return;
 
-    const dateKey = getIstanbulDateKey();
-    if (isWorldCupPopupDismissed(dateKey)) return;
+    const dismissKey = getWorldCupPopupDismissKey();
+    if (isWorldCupPopupDismissed(dismissKey)) return;
 
     setPopup(active);
     setOpen(true);
   }, []);
 
   function handleClose() {
-    if (popup) dismissWorldCupPopup(popup.date);
+    dismissWorldCupPopup(getWorldCupPopupDismissKey());
     setOpen(false);
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && popup && (
         <motion.div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -44,7 +52,7 @@ export function WorldCupDailyPopup() {
           <button
             type="button"
             onClick={handleClose}
-            className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-[90] flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-xl font-light text-white shadow-lg ring-2 ring-white/25 backdrop-blur-md"
+            className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-[210] flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-xl font-light text-white shadow-lg ring-2 ring-white/25 backdrop-blur-md"
             aria-label={t("close")}
           >
             ✕
@@ -69,6 +77,7 @@ export function WorldCupDailyPopup() {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

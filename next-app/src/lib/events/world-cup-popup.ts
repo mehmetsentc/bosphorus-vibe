@@ -22,6 +22,11 @@ export const WORLD_CUP_POPUP_DAYS: WorldCupPopupDay[] = [
     imageSrc: "/events/world-cup/2026-06-08.png",
     alt: "FIFA World Cup 2026 — Bosphorus Sorgun günlük özet",
   },
+  {
+    date: "2026-06-13",
+    imageSrc: "/events/world-cup/2026-06-13.png",
+    alt: "FIFA World Cup 2026 — Bosphorus Sorgun günlük özet",
+  },
 ];
 
 export function getIstanbulDateKey(now = new Date()): string {
@@ -33,9 +38,19 @@ export function getIstanbulDateKey(now = new Date()): string {
   }).format(now);
 }
 
+/** Today's poster, or the latest configured day on/before today. */
 export function getActiveWorldCupPopup(now = new Date()): WorldCupPopupDay | null {
   const dateKey = getIstanbulDateKey(now);
-  return WORLD_CUP_POPUP_DAYS.find((day) => day.date === dateKey) ?? null;
+  const exact = WORLD_CUP_POPUP_DAYS.find((day) => day.date === dateKey);
+  if (exact) return exact;
+
+  const sorted = [...WORLD_CUP_POPUP_DAYS].sort((a, b) => b.date.localeCompare(a.date));
+  return sorted.find((day) => day.date <= dateKey) ?? null;
+}
+
+/** Dismiss key is always "today" so each calendar day can show once. */
+export function getWorldCupPopupDismissKey(now = new Date()): string {
+  return getIstanbulDateKey(now);
 }
 
 const DISMISS_PREFIX = "bosphorus-wc-popup-dismissed-";
