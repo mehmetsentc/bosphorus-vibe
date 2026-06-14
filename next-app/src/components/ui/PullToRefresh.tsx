@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { useT } from "@/components/providers/I18nProvider";
 
 type PullToRefreshProps = {
@@ -9,9 +9,17 @@ type PullToRefreshProps = {
   disabled?: boolean;
   children: ReactNode;
   className?: string;
+  /** When set, pull only triggers at scroll top of this element (reels scroll). */
+  scrollRef?: RefObject<HTMLElement | null>;
 };
 
 const THRESHOLD = 72;
+
+function readScrollTop(scrollRef?: RefObject<HTMLElement | null>): number {
+  if (scrollRef?.current) return scrollRef.current.scrollTop;
+  if (typeof window === "undefined") return 0;
+  return window.scrollY;
+}
 
 export function PullToRefresh({
   onRefresh,
@@ -19,6 +27,7 @@ export function PullToRefresh({
   disabled = false,
   children,
   className = "",
+  scrollRef,
 }: PullToRefreshProps) {
   const t = useT();
   const startY = useRef(0);
@@ -27,16 +36,24 @@ export function PullToRefresh({
 
   function onTouchStart(e: React.TouchEvent) {
     if (disabled || refreshing) return;
-    if (window.scrollY > 8) return;
+    if (readScrollTop(scrollRef) > 8) return;
     startY.current = e.touches[0]?.clientY ?? 0;
     pulling.current = true;
   }
 
   function onTouchMove(e: React.TouchEvent) {
     if (!pulling.current || disabled || refreshing) return;
+    if (readScrollTop(scrollRef) > 8) {
+      pulling.current = false;
+      setPull(0);
+      return;
+    }
     const y = e.touches[0]?.clientY ?? 0;
     const delta = Math.max(0, Math.min(y - startY.current, THRESHOLD * 1.5));
     setPull(delta);
+    if (delta > 0 && scrollRef?.current) {
+      e.preventDefault();
+    }
   }
 
   async function onTouchEnd() {

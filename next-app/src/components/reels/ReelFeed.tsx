@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { getPostVideoUrl } from "@/lib/services/firestore";
@@ -36,6 +36,10 @@ type ReelFeedProps = {
   initialPostId?: string;
   /** Called when user finishes watching a reel (swipes away) */
   onPostSeen?: (postId: string) => void;
+  /** Exposes the scroll container for pull-to-refresh */
+  scrollContainerRef?: MutableRefObject<HTMLDivElement | null>;
+  /** Increment to scroll back to the first reel after refresh */
+  resetScrollToken?: number;
 };
 
 // Memoized per-slide — only re-renders when isActive/isNext changes
@@ -120,11 +124,25 @@ export function ReelFeed({
   guestPreview = false,
   initialPostId,
   onPostSeen,
+  scrollContainerRef,
+  resetScrollToken,
 }: ReelFeedProps) {
   const t = useT();
   const router = useRouter();
   const networkTier = useEffectiveNetworkTier();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null) as MutableRefObject<
+    HTMLDivElement | null
+  >;
+  const resetTokenRef = useRef<number | undefined>(undefined);
+
+  const setContainerRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      containerRef.current = el;
+      if (scrollContainerRef) scrollContainerRef.current = el;
+    },
+    [scrollContainerRef],
+  );
+
   useReelsViewportHeight(containerRef);
   const [posts, setPosts] = useState(initialPosts);
 
@@ -164,6 +182,19 @@ export function ReelFeed({
       return next;
     });
   }, [initialPosts]);
+
+  useEffect(() => {
+    if (resetScrollToken === undefined) return;
+    if (resetTokenRef.current === undefined) {
+      resetTokenRef.current = resetScrollToken;
+      return;
+    }
+    if (resetTokenRef.current === resetScrollToken) return;
+    resetTokenRef.current = resetScrollToken;
+    initialScrollDone.current = false;
+    setActiveIndex(0);
+    containerRef.current?.scrollTo({ top: 0 });
+  }, [resetScrollToken]);
 
   const handlePostDeleted = useCallback(
     (postId: string) => {
@@ -255,7 +286,7 @@ export function ReelFeed({
     : null;
 
   return (
-    <div ref={containerRef} className="reels-shell-scroll">
+    <div ref={setContainerRef} className="reels-shell-scroll">
       {visiblePosts.map((post, i) => (
         <ReelItem
           key={post.id}

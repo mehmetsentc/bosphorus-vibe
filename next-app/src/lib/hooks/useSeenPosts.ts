@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
+  fillUnseenPages,
   getDisplayPosts,
   markPostSeen,
   shouldLoadMoreForUnseen,
@@ -13,6 +14,10 @@ export function useSeenPosts(options?: DisplayPostsOptions) {
   const { user } = useAuth();
   const userId = user?.uid;
   const [revision, setRevision] = useState(0);
+
+  const invalidate = useCallback(() => {
+    setRevision((n) => n + 1);
+  }, []);
 
   const markSeen = useCallback(
     (postId: string) => {
@@ -37,8 +42,23 @@ export function useSeenPosts(options?: DisplayPostsOptions) {
     [],
   );
 
+  const refreshWithUnseen = useCallback(
+    async (
+      refresh: () => Promise<void>,
+      loadMore: () => Promise<void>,
+      getPosts: () => { id: string }[],
+      getHasMore: () => boolean,
+    ) => {
+      await refresh();
+      invalidate();
+      await fillUnseenPages(filterPosts, getPosts, getHasMore, loadMore);
+      invalidate();
+    },
+    [filterPosts, invalidate],
+  );
+
   return useMemo(
-    () => ({ markSeen, filterPosts, needsMore, revision }),
-    [markSeen, filterPosts, needsMore, revision],
+    () => ({ markSeen, filterPosts, needsMore, invalidate, refreshWithUnseen, revision }),
+    [markSeen, filterPosts, needsMore, invalidate, refreshWithUnseen, revision],
   );
 }

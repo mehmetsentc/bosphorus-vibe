@@ -49,11 +49,18 @@ export function useFeedPosts() {
     return posts !== null && !isCacheExpired(lastFetched.posts);
   });
 
+  const postsRef = useRef(localPosts);
+  const hasMoreRef = useRef(hasMore);
+  postsRef.current = localPosts;
+  hasMoreRef.current = hasMore;
+
   const hasValidCache =
     hydrated && postsCache !== null && !isCacheExpired(lastFetched);
 
   const syncFromCache = useCallback(() => {
     if (!postsCache) return;
+    postsRef.current = postsCache.posts;
+    hasMoreRef.current = postsCache.hasMore;
     setLocalPosts(postsCache.posts);
     setHasMore(postsCache.hasMore);
     cursorRef.current = null;
@@ -74,6 +81,8 @@ export function useFeedPosts() {
     async (force = false) => {
       if (!force && postsCache && !isCacheExpired(lastFetched)) {
         syncFromCache();
+        postsRef.current = postsCache.posts;
+        hasMoreRef.current = postsCache.hasMore;
         return;
       }
 
@@ -90,6 +99,8 @@ export function useFeedPosts() {
         if (requestId !== fetchRef.current) return;
 
         cursorRef.current = page.lastDoc;
+        postsRef.current = enriched;
+        hasMoreRef.current = page.hasMore;
         setLocalPosts(enriched);
         setHasMore(page.hasMore);
         setPostsCache({ posts: enriched, hasMore: page.hasMore });
@@ -113,18 +124,19 @@ export function useFeedPosts() {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
     try {
-      // Prefer live DocumentSnapshot cursor; fall back to Date from cache restore
       const cursor = cursorRef.current ?? dateCursorRef.current;
       const page = await getFeedPostsPage(FEED_PAGE_SIZE, cursor);
       cursorRef.current = page.lastDoc;
-      dateCursorRef.current = null; // consumed
+      dateCursorRef.current = null;
+      hasMoreRef.current = page.hasMore;
       setHasMore(page.hasMore);
       const enriched = await enrichPostsWithUsers(page.posts);
       setLocalPosts((prev) => {
-        // Deduplicate — cache restore + loadMore could overlap
         const existingIds = new Set(prev.map((p) => p.id));
         const fresh = enriched.filter((p) => !existingIds.has(p.id));
-        return [...prev, ...fresh];
+        const next = [...prev, ...fresh];
+        postsRef.current = next;
+        return next;
       });
       appendFeedPosts(enriched, page.hasMore);
     } finally {
@@ -149,6 +161,8 @@ export function useFeedPosts() {
     loadMore,
     refresh,
     setPosts: setLocalPosts,
+    postsSnapshot: postsRef,
+    hasMoreSnapshot: hasMoreRef,
   };
 }
 
@@ -185,11 +199,18 @@ export function useReelsPosts() {
     return reels !== null && !isCacheExpired(fetched.reels);
   });
 
+  const postsRef = useRef(localPosts);
+  const hasMoreRef = useRef(hasMore);
+  postsRef.current = localPosts;
+  hasMoreRef.current = hasMore;
+
   const hasValidCache =
     hydrated && reelsCache !== null && !isCacheExpired(lastFetched);
 
   const syncFromCache = useCallback(() => {
     if (!reelsCache) return;
+    postsRef.current = reelsCache.posts;
+    hasMoreRef.current = reelsCache.hasMore;
     setLocalPosts(reelsCache.posts);
     setHasMore(reelsCache.hasMore);
     cursorRef.current = null;
@@ -244,6 +265,8 @@ export function useReelsPosts() {
         if (requestId !== fetchRef.current) return;
 
         cursorRef.current = page.lastDoc;
+        postsRef.current = page.posts;
+        hasMoreRef.current = page.hasMore;
         setLocalPosts(page.posts);
         setHasMore(page.hasMore);
         setInitialized(true);
@@ -266,18 +289,19 @@ export function useReelsPosts() {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
     try {
-      // Prefer live DocumentSnapshot cursor; fall back to Date from cache restore
       const cursor = cursorRef.current ?? dateCursorRef.current;
       const page = await getVideoPostsPage(REELS_PAGE_SIZE, cursor);
       cursorRef.current = page.lastDoc;
-      dateCursorRef.current = null; // consumed
+      dateCursorRef.current = null;
+      hasMoreRef.current = page.hasMore;
       setHasMore(page.hasMore);
       const enriched = await enrichPostsWithUsers(page.posts);
       setLocalPosts((prev) => {
-        // Deduplicate — cache restore + loadMore could overlap
         const existingIds = new Set(prev.map((p) => p.id));
         const fresh = enriched.filter((p) => !existingIds.has(p.id));
-        return [...prev, ...fresh];
+        const next = [...prev, ...fresh];
+        postsRef.current = next;
+        return next;
       });
       appendReelsPosts(enriched, page.hasMore);
     } finally {
@@ -310,5 +334,7 @@ export function useReelsPosts() {
     loadMore,
     refresh,
     deletePost,
+    postsSnapshot: postsRef,
+    hasMoreSnapshot: hasMoreRef,
   };
 }

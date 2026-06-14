@@ -97,6 +97,21 @@ export function shouldLoadMoreForUnseen(
   return hasMore && displayCount < MIN_UNSEEN_BEFORE_LOAD;
 }
 
+/** After refresh, paginate until enough unseen posts are available. */
+export async function fillUnseenPages(
+  filterPosts: <T extends { id: string }>(posts: T[]) => T[],
+  getPosts: () => { id: string }[],
+  getHasMore: () => boolean,
+  loadMore: () => Promise<void>,
+  maxPages = 10,
+): Promise<void> {
+  for (let i = 0; i < maxPages; i++) {
+    const display = filterPosts(getPosts());
+    if (display.length >= MIN_UNSEEN_BEFORE_LOAD || !getHasMore()) return;
+    await loadMore();
+  }
+}
+
 /** @deprecated Use getDisplayPosts — kept for any legacy callers. */
 export function sortPostsByUnseen<T extends { id: string }>(posts: T[]): T[] {
   return getDisplayPosts(posts);

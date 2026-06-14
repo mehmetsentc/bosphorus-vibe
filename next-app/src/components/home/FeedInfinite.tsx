@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { FeedPostCard } from "@/components/post/FeedPostCard";
+import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useSeenPosts } from "@/lib/hooks/useSeenPosts";
 
 // Suggestion cards only appear after scrolling — lazy load them
@@ -94,9 +95,13 @@ export function FeedInfinite() {
     hasMore,
     loading,
     loadingMore,
+    refreshing,
     loadMore,
+    refresh,
+    postsSnapshot,
+    hasMoreSnapshot,
   } = useFeedPosts();
-  const { markSeen, filterPosts, needsMore } = useSeenPosts();
+  const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts();
   const [following, setFollowing] = useState<Set<string>>(new Set());
   const [friendSuggestions, setFriendSuggestions] = useState<PublicUser[]>([]);
   const [videoSuggestions, setVideoSuggestions] = useState<EnrichedPost[]>([]);
@@ -139,6 +144,17 @@ export function FeedInfinite() {
     }, FEED_SUGGESTIONS_DEFER_MS);
     return () => window.clearTimeout(id);
   }, [following, loadSuggestions]);
+
+  const handleRefresh = useCallback(async () => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    await refreshWithUnseen(
+      refresh,
+      loadMore,
+      () => postsSnapshot.current,
+      () => hasMoreSnapshot.current,
+    );
+    void loadSuggestions(following);
+  }, [refresh, loadMore, refreshWithUnseen, loadSuggestions, following, postsSnapshot, hasMoreSnapshot]);
 
   useEffect(() => {
     const node = sentinelRef.current;
@@ -244,8 +260,9 @@ export function FeedInfinite() {
   }
 
   return (
-    <section>
-      {feedRows.map((row, index) => {
+    <PullToRefresh onRefresh={handleRefresh} refreshing={refreshing}>
+      <section>
+        {feedRows.map((row, index) => {
         if (row.kind === "post") {
           return (
             <FeedPostCard
@@ -302,6 +319,7 @@ export function FeedInfinite() {
       {!hasMore && displayPosts.length > 0 && (
         <p className="py-10 text-center text-xs text-muted">{t("feedEnd")}</p>
       )}
-    </section>
+      </section>
+    </PullToRefresh>
   );
 }

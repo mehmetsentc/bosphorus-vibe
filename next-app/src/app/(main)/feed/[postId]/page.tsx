@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReelFeed } from "@/components/reels/ReelFeed";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
@@ -11,8 +11,6 @@ import { useAccess } from "@/lib/hooks/useAccess";
 
 /**
  * Full-screen reels-style view that opens when the user taps a video in the feed.
- * Uses the same feed posts cache so there's no extra fetch — starts scrolled
- * to the tapped post via `initialPostId`.
  */
 export default function FeedPostViewPage({
   params,
@@ -29,15 +27,29 @@ export default function FeedPostViewPage({
     loadMore,
     setPosts,
     refresh,
+    postsSnapshot,
+    hasMoreSnapshot,
   } = useFeedPosts();
-  const { markSeen, filterPosts, needsMore } = useSeenPosts({
+  const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts({
     pinIds: [params.postId],
   });
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [resetScrollToken, setResetScrollToken] = useState(0);
 
   const displayPosts = useMemo(
     () => filterPosts(posts),
     [posts, filterPosts],
   );
+
+  const handleRefresh = useCallback(async () => {
+    await refreshWithUnseen(
+      refresh,
+      loadMore,
+      () => postsSnapshot.current,
+      () => hasMoreSnapshot.current,
+    );
+    setResetScrollToken((n) => n + 1);
+  }, [refresh, loadMore, refreshWithUnseen, postsSnapshot, hasMoreSnapshot]);
 
   useEffect(() => {
     if (!needsMore(displayPosts.length, hasMore) || loadingMore) return;
@@ -60,8 +72,9 @@ export default function FeedPostViewPage({
   return (
     <ReelsShell>
       <PullToRefresh
-        onRefresh={refresh}
+        onRefresh={handleRefresh}
         refreshing={refreshing}
+        scrollRef={scrollRef}
         className="reels-pull-root"
       >
         {refreshing && (
@@ -78,6 +91,8 @@ export default function FeedPostViewPage({
           guestPreview={isGuest}
           initialPostId={params.postId}
           onPostSeen={markSeen}
+          scrollContainerRef={scrollRef}
+          resetScrollToken={resetScrollToken}
         />
       </PullToRefresh>
     </ReelsShell>
