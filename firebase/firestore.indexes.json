@@ -1,170 +1,131 @@
 {
   "indexes": [
     {
-      "collectionGroup": "storyComments",
+      "collectionGroup": "chat_messages",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "storyAssociation",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timePosted",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "userPosts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "postUser",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timePosted",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "postComments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "post",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timePosted",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "chat", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     },
     {
       "collectionGroup": "chats",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "users",
-          "arrayConfig": "CONTAINS"
-        },
-        {
-          "fieldPath": "last_message_time",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "users", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "last_message_time", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "chat_messages",
+      "collectionGroup": "eventListPortyApp",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "chat",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timestamp",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "Category", "order": "ASCENDING" },
+        { "fieldPath": "Event_Date", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "eventListPortyApp",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Category", "order": "ASCENDING" },
+        { "fieldPath": "id", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "eventListPortyApp",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Category", "order": "ASCENDING" },
+        { "fieldPath": "id", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "Notification",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "made_to_id", "order": "ASCENDING" },
+        { "fieldPath": "time", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "Notification",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "made_to_id", "order": "ASCENDING" },
+        { "fieldPath": "is_read", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "postComments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "post", "order": "ASCENDING" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "storyComments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "storyAssociation", "order": "ASCENDING" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "postUser", "order": "ASCENDING" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "postVideo", "order": "ASCENDING" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tagged_user_ids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "last_active_time", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     },
     {
       "collectionGroup": "userStories",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "user",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "storyPostedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "userPosts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "postVideo",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timePosted",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "eventListPortyApp",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "Category",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "id",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "eventListPortyApp",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "Category",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "Event_Date",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "userPosts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "tagged_user_ids",
-          "arrayConfig": "CONTAINS"
-        },
-        {
-          "fieldPath": "timePosted",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "userPosts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "videoTranscodeStatus",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "Notification",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "made_to_id", "order": "ASCENDING" },
-        { "fieldPath": "time", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "Notification",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "made_to_id", "order": "ASCENDING" },
-        { "fieldPath": "is_read", "order": "ASCENDING" }
+        { "fieldPath": "user", "order": "ASCENDING" },
+        { "fieldPath": "storyPostedAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     }
-  ]
+  ],
+  "fieldOverrides": []
 }
