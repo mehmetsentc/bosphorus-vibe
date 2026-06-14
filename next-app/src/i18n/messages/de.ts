@@ -86,6 +86,7 @@ const de: Messages = {
   eveningShow: "Abendshow",
   dailyActivities: "Tägliche Aktivitäten",
   membersTitle: "{brand} Mitglieder",
+  membersPageSubtitle: "Entdecke und folge Community-Mitgliedern",
   showAllMembers: "Alle Mitglieder anzeigen",
   showActiveToday: "Heute aktive Mitglieder anzeigen",
   noMembers: "Keine Mitglieder gefunden.",

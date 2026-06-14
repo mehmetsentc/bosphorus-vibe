@@ -88,6 +88,7 @@ const tr: Messages = {
   eveningShow: "Akşam Gösterisi",
   dailyActivities: "Günlük Aktiviteler",
   membersTitle: "{brand} Üyeleri",
+  membersPageSubtitle: "Topluluktaki üyeleri keşfet ve takip et",
   showAllMembers: "Tüm üyeleri göster",
   showActiveToday: "Bugün aktif üyeleri göster",
   noMembers: "Üye bulunamadı.",

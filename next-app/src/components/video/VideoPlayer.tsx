@@ -78,12 +78,13 @@ export function VideoPlayer({
   } = useAdaptiveVideoSrc(post, "feed", isActive);
   const preload = isActive || isNext ? "auto" : isNear ? "metadata" : "none";
 
+  const feedMuted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
 
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(feedMuted);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(() => !poster);
@@ -101,26 +102,37 @@ export function VideoPlayer({
     if (playingId !== null && playingId !== post.id) video.pause();
   }, [playingId, post.id]);
 
+  // Keep in sync when user toggles sound on another reel
+  useEffect(() => {
+    setIsMuted(feedMuted);
+    const video = videoRef.current;
+    if (video && isActive) applyMuted(video, feedMuted);
+  }, [feedMuted, isActive]);
+
   // Play/pause when active state changes
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
-      setIsMuted(true);
-      applyMuted(video, true);
+      setIsMuted(feedMuted);
+      applyMuted(video, feedMuted);
       if (video.readyState === 0) video.load();
       video.play().catch(() => {
-        const onCanPlay = () => video.play().catch(() => {});
-        video.addEventListener("canplay", onCanPlay, { once: true });
-        video.addEventListener("loadeddata", onCanPlay, { once: true });
+        if (!feedMuted) {
+          setIsMuted(true);
+          applyMuted(video, true);
+        }
+        video.play().catch(() => {
+          const onCanPlay = () => video.play().catch(() => {});
+          video.addEventListener("canplay", onCanPlay, { once: true });
+          video.addEventListener("loadeddata", onCanPlay, { once: true });
+        });
       });
       requestPlay(post.id);
     } else {
       video.pause();
       if (!isActive) {
         video.currentTime = 0;
-        setIsMuted(true);
-        applyMuted(video, true);
         setShowPoster(true);
         hasPlayedRef.current = false;
       }
@@ -128,7 +140,7 @@ export function VideoPlayer({
     }
     return () => { releasePlay(post.id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, autoPlay, videoSrc, post.id, requestPlay, releasePlay]);
+  }, [isActive, autoPlay, videoSrc, post.id, feedMuted, requestPlay, releasePlay]);
 
   const toggleMute = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();

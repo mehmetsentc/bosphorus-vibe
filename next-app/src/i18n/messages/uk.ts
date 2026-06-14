@@ -85,6 +85,7 @@ const uk: Messages = {
   eveningShow: "Вечірнє шоу",
   dailyActivities: "Щоденні активності",
   membersTitle: "Учасники {brand}",
+  membersPageSubtitle: "Знаходьте та стежте за учасниками спільноти",
   showAllMembers: "Показати всіх учасників",
   showActiveToday: "Показати активних сьогодні",
   noMembers: "Учасників не знайдено.",

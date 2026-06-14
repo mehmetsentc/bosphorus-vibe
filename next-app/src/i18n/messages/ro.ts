@@ -85,6 +85,7 @@ const ro: Messages = {
   eveningShow: "Show de seară",
   dailyActivities: "Activități zilnice",
   membersTitle: "Membri {brand}",
+  membersPageSubtitle: "Descoperă și urmărește membrii comunității",
   showAllMembers: "Arată toți membrii",
   showActiveToday: "Arată membrii activi azi",
   noMembers: "Nu s-au găsit membri.",

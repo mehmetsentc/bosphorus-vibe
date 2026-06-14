@@ -85,6 +85,7 @@ const pl: Messages = {
   eveningShow: "Wieczorny show",
   dailyActivities: "Codzienne aktywności",
   membersTitle: "Członkowie {brand}",
+  membersPageSubtitle: "Odkrywaj i obserwuj członków społeczności",
   showAllMembers: "Pokaż wszystkich członków",
   showActiveToday: "Pokaż aktywnych dziś",
   noMembers: "Nie znaleziono członków.",

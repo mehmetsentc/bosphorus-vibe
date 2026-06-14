@@ -62,8 +62,8 @@ function ActionButton({
         {children}
       </span>
       <span
-        className={`max-w-[4.5rem] truncate text-center text-[11px] font-medium drop-shadow-sm ${
-          danger ? "text-red-300" : "text-foreground/90"
+        className={`max-w-[5.5rem] truncate text-center text-[11px] font-semibold leading-tight [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_0_8px_rgba(0,0,0,0.6)] ${
+          danger ? "text-red-200" : "text-white"
         }`}
       >
         {label}
@@ -273,7 +273,7 @@ export function VideoFeedSideActions({
       </div>
 
       {flash && (
-        <div className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 rounded-full bg-black/75 px-4 py-2 text-xs font-medium text-foreground backdrop-blur-md">
+        <div className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 rounded-full bg-black/75 px-4 py-2 text-xs font-medium text-white backdrop-blur-md">
           {flash}
         </div>
       )}

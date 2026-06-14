@@ -85,6 +85,7 @@ const en = {
   eveningShow: "Evening Show",
   dailyActivities: "Daily Activities",
   membersTitle: "{brand} Members",
+  membersPageSubtitle: "Discover and follow community members",
   showAllMembers: "Show all members",
   showActiveToday: "Show members active today",
   noMembers: "No members found.",

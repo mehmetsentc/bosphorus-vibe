@@ -85,6 +85,7 @@ const ru: Messages = {
   eveningShow: "Вечернее шоу",
   dailyActivities: "Ежедневные активности",
   membersTitle: "Участники {brand}",
+  membersPageSubtitle: "Находите и подписывайтесь на участников сообщества",
   showAllMembers: "Показать всех участников",
   showActiveToday: "Показать активных сегодня",
   noMembers: "Участники не найдены.",

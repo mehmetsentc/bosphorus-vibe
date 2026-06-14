@@ -85,6 +85,7 @@ const sq: Messages = {
   eveningShow: "Shfaqja e mbrëmjes",
   dailyActivities: "Aktivitete ditore",
   membersTitle: "Anëtarët e {brand}",
+  membersPageSubtitle: "Zbuloni dhe ndiqni anëtarët e komunitetit",
   showAllMembers: "Shfaq të gjithë anëtarët",
   showActiveToday: "Shfaq anëtarët aktivë sot",
   noMembers: "Nuk u gjetën anëtarë.",

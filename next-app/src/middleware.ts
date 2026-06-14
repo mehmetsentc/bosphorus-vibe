@@ -21,6 +21,7 @@ const GUEST_ALLOWED_PREFIXES = [
   "/feed",
   "/reels",
   "/team",
+  "/members",
   "/post",
 ];
 
