@@ -26,4 +26,4 @@ export const FEED_PAGE_SIZE = 10;
 export const REELS_PAGE_SIZE = 12;
 
 /** Buffering longer than this → switch to lower-quality URL if available */
-export const VIDEO_STALL_DOWNGRADE_MS = 1_200;
+export const VIDEO_STALL_DOWNGRADE_MS = 800;

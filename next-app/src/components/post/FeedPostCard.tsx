@@ -3,8 +3,10 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
+import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
 import { useHideLikeCounts } from "@/lib/hooks/useSettingsEffects";
@@ -18,7 +20,7 @@ import {
   followUser,
   unfollowUser,
 } from "@/lib/services/friends";
-import { getPostVideoPoster, pickImageSource } from "@/lib/utils/video-sources";
+import { getPostVideoPoster, pickImageSource, getVideoReelsPath, prewarmPostVideo } from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
 import {
   IconPlay,
@@ -59,6 +61,8 @@ function FeedPostCardInner({
   priority = false,
 }: FeedPostCardProps) {
   const t = useT();
+  const router = useRouter();
+  const networkTier = useEffectiveNetworkTier();
   const { user } = useAuth();
   const { canLike } = useAccess();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -165,16 +169,23 @@ function FeedPostCardInner({
     }
   }, [isActive, post.id]);
 
-  // Tap on video = play / pause
-  const handleVideoTap = useCallback(() => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    if (vid.paused) {
-      vid.play().catch(() => {});
-    } else {
-      vid.pause();
-    }
-  }, []);
+  // Prewarm + prefetch reels route while video is visible in feed
+  useEffect(() => {
+    if (!isActive || !video) return;
+    prewarmPostVideo(post, networkTier);
+    router.prefetch(getVideoReelsPath(post.id));
+  }, [isActive, video, post, networkTier, router]);
+
+  const openReels = useCallback(() => {
+    if (!video) return;
+    prewarmPostVideo(post, networkTier);
+    router.push(getVideoReelsPath(post.id));
+  }, [video, post, networkTier, router]);
+
+  const handleVideoPointerDown = useCallback(() => {
+    if (!video) return;
+    prewarmPostVideo(post, networkTier);
+  }, [video, post, networkTier]);
 
   // Mute button (top-right corner) — toggle sound only
   const handleMuteToggle = useCallback((e: React.MouseEvent) => {
@@ -309,12 +320,13 @@ function FeedPostCardInner({
             />
             )}
 
-            {/* Play/pause tap area — covers full video */}
+            {/* Tap opens full-screen reels flow (Instagram-style) */}
             <button
               type="button"
-              onClick={handleVideoTap}
+              onPointerDown={handleVideoPointerDown}
+              onClick={openReels}
               className="absolute inset-0 z-[1] bg-transparent"
-              aria-label={showPoster ? "Oynat" : "Duraklat"}
+              aria-label={t("navReels")}
             />
 
             {/* Play icon — only when scrolled away / paused (not during autoplay load) */}

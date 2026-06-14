@@ -244,7 +244,7 @@ export function pickVideoSource(
 
 const prewarmedUrls = new Set<string>();
 const prewarmElements: HTMLVideoElement[] = [];
-const MAX_PREWARM_ELEMENTS = 5;
+const MAX_PREWARM_ELEMENTS = 8;
 
 /** Hint the browser to fetch the next clip (desktop / Android). */
 export function prefetchVideoUrl(url: string): void {
@@ -304,6 +304,18 @@ export function prefetchImageUrl(url: string): void {
 
 export function prefetchImageUrls(urls: string[]): void {
   for (const url of urls) prefetchImageUrl(url);
+}
+
+/** Full-screen reels flow for a feed video (Instagram-style). */
+export function getVideoReelsPath(postId: string): string {
+  return `/feed/${postId}`;
+}
+
+/** Warm video + poster before opening reels from feed tap. */
+export function prewarmPostVideo(post: UserPostDoc, tier: NetworkTier): void {
+  const { src, poster } = pickVideoSource(post, tier, "feed");
+  if (src) prewarmVideoUrl(src);
+  if (poster) prefetchImageUrl(poster);
 }
 
 /**

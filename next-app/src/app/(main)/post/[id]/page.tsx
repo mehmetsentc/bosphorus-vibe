@@ -61,6 +61,10 @@ function PostDetailContent({ id }: { id: string }) {
           router.replace("/profile");
           return;
         }
+        if (getPostVideoUrl(p)) {
+          router.replace(`/feed/${p.id}`);
+          return;
+        }
         setPost(p);
         setCommentCount(p.numComments);
       })

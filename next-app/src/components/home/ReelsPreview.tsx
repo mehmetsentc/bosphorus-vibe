@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { getPostVideoUrl } from "@/lib/services/firestore";
+import { getVideoReelsPath } from "@/lib/utils/video-sources";
 import { AdaptiveVideo } from "@/components/video/AdaptiveVideo";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
@@ -35,7 +36,7 @@ export function ReelsPreview({ posts }: { posts: EnrichedPost[] }) {
               className="shrink-0"
             >
               <Link
-                href={`/post/${post.id}`}
+                href={getVideoReelsPath(post.id)}
                 className="group flex w-[76px] flex-col items-center gap-2 sm:w-[84px]"
               >
                 <div className="rounded-full bg-gradient-to-br from-gold via-vibe to-gold p-[2px] transition group-active:scale-95">

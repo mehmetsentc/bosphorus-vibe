@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { getPostVideoUrl } from "@/lib/services/firestore";
+import { getVideoReelsPath } from "@/lib/utils/video-sources";
 import { AdaptiveVideo } from "@/components/video/AdaptiveVideo";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
@@ -32,7 +33,7 @@ export function FeedVideoSuggestions({ posts }: FeedVideoSuggestionsProps) {
             return (
               <Link
                 key={post.id}
-                href={`/post/${post.id}?from=/home`}
+                href={getVideoReelsPath(post.id)}
                 className="group shrink-0"
               >
                 <div className="relative h-[200px] w-[120px] overflow-hidden rounded-xl bg-black ring-1 ring-border transition group-active:scale-[0.98] sm:h-[220px] sm:w-[130px]">

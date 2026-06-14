@@ -75,8 +75,9 @@ export function VideoPlayer({
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed", isActive);
+  } = useAdaptiveVideoSrc(post, "feed", isActive || isNext);
   const preload = isActive || isNext ? "auto" : isNear ? "metadata" : "none";
+  const shouldPrime = isActive || isNext || isNear;
 
   const feedMuted = useVideoSoundStore((s) => s.feedMuted);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
@@ -126,6 +127,7 @@ export function VideoPlayer({
           const onCanPlay = () => video.play().catch(() => {});
           video.addEventListener("canplay", onCanPlay, { once: true });
           video.addEventListener("loadeddata", onCanPlay, { once: true });
+          video.addEventListener("canplaythrough", onCanPlay, { once: true });
         });
       });
       requestPlay(post.id);
@@ -141,6 +143,13 @@ export function VideoPlayer({
     return () => { releasePlay(post.id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, autoPlay, videoSrc, post.id, feedMuted, requestPlay, releasePlay]);
+
+  // Buffer adjacent slides before they become active
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !shouldPrime || isActive) return;
+    if (video.readyState === 0) video.load();
+  }, [shouldPrime, isActive, videoSrc, post.id]);
 
   const toggleMute = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -205,14 +214,17 @@ export function VideoPlayer({
         poster={poster}
         loop
         playsInline
+        autoPlay={isActive && autoPlay}
         muted={isMuted}
         preload={preload}
         className={videoClassName}
         onLoadStart={() => setLoading(true)}
         onLoadedData={() => {
-          if (isActive) setShowPoster(false);
-          if (isActive && autoPlay && videoRef.current?.paused) {
-            videoRef.current.play().catch(() => {});
+          if (isActive) {
+            setShowPoster(false);
+            if (autoPlay && videoRef.current?.paused) {
+              videoRef.current.play().catch(() => {});
+            }
           }
         }}
         onLoadedMetadata={(e) => {
@@ -221,7 +233,19 @@ export function VideoPlayer({
             videoRef.current.play().catch(() => {});
           }
         }}
-        onCanPlay={() => { setLoading(false); onReady?.(); }}
+        onCanPlay={() => {
+          setLoading(false);
+          if (isActive) setShowPoster(false);
+          if (isActive && autoPlay && videoRef.current?.paused) {
+            videoRef.current.play().catch(() => {});
+          }
+          onReady?.();
+        }}
+        onCanPlayThrough={() => {
+          if (isActive && autoPlay && videoRef.current?.paused) {
+            videoRef.current.play().catch(() => {});
+          }
+        }}
         onError={handleVideoError}
         onWaiting={() => {
           setLoading(true);

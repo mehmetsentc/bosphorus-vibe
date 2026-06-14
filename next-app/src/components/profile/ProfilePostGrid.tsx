@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getPostVideoUrl } from "@/lib/services/firestore";
 import {
   getPostGridThumbnailCandidates,
+  getVideoReelsPath,
   pickImageSource,
 } from "@/lib/utils/video-sources";
 import { IconLayers, IconMenu, IconPin, IconReels } from "@/components/icons/Icons";
@@ -106,7 +107,9 @@ export function ProfilePostGrid({
 
         const href = feedPath
           ? `${feedPath}/${post.id}${tab !== "posts" ? `?tab=${tab}` : ""}`
-          : `/post/${post.id}`;
+          : videoUrl
+            ? getVideoReelsPath(post.id)
+            : `/post/${post.id}`;
 
         return (
           <div key={post.id} className={`relative ${aspectClass}`}>

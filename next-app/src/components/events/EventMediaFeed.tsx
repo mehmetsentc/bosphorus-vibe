@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { getPostImageUrl, getPostVideoUrl } from "@/lib/services/firestore";
+import { getVideoReelsPath } from "@/lib/utils/video-sources";
 import { AdaptiveVideo } from "@/components/video/AdaptiveVideo";
 import { useT } from "@/components/providers/I18nProvider";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
@@ -26,7 +27,9 @@ export function EventMediaFeed({ posts, eventId }: EventMediaFeedProps) {
         {posts.map((post) => {
           const hasVideo = Boolean(getPostVideoUrl(post));
           const imageUrl = getPostImageUrl(post);
-          const href = `/post/${post.id}?from=/events/${eventId}`;
+          const href = hasVideo
+            ? getVideoReelsPath(post.id)
+            : `/post/${post.id}?from=/events/${eventId}`;
 
           return (
             <Link

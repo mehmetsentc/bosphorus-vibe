@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { getPostVideoUrl } from "@/lib/services/firestore";
@@ -124,7 +124,20 @@ export function ReelFeed({
   const containerRef = useRef<HTMLDivElement>(null);
   useReelsViewportHeight(containerRef);
   const [posts, setPosts] = useState(initialPosts);
-  const [activeIndex, setActiveIndex] = useState(0);
+
+  const videoPosts = useMemo(
+    () => posts.filter((p) => getPostVideoUrl(p)),
+    [posts],
+  );
+  const visiblePosts = guestPreview ? videoPosts.slice(0, 6) : videoPosts;
+
+  const [activeIndex, setActiveIndex] = useState(() => {
+    if (!initialPostId) return 0;
+    const idx = initialPosts
+      .filter((p) => getPostVideoUrl(p))
+      .findIndex((p) => p.id === initialPostId);
+    return idx >= 0 ? idx : 0;
+  });
   const initialScrollDone = useRef(false);
 
   // Single shared comment modal lifted out of N ReelItems
@@ -143,9 +156,6 @@ export function ReelFeed({
       return next;
     });
   }, [initialPosts]);
-
-  const videoPosts = posts.filter((p) => getPostVideoUrl(p));
-  const visiblePosts = guestPreview ? videoPosts.slice(0, 6) : videoPosts;
 
   const handlePostDeleted = useCallback(
     (postId: string) => {
@@ -166,41 +176,45 @@ export function ReelFeed({
     [hasMore, loadingMore, onLoadMore, onActiveChange, visiblePosts.length],
   );
 
-  // Prewarm current + next reels for instant playback (iOS ignores link prefetch)
+  // Prewarm current + adjacent reels for instant playback
   useEffect(() => {
     const toWarm = [
+      visiblePosts[activeIndex - 1],
       visiblePosts[activeIndex],
       visiblePosts[activeIndex + 1],
       visiblePosts[activeIndex + 2],
     ].filter(Boolean);
-    const urls = toWarm.map((post) =>
-      pickVideoSource(post, networkTier, "feed").src,
-    ).filter(Boolean);
+    const urls = toWarm
+      .map((post) => pickVideoSource(post, networkTier, "feed").src)
+      .filter(Boolean);
     prewarmVideoUrls(urls);
   }, [activeIndex, visiblePosts, networkTier]);
 
-  const openComment = useCallback((postId: string) => setCommentPostId(postId), []);
-  const closeComment = useCallback(() => setCommentPostId(null), []);
-
-  // Scroll to the post matching initialPostId on first render
-  useEffect(() => {
+  // Jump to tapped post before paint when opening from feed
+  useLayoutEffect(() => {
     if (initialScrollDone.current || !initialPostId || !containerRef.current) return;
     const idx = visiblePosts.findIndex((p) => p.id === initialPostId);
-    if (idx <= 0) {
-      initialScrollDone.current = true;
-      return;
+    if (idx > 0) {
+      containerRef.current.scrollTop = idx * containerRef.current.clientHeight;
+      setActiveIndex(idx);
     }
-    setActiveIndex(idx);
-    // Double rAF ensures scroll-snap container has painted before we jump
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (containerRef.current) {
-          containerRef.current.scrollTop = idx * containerRef.current.clientHeight;
-        }
-      });
-    });
     initialScrollDone.current = true;
   }, [visiblePosts, initialPostId]);
+
+  // Extra prewarm when landing on a specific post from feed tap
+  useEffect(() => {
+    if (!initialPostId) return;
+    const idx = visiblePosts.findIndex((p) => p.id === initialPostId);
+    if (idx < 0) return;
+    const toWarm = visiblePosts.slice(idx, idx + 3);
+    const urls = toWarm
+      .map((post) => pickVideoSource(post, networkTier, "feed").src)
+      .filter(Boolean);
+    prewarmVideoUrls(urls);
+  }, [initialPostId, visiblePosts, networkTier]);
+
+  const openComment = useCallback((postId: string) => setCommentPostId(postId), []);
+  const closeComment = useCallback(() => setCommentPostId(null), []);
 
   if (!visiblePosts.length) {
     return (
