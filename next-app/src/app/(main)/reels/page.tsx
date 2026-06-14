@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { ReelFeed } from "@/components/reels/ReelFeed";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useReelsPosts } from "@/lib/hooks/usePosts";
+import { useSeenPosts } from "@/lib/hooks/useSeenPosts";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { consumeReelsRefreshPending } from "@/lib/utils/invalidate-feed-cache";
 
@@ -21,12 +22,23 @@ export default function ReelsPage() {
     refresh,
     deletePost,
   } = useReelsPosts();
+  const { markSeen, filterPosts, needsMore } = useSeenPosts();
+
+  const displayPosts = useMemo(
+    () => filterPosts(posts),
+    [posts, filterPosts],
+  );
 
   useEffect(() => {
     if (consumeReelsRefreshPending()) {
       void refresh();
     }
   }, [refresh]);
+
+  useEffect(() => {
+    if (!needsMore(displayPosts.length, hasMore) || loadingMore) return;
+    void loadMore();
+  }, [displayPosts.length, hasMore, needsMore, loadMore, loadingMore]);
 
   if (loading && posts.length === 0) {
     return (
@@ -49,12 +61,13 @@ export default function ReelsPage() {
           </div>
         )}
         <ReelFeed
-          posts={posts}
+          posts={displayPosts}
           hasMore={!isGuest && hasMore}
           loadingMore={loadingMore}
           onLoadMore={isGuest ? undefined : loadMore}
           onPostDeleted={deletePost}
           guestPreview={isGuest}
+          onPostSeen={markSeen}
         />
       </PullToRefresh>
     </ReelsShell>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { ReelFeed } from "@/components/reels/ReelFeed";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useFeedPosts } from "@/lib/hooks/usePosts";
+import { useSeenPosts } from "@/lib/hooks/useSeenPosts";
 import { useAccess } from "@/lib/hooks/useAccess";
 
 /**
@@ -29,6 +30,19 @@ export default function FeedPostViewPage({
     setPosts,
     refresh,
   } = useFeedPosts();
+  const { markSeen, filterPosts, needsMore } = useSeenPosts({
+    pinIds: [params.postId],
+  });
+
+  const displayPosts = useMemo(
+    () => filterPosts(posts),
+    [posts, filterPosts],
+  );
+
+  useEffect(() => {
+    if (!needsMore(displayPosts.length, hasMore) || loadingMore) return;
+    void loadMore();
+  }, [displayPosts.length, hasMore, needsMore, loadMore, loadingMore]);
 
   const deletePost = useCallback(
     (postId: string) => setPosts((prev) => prev.filter((p) => p.id !== postId)),
@@ -56,13 +70,14 @@ export default function FeedPostViewPage({
           </div>
         )}
         <ReelFeed
-          posts={posts}
+          posts={displayPosts}
           hasMore={!isGuest && hasMore}
           loadingMore={loadingMore}
           onLoadMore={isGuest ? undefined : loadMore}
           onPostDeleted={deletePost}
           guestPreview={isGuest}
           initialPostId={params.postId}
+          onPostSeen={markSeen}
         />
       </PullToRefresh>
     </ReelsShell>

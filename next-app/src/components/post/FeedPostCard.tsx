@@ -52,6 +52,8 @@ type FeedPostCardProps = {
   onFollowChange?: (uid: string, following: boolean) => void;
   /** First visible card — eager-load poster for better LCP */
   priority?: boolean;
+  /** Called once when the post leaves the viewport after being viewed */
+  onPostSeen?: (postId: string) => void;
 };
 
 function FeedPostCardInner({
@@ -59,6 +61,7 @@ function FeedPostCardInner({
   followingIds,
   onFollowChange,
   priority = false,
+  onPostSeen,
 }: FeedPostCardProps) {
   const t = useT();
   const router = useRouter();
@@ -67,6 +70,7 @@ function FeedPostCardInner({
   const { canLike } = useAccess();
   const videoRef = useRef<HTMLVideoElement>(null);
   const viewedRef = useRef(false);
+  const wasActiveRef = useRef(false);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const feedMuted = useVideoSoundStore((s) => s.feedMuted);
   const [isMuted, setIsMuted] = useState(feedMuted);
@@ -168,6 +172,14 @@ function FeedPostCardInner({
       incrementPostViews(post.id);
     }
   }, [isActive, post.id]);
+
+  // Mark as seen when user scrolls away (Instagram / TikTok-style)
+  useEffect(() => {
+    if (wasActiveRef.current && !isActive) {
+      onPostSeen?.(post.id);
+    }
+    wasActiveRef.current = isActive;
+  }, [isActive, post.id, onPostSeen]);
 
   // Prewarm + prefetch reels route while video is visible in feed
   useEffect(() => {

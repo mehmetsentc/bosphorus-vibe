@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { FeedPostCard } from "@/components/post/FeedPostCard";
-import { markPostsSeen, sortPostsByUnseen } from "@/lib/utils/seenPosts";
+import { useSeenPosts } from "@/lib/hooks/useSeenPosts";
 
 // Suggestion cards only appear after scrolling — lazy load them
 const FeedFriendSuggestions = dynamic(
@@ -96,6 +96,7 @@ export function FeedInfinite() {
     loadingMore,
     loadMore,
   } = useFeedPosts();
+  const { markSeen, filterPosts, needsMore } = useSeenPosts();
   const [following, setFollowing] = useState<Set<string>>(new Set());
   const [friendSuggestions, setFriendSuggestions] = useState<PublicUser[]>([]);
   const [videoSuggestions, setVideoSuggestions] = useState<EnrichedPost[]>([]);
@@ -168,18 +169,32 @@ export function FeedInfinite() {
     setFriendSuggestions((prev) => prev.filter((u) => u.uid !== uid));
   }
 
-  // Sort unseen posts first, then seen ones — mark all as seen after render
-  const sortedPosts = useMemo(() => sortPostsByUnseen(posts), [posts]);
+  const displayPosts = useMemo(
+    () => filterPosts(posts),
+    [posts, filterPosts],
+  );
 
+  // Fetch more when unseen pool is running low
   useEffect(() => {
-    if (posts.length > 0) markPostsSeen(posts.map((p) => p.id));
-  }, [posts]);
+    if (!needsMore(displayPosts.length, hasMore) || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    loadMore().finally(() => {
+      loadingMoreRef.current = false;
+    });
+  }, [displayPosts.length, hasMore, needsMore, loadMore]);
 
-  const feedPostIds = useMemo(() => new Set(sortedPosts.map((p) => p.id)), [sortedPosts]);
+  const feedPostIds = useMemo(
+    () => new Set(displayPosts.map((p) => p.id)),
+    [displayPosts],
+  );
 
   const filteredVideoSuggestions = useMemo(
-    () => videoSuggestions.filter((p) => !feedPostIds.has(p.id)).slice(0, 8),
-    [videoSuggestions, feedPostIds],
+    () =>
+      filterPosts(videoSuggestions.filter((p) => !feedPostIds.has(p.id))).slice(
+        0,
+        8,
+      ),
+    [videoSuggestions, feedPostIds, filterPosts],
   );
 
   const availability = useMemo(
@@ -192,8 +207,8 @@ export function FeedInfinite() {
   );
 
   const feedRows = useMemo(
-    () => buildFeedRows(sortedPosts, availability),
-    [sortedPosts, availability],
+    () => buildFeedRows(displayPosts, availability),
+    [displayPosts, availability],
   );
 
   if (loading) {
@@ -212,10 +227,18 @@ export function FeedInfinite() {
     );
   }
 
-  if (!posts.length) {
+  if (!displayPosts.length && !hasMore) {
     return (
       <section className="py-16 text-center">
         <p className="text-sm text-muted">{t("noPostsInFeed")}</p>
+      </section>
+    );
+  }
+
+  if (!displayPosts.length) {
+    return (
+      <section className="flex justify-center py-16">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-gold border-t-transparent" />
       </section>
     );
   }
@@ -231,6 +254,7 @@ export function FeedInfinite() {
               followingIds={following}
               onFollowChange={handleFollowChange}
               priority={index === 0}
+              onPostSeen={markSeen}
             />
           );
         }
@@ -275,7 +299,7 @@ export function FeedInfinite() {
         </div>
       )}
 
-      {!hasMore && posts.length > 0 && (
+      {!hasMore && displayPosts.length > 0 && (
         <p className="py-10 text-center text-xs text-muted">{t("feedEnd")}</p>
       )}
     </section>

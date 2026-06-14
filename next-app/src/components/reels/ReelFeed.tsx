@@ -34,6 +34,8 @@ type ReelFeedProps = {
   guestPreview?: boolean;
   /** Scroll to this post on first render (e.g. when opening from feed) */
   initialPostId?: string;
+  /** Called when user finishes watching a reel (swipes away) */
+  onPostSeen?: (postId: string) => void;
 };
 
 // Memoized per-slide — only re-renders when isActive/isNext changes
@@ -117,6 +119,7 @@ export function ReelFeed({
   onPostDeleted,
   guestPreview = false,
   initialPostId,
+  onPostSeen,
 }: ReelFeedProps) {
   const t = useT();
   const router = useRouter();
@@ -139,6 +142,11 @@ export function ReelFeed({
     return idx >= 0 ? idx : 0;
   });
   const initialScrollDone = useRef(false);
+  const prevActiveIndexRef = useRef(activeIndex);
+  const onPostSeenRef = useRef(onPostSeen);
+  const visiblePostsRef = useRef(visiblePosts);
+  onPostSeenRef.current = onPostSeen;
+  visiblePostsRef.current = visiblePosts;
 
   // Single shared comment modal lifted out of N ReelItems
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -175,6 +183,24 @@ export function ReelFeed({
     },
     [hasMore, loadingMore, onLoadMore, onActiveChange, visiblePosts.length],
   );
+
+  // Mark reel as seen when user swipes to the next one
+  useEffect(() => {
+    const prevIdx = prevActiveIndexRef.current;
+    if (prevIdx !== activeIndex) {
+      const prevPost = visiblePosts[prevIdx];
+      if (prevPost) onPostSeenRef.current?.(prevPost.id);
+      prevActiveIndexRef.current = activeIndex;
+    }
+  }, [activeIndex, visiblePosts]);
+
+  useEffect(() => {
+    return () => {
+      const idx = prevActiveIndexRef.current;
+      const current = visiblePostsRef.current[idx];
+      if (current) onPostSeenRef.current?.(current.id);
+    };
+  }, []);
 
   // Prewarm current + adjacent reels for instant playback
   useEffect(() => {
