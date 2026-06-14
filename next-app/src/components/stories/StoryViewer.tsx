@@ -40,6 +40,8 @@ type StoryViewerProps = {
   startGroupIndex: number;
   onClose: () => void;
   onChanged: () => void;
+  /** Highlights replay archived/expired stories */
+  highlightMode?: boolean;
 };
 
 export function StoryViewer({
@@ -47,6 +49,7 @@ export function StoryViewer({
   startGroupIndex,
   onClose,
   onChanged,
+  highlightMode = false,
 }: StoryViewerProps) {
   const { user } = useAuth();
   const t = useT();
@@ -64,6 +67,7 @@ export function StoryViewer({
   const [shareOpen, setShareOpen] = useState(false);
   const [viewersOpen, setViewersOpen] = useState(false);
   const [liveViewedByIds, setLiveViewedByIds] = useState<string[]>([]);
+  const [dragY, setDragY] = useState(0);
 
   useEffect(() => {
     setGroupIndex(startGroupIndex);
@@ -72,6 +76,7 @@ export function StoryViewer({
     setReply("");
     setLiked(false);
     setViewersOpen(false);
+    setDragY(0);
   }, [startGroupIndex]);
 
   const tier = useEffectiveNetworkTier();
@@ -127,18 +132,19 @@ export function StoryViewer({
 
   useEffect(() => {
     if (!story || !user) return;
-    if (isStoryExpired(story)) {
+    if (!highlightMode && isStoryExpired(story)) {
       goNext();
       return;
     }
-    if (!story.viewedByIds.includes(user.uid)) {
+    if (!highlightMode && !story.viewedByIds.includes(user.uid)) {
       markStoryViewed(story.id, user.uid).catch(() => {});
     }
-  }, [story, user, goNext]);
+  }, [story, user, goNext, highlightMode]);
 
   useEffect(() => {
     setLiveViewedByIds(story?.viewedByIds ?? []);
     setViewersOpen(false);
+    setDragY(0);
   }, [story?.id, story?.viewedByIds]);
 
   useEffect(() => {
@@ -249,8 +255,30 @@ export function StoryViewer({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[140] flex items-center justify-center bg-black"
+        onClick={onClose}
       >
-        <div className="relative h-full w-full max-w-[430px] overflow-hidden bg-black">
+        <motion.div
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 280 }}
+          dragElastic={{ top: 0, bottom: 0.45 }}
+          onDrag={(_, info) => {
+            if (info.offset.y > 0) setDragY(info.offset.y);
+          }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 100 || info.velocity.y > 450) {
+              onClose();
+              return;
+            }
+            setDragY(0);
+          }}
+          style={{
+            y: dragY,
+            opacity: Math.max(0.35, 1 - dragY / 320),
+            scale: Math.max(0.92, 1 - dragY / 900),
+          }}
+          className="relative h-full w-full max-w-[430px] touch-pan-y overflow-hidden bg-black"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="absolute left-0 right-0 top-0 z-20 flex gap-[3px] px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
             {progressBars}
           </div>
@@ -385,7 +413,7 @@ export function StoryViewer({
               </>
             )}
           </div>
-        </div>
+        </motion.div>
       </motion.div>
 
       <ShareSheet

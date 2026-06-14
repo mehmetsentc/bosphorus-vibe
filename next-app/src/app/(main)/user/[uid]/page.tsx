@@ -11,8 +11,8 @@ import {
   getPostVideoUrl,
   getPostsTaggingUser,
 } from "@/lib/services/firestore";
-import { getStoriesByUser } from "@/lib/services/stories";
-import { buildProfileHighlightItems, groupStoriesByCategory } from "@/lib/utils/story-categories";
+import { getStoriesByUser, getStoriesByIds } from "@/lib/services/stories";
+import { useStoryHighlights } from "@/lib/hooks/useStoryHighlights";
 import dynamic from "next/dynamic";
 import { ProfileHighlights } from "@/components/profile/ProfileHighlights";
 
@@ -20,7 +20,6 @@ const StoryViewer = dynamic(
   () => import("@/components/stories/StoryViewer").then((m) => ({ default: m.StoryViewer })),
   { ssr: false },
 );
-import { BRAND_NAME } from "@/lib/brand";
 import { findOrCreateDirectChat } from "@/lib/services/messages";
 import { followUser, isFollowing, unfollowUser } from "@/lib/services/friends";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
@@ -29,7 +28,7 @@ import { ProfileTabs } from "@/components/profile/ProfileTabs";
 import { IgButton } from "@/components/profile/ProfileActions";
 import { IconGrid, IconReels, IconTagged } from "@/components/icons/Icons";
 import { useT } from "@/components/providers/I18nProvider";
-import type { StoryCategory, StoryDoc, UserDoc, UserPostDoc } from "@/types";
+import type { StoryDoc, UserDoc, UserPostDoc } from "@/types";
 
 type ProfileTab = "posts" | "reels" | "tagged";
 
@@ -63,9 +62,8 @@ function UserProfilePageContent() {
   const [posts, setPosts] = useState<UserPostDoc[]>([]);
   const [taggedPosts, setTaggedPosts] = useState<UserPostDoc[]>([]);
   const [stories, setStories] = useState<StoryDoc[]>([]);
-  const [highlightCategory, setHighlightCategory] = useState<StoryCategory | null>(
-    null,
-  );
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
+  const [highlightStories, setHighlightStories] = useState<StoryDoc[]>([]);
   const [followers, setFollowers] = useState(0);
   const [following, setFollowing] = useState(0);
   const [isFriend, setIsFriend] = useState(false);
@@ -73,6 +71,7 @@ function UserProfilePageContent() {
   const [loading, setLoading] = useState(true);
   const [friendBusy, setFriendBusy] = useState(false);
   const [messageBusy, setMessageBusy] = useState(false);
+  const { items: storyHighlights } = useStoryHighlights(uid);
 
   const load = useCallback(async () => {
     if (!uid) return;
@@ -147,44 +146,36 @@ function UserProfilePageContent() {
     [posts],
   );
 
-  const storyCategoryLabels = useMemo(
-    (): Record<StoryCategory, string> => ({
-      vibe: BRAND_NAME,
-      reels: t("navReels"),
-      events: t("eventsHighlight"),
-    }),
-    [t],
-  );
-
-  const highlights = useMemo(
-    () => buildProfileHighlightItems(stories, storyCategoryLabels),
-    [stories, storyCategoryLabels],
-  );
+  useEffect(() => {
+    if (!activeHighlightId) {
+      setHighlightStories([]);
+      return;
+    }
+    const highlight = storyHighlights.find((h) => h.id === activeHighlightId);
+    if (!highlight?.storyIds.length) {
+      setHighlightStories([]);
+      return;
+    }
+    void getStoriesByIds(highlight.storyIds).then(setHighlightStories);
+  }, [activeHighlightId, storyHighlights]);
 
   const highlightViewerGroups = useMemo(() => {
-    if (!highlightCategory || !profile || !uid) return [];
-    const grouped = groupStoriesByCategory(stories);
-    const categoryStories = grouped[highlightCategory];
-    if (!categoryStories.length) return [];
-
+    if (!activeHighlightId || !profile || !uid || !highlightStories.length) {
+      return [];
+    }
     return [
       {
         userId: uid,
         userName: profile.userName || profile.display_name || "user",
         userPhoto: profile.photo_url || "",
-        stories: categoryStories,
+        stories: highlightStories,
         hasUnviewed: false,
         latestAt:
-          categoryStories[categoryStories.length - 1]?.storyPostedAt ??
+          highlightStories[highlightStories.length - 1]?.storyPostedAt ??
           new Date(0),
       },
     ];
-  }, [highlightCategory, stories, profile, uid]);
-
-  function handleHighlightSelect(category: StoryCategory) {
-    const count = groupStoriesByCategory(stories)[category].length;
-    if (count > 0) setHighlightCategory(category);
-  }
+  }, [activeHighlightId, highlightStories, profile, uid]);
 
   if (loading || !profile) {
     return (
@@ -243,11 +234,11 @@ function UserProfilePageContent() {
         </>
       }
       highlights={
-        highlights.some((h) => h.count > 0) ? (
+        storyHighlights.length > 0 ? (
           <ProfileHighlights
-            items={highlights}
-            activeId={highlightCategory}
-            onSelect={handleHighlightSelect}
+            items={storyHighlights}
+            activeId={activeHighlightId}
+            onSelect={setActiveHighlightId}
           />
         ) : undefined
       }
@@ -282,14 +273,12 @@ function UserProfilePageContent() {
       )}
     </ProfileLayout>
 
-      {highlightCategory && highlightViewerGroups.length > 0 && (
+      {activeHighlightId && highlightViewerGroups.length > 0 && (
         <StoryViewer
           groups={highlightViewerGroups}
           startGroupIndex={0}
-          onClose={() => {
-            setHighlightCategory(null);
-            load();
-          }}
+          highlightMode
+          onClose={() => setActiveHighlightId(null)}
           onChanged={load}
         />
       )}

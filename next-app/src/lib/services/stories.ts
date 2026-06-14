@@ -132,7 +132,7 @@ async function removeStoryRecord(
   await deleteStoryStorageFiles(collectStoryStorageUrls(data));
 }
 
-/** Owner's expired stories — delete from Firestore + Storage. */
+/** Marks expired stories instead of deleting — keeps media for highlights. */
 export async function cleanupOwnExpiredStories(userId: string): Promise<number> {
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const snap = await getDocs(
@@ -143,18 +143,18 @@ export async function cleanupOwnExpiredStories(userId: string): Promise<number> 
   );
 
   const now = Date.now();
-  let removed = 0;
+  let marked = 0;
 
   await Promise.allSettled(
     snap.docs.map(async (storyDoc) => {
       const story = mapStory(storyDoc.id, storyDoc.data());
-      if (!isStoryExpired(story, now)) return;
-      await removeStoryRecord(storyDoc.id, storyDoc.data());
-      removed += 1;
+      if (!isStoryExpired(story, now) || story.isExpired) return;
+      await updateDoc(storyDoc.ref, { isExpired: true });
+      marked += 1;
     }),
   );
 
-  return removed;
+  return marked;
 }
 
 export async function getActiveStories(limitCount = 120): Promise<StoryDoc[]> {
@@ -186,6 +186,41 @@ export async function getStoriesByUser(userId: string): Promise<StoryDoc[]> {
     .map((d) => mapStory(d.id, d.data()))
     .filter((story) => isStoryActive(story, now))
     .sort((a, b) => a.storyPostedAt.getTime() - b.storyPostedAt.getTime());
+}
+
+/** All stories for owner archive / highlight picker (includes expired). */
+export async function getAllStoriesByUser(userId: string): Promise<StoryDoc[]> {
+  const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
+  const snap = await getDocs(
+    query(
+      collection(getFirebaseDb(), COLLECTIONS.userStories),
+      where("user", "==", userRef),
+    ),
+  );
+  return snap.docs
+    .map((d) => mapStory(d.id, d.data()))
+    .filter((story) => Boolean(getStoryMediaUrl(story)))
+    .sort((a, b) => a.storyPostedAt.getTime() - b.storyPostedAt.getTime());
+}
+
+export async function getStoriesByIds(storyIds: string[]): Promise<StoryDoc[]> {
+  if (!storyIds.length) return [];
+  const db = getFirebaseDb();
+  const stories: StoryDoc[] = [];
+  await Promise.all(
+    storyIds.map(async (id) => {
+      const snap = await getDoc(doc(db, COLLECTIONS.userStories, id));
+      if (!snap.exists()) return;
+      const story = mapStory(snap.id, snap.data());
+      if (!getStoryMediaUrl(story)) return;
+      stories.push(story);
+    }),
+  );
+  const order = new Map(storyIds.map((id, i) => [id, i]));
+  stories.sort(
+    (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
+  );
+  return stories;
 }
 
 export async function groupStoriesByUser(

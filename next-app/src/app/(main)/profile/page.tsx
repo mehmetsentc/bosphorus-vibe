@@ -28,6 +28,13 @@ const StoryUploadModal = dynamic(
   () => import("@/components/stories/StoryUploadModal").then((m) => ({ default: m.StoryUploadModal })),
   { ssr: false },
 );
+const HighlightEditorModal = dynamic(
+  () =>
+    import("@/components/stories/HighlightEditorModal").then((m) => ({
+      default: m.HighlightEditorModal,
+    })),
+  { ssr: false },
+);
 const StoryViewer = dynamic(
   () => import("@/components/stories/StoryViewer").then((m) => ({ default: m.StoryViewer })),
   { ssr: false },
@@ -51,14 +58,12 @@ import {
 import { isAnimationTeamRole } from "@/lib/utils/roles";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "@/components/providers/I18nProvider";
-import {
-  buildProfileHighlightItems,
-  groupStoriesByCategory,
-} from "@/lib/utils/story-categories";
+import { useStoryHighlights } from "@/lib/hooks/useStoryHighlights";
+import { getStoriesByIds } from "@/lib/services/stories";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { BRAND_NAME } from "@/lib/brand";
-import type { StoryCategory } from "@/types";
+import type { StoryHighlightDoc } from "@/types";
 
 type ProfileTab = "posts" | "reels" | "tagged";
 
@@ -89,7 +94,12 @@ function ProfilePageContent() {
   const t = useT();
   const photoModalRef = useRef<ProfilePhotoModalHandle>(null);
   const [tab, setTab] = useState<ProfileTab>("posts");
-  const [highlightCategory, setHighlightCategory] = useState<StoryCategory | null>(
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
+  const [highlightStories, setHighlightStories] = useState<
+    import("@/types").StoryDoc[]
+  >([]);
+  const [highlightEditorOpen, setHighlightEditorOpen] = useState(false);
+  const [editHighlight, setEditHighlight] = useState<StoryHighlightDoc | null>(
     null,
   );
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -109,6 +119,10 @@ function ProfilePageContent() {
     refreshing,
     refresh,
   } = useProfile();
+  const {
+    items: storyHighlights,
+    refresh: refreshHighlights,
+  } = useStoryHighlights(user?.uid);
 
   useEffect(() => {
     const urlTab = searchParams.get("tab");
@@ -143,43 +157,48 @@ function ProfilePageContent() {
     [myPosts],
   );
 
-  const storyCategoryLabels = useMemo(
-    (): Record<StoryCategory, string> => ({
-      vibe: BRAND_NAME,
-      reels: t("navReels"),
-      events: t("eventsHighlight"),
-    }),
-    [t],
-  );
-
-  const highlights = useMemo(
-    () => buildProfileHighlightItems(myStories, storyCategoryLabels),
-    [myStories, storyCategoryLabels],
-  );
+  useEffect(() => {
+    if (!activeHighlightId) {
+      setHighlightStories([]);
+      return;
+    }
+    const highlight = storyHighlights.find((h) => h.id === activeHighlightId);
+    if (!highlight?.storyIds.length) {
+      setHighlightStories([]);
+      return;
+    }
+    void getStoriesByIds(highlight.storyIds).then(setHighlightStories);
+  }, [activeHighlightId, storyHighlights]);
 
   const highlightViewerGroups = useMemo(() => {
-    if (!highlightCategory || !user) return [];
-    const grouped = groupStoriesByCategory(myStories);
-    const stories = grouped[highlightCategory];
-    if (!stories.length) return [];
-
+    if (!activeHighlightId || !user || !highlightStories.length) return [];
     return [
       {
         userId: user.uid,
         userName: username,
         userPhoto: photoUrl,
-        stories,
+        stories: highlightStories,
         hasUnviewed: false,
-        latestAt: stories[stories.length - 1]?.storyPostedAt ?? new Date(0),
+        latestAt: highlightStories[highlightStories.length - 1]?.storyPostedAt ?? new Date(0),
       },
     ];
-  }, [highlightCategory, myStories, user, username, photoUrl]);
+  }, [activeHighlightId, highlightStories, user, username, photoUrl]);
 
-  function handleHighlightSelect(category: StoryCategory) {
-    setHighlightCategory(category);
+  function handleHighlightSelect(id: string) {
+    setActiveHighlightId(id);
   }
 
-  const hasStoryHighlights = highlights.some((h) => h.count > 0);
+  function handleHighlightEdit(id: string) {
+    const item = storyHighlights.find((h) => h.id === id);
+    if (!item) return;
+    setEditHighlight(item);
+    setHighlightEditorOpen(true);
+  }
+
+  function handleHighlightsSaved() {
+    refreshHighlights();
+    refresh();
+  }
 
   const noteText = bioText ? bioText.split("\n")[0] : `${BRAND_NAME} ✨`;
   const vibeLine = profile?.title || BRAND_NAME;
@@ -267,14 +286,15 @@ function ProfilePageContent() {
           }
           highlights={
             <ProfileHighlights
-              items={highlights}
-              activeId={highlightCategory}
+              items={storyHighlights}
+              activeId={activeHighlightId}
               onSelect={handleHighlightSelect}
-              onAddStory={
-                !hasStoryHighlights
-                  ? () => setStoryUploadOpen(true)
-                  : undefined
-              }
+              onCreate={() => {
+                setEditHighlight(null);
+                setHighlightEditorOpen(true);
+              }}
+              onEdit={handleHighlightEdit}
+              isOwner
             />
           }
           tabs={
@@ -349,15 +369,26 @@ function ProfilePageContent() {
         onChanged={refresh}
       />
 
-      {highlightCategory && highlightViewerGroups.length > 0 && (
+      {activeHighlightId && highlightViewerGroups.length > 0 && (
         <StoryViewer
           groups={highlightViewerGroups}
           startGroupIndex={0}
+          highlightMode
+          onClose={() => setActiveHighlightId(null)}
+          onChanged={handleHighlightsSaved}
+        />
+      )}
+
+      {user?.uid && (
+        <HighlightEditorModal
+          open={highlightEditorOpen}
+          userId={user.uid}
+          editHighlight={editHighlight}
           onClose={() => {
-            setHighlightCategory(null);
-            refresh();
+            setHighlightEditorOpen(false);
+            setEditHighlight(null);
           }}
-          onChanged={refresh}
+          onSaved={handleHighlightsSaved}
         />
       )}
     </>

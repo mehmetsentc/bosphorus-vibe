@@ -110,6 +110,16 @@ export interface NotificationDoc {
   actor_photo?: string;
 }
 
+export interface StoryHighlightDoc {
+  id: string;
+  userId: string;
+  title: string;
+  coverUrl: string;
+  storyIds: string[];
+  sortOrder: number;
+  createdAt: Date;
+}
+
 export type StoryCategory = "vibe" | "reels" | "events";
 
 export interface StoryDoc {
@@ -171,6 +181,7 @@ export const COLLECTIONS = {
   userPosts: "userPosts",
   eventListPortyApp: "eventListPortyApp",
   userStories: "userStories",
+  storyHighlights: "storyHighlights",
   postComments: "postComments",
   friends: "friends",
   notification: "Notification",
