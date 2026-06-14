@@ -16,6 +16,8 @@ export interface UserDoc {
   bio: string;
   role: string;
   title: string;
+  /** Firebase anonymous guest sessions — hidden from public member lists */
+  isAnonymous?: boolean;
   created_time: Date;
   last_active_time?: Date;
   total_activity_participants?: number;

@@ -6,6 +6,7 @@ import {
   getDoc,
   getDocs,
   limit,
+  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -30,6 +31,15 @@ function mapPublicUser(uid: string, data: Record<string, unknown>): PublicUser {
   };
 }
 
+/** Anonymous / guest browse accounts — not real registered members. */
+export function isGuestProfile(data: Record<string, unknown>): boolean {
+  if (data.isAnonymous === true) return true;
+  const email = String(data.email ?? "").trim();
+  if (email) return false;
+  const name = String(data.display_name || data.userName || "").trim();
+  return !name || name === "Misafir" || name.toLowerCase() === "guest";
+}
+
 export async function listUsersForFriends(
   excludeUid: string,
   max = 60,
@@ -42,12 +52,45 @@ export async function listUsersForFriends(
     .map((d) => mapPublicUser(d.id, d.data()));
 }
 
+/** Google / email sign-ups — excludes anonymous "Misafir" browse sessions. */
+export async function listRegisteredMembers(
+  excludeUid: string,
+  max = 100,
+): Promise<PublicUser[]> {
+  const pool = Math.min(max * 4, 400);
+
+  try {
+    const snap = await getDocs(
+      query(
+        collection(getFirebaseDb(), COLLECTIONS.users),
+        where("email", ">", ""),
+        orderBy("email"),
+        limit(pool),
+      ),
+    );
+    const fromEmail = snap.docs
+      .filter((d) => d.id !== excludeUid && !isGuestProfile(d.data()))
+      .map((d) => mapPublicUser(d.id, d.data()));
+    if (fromEmail.length >= max) return fromEmail.slice(0, max);
+  } catch {
+    /* index may be building — fall through to scan */
+  }
+
+  const snap = await getDocs(
+    query(collection(getFirebaseDb(), COLLECTIONS.users), limit(pool)),
+  );
+  return snap.docs
+    .filter((d) => d.id !== excludeUid && !isGuestProfile(d.data()))
+    .map((d) => mapPublicUser(d.id, d.data()))
+    .slice(0, max);
+}
+
 export async function getSuggestedUsers(
   currentUid: string,
   following: Set<string>,
   max = 8,
 ): Promise<PublicUser[]> {
-  const users = await listUsersForFriends(currentUid, 80);
+  const users = await listRegisteredMembers(currentUid, 80);
   return users.filter((u) => !following.has(u.uid)).slice(0, max);
 }
 

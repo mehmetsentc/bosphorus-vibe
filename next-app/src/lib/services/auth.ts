@@ -529,6 +529,7 @@ async function upsertUser(user: User, displayNameOverride?: string): Promise<voi
     userName: displayName,
     email: user.email ?? "",
     photo_url: user.photoURL ?? "",
+    isAnonymous: user.isAnonymous,
     created_time: serverTimestamp(),
     bio: "",
     role: "user",

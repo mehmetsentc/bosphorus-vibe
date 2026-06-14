@@ -24,7 +24,7 @@ import { useT } from "@/components/providers/I18nProvider";
 import {
   getSuggestedUsers,
   getFollowingSet,
-  listUsersForFriends,
+  listRegisteredMembers,
 } from "@/lib/services/friends";
 import {
   enrichPostsWithUsers,
@@ -121,7 +121,7 @@ export function FeedInfinite() {
     const [friendsRaw, videosRaw, eventsRaw] = await Promise.all([
       user
         ? getSuggestedUsers(user.uid, followingSet, 8)
-        : listUsersForFriends("", 8),
+        : listRegisteredMembers("", 8),
       cachedVideos?.length
         ? Promise.resolve(cachedVideos)
         : getVideoPosts(10).then(enrichPostsWithUsers),

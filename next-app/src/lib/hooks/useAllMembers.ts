@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   getFollowingSet,
-  listUsersForFriends,
+  listRegisteredMembers,
   type PublicUser,
 } from "@/lib/services/friends";
 
@@ -23,7 +23,7 @@ export function useAllMembers() {
       setLoading(true);
       try {
         const [users, followingSet] = await Promise.all([
-          listUsersForFriends(user?.uid ?? "", MEMBERS_PAGE_SIZE),
+          listRegisteredMembers(user?.uid ?? "", MEMBERS_PAGE_SIZE),
           user
             ? getFollowingSet(user.uid)
             : Promise.resolve(new Set<string>()),
