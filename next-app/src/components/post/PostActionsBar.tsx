@@ -17,6 +17,7 @@ import { useHideLikeCounts } from "@/lib/hooks/useSettingsEffects";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { buildPostSharePayload } from "@/lib/utils/share-post";
 import { useT } from "@/components/providers/I18nProvider";
+import { ShareToStoryButton } from "@/components/stories/ShareToStoryButton";
 import type { UserPostDoc } from "@/types";
 
 // Heavy share sheet — load only on first open
@@ -153,6 +154,11 @@ export function PostActionsBar({
           >
             <IconShare size={iconSize} className="text-foreground" />
           </button>
+          <ShareToStoryButton
+            postId={post.id}
+            className={btnClass}
+            onToast={showShareToast}
+          />
         </div>
         <button
           type="button"

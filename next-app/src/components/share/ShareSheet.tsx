@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -8,7 +9,6 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useT } from "@/components/providers/I18nProvider";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { createStoryFromPost } from "@/lib/services/stories";
 import {
   buildShareUrl,
   copyShareLink,
@@ -16,6 +16,14 @@ import {
   type ExternalSharePlatform,
 } from "@/lib/utils/share-links";
 import { BRAND_NAME } from "@/lib/brand";
+
+const StoryPostComposer = dynamic(
+  () =>
+    import("@/components/stories/StoryPostComposer").then((m) => ({
+      default: m.StoryPostComposer,
+    })),
+  { ssr: false },
+);
 
 export type SharePayload = {
   url: string;
@@ -46,7 +54,7 @@ export function ShareSheet({ open, onClose, payload, onToast }: ShareSheetProps)
   const { canUpload } = useAccess();
   const { prefs } = useSettings();
   const [mounted, setMounted] = useState(false);
-  const [storyBusy, setStoryBusy] = useState(false);
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -71,7 +79,7 @@ export function ShareSheet({ open, onClose, payload, onToast }: ShareSheetProps)
   const shareText = payload?.text || payload?.title || BRAND_NAME;
   const shareTitle = payload?.title || BRAND_NAME;
 
-  async function handleStoryShare() {
+  function handleStoryShare() {
     if (!payload?.postId) return;
     if (!canUpload) {
       router.push("/welcome?reason=auth-required");
@@ -79,17 +87,8 @@ export function ShareSheet({ open, onClose, payload, onToast }: ShareSheetProps)
       return;
     }
     if (!user) return;
-
-    setStoryBusy(true);
-    try {
-      await createStoryFromPost(payload.postId, user.uid);
-      toast(t("storyShareSuccess"));
-      onClose();
-    } catch {
-      toast(t("storyShareFailed"));
-    } finally {
-      setStoryBusy(false);
-    }
+    onClose();
+    setStoryComposerOpen(true);
   }
 
   function openExternal(platform: ExternalSharePlatform) {
@@ -188,9 +187,8 @@ export function ShareSheet({ open, onClose, payload, onToast }: ShareSheetProps)
                 </p>
                 <button
                   type="button"
-                  disabled={storyBusy}
                   onClick={handleStoryShare}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-vibe/30 bg-vibe/10 px-4 py-3 transition hover:bg-vibe/15 disabled:opacity-50"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-vibe/30 bg-vibe/10 px-4 py-3 transition hover:bg-vibe/15"
                 >
                   <div className="rounded-full bg-gradient-to-br from-gold via-vibe to-gold p-[2px]">
                     <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-black">
@@ -210,9 +208,6 @@ export function ShareSheet({ open, onClose, payload, onToast }: ShareSheetProps)
                     <p className="font-semibold">{t("shareStory")}</p>
                     <p className="text-xs text-muted">{t("storyExpiresHint")}</p>
                   </div>
-                  {storyBusy && (
-                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-vibe border-t-transparent" />
-                  )}
                 </button>
               </div>
             )}
@@ -258,6 +253,12 @@ export function ShareSheet({ open, onClose, payload, onToast }: ShareSheetProps)
           </motion.div>
         </div>
       )}
+      <StoryPostComposer
+        open={storyComposerOpen}
+        postId={payload?.postId ?? null}
+        onClose={() => setStoryComposerOpen(false)}
+        onToast={toast}
+      />
     </AnimatePresence>,
     document.body,
   );

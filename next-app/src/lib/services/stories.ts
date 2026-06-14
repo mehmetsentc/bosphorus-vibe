@@ -394,6 +394,10 @@ export function storyCoverUrl(story: StoryDoc): string {
 export async function createStoryFromPost(
   postId: string,
   userId: string,
+  options?: {
+    overlayText?: string;
+    sharedFromUserName?: string;
+  },
 ): Promise<string> {
   const { getPostById, getPostCaption, getPostImageUrl, getPostVideoUrl } =
     await import("@/lib/services/firestore");
@@ -407,6 +411,14 @@ export async function createStoryFromPost(
       ? "reels"
       : "vibe";
   const caption = getPostCaption(post);
+  const parts: string[] = [];
+  if (options?.overlayText) parts.push(options.overlayText);
+  if (options?.sharedFromUserName) {
+    parts.push(`@${options.sharedFromUserName}`);
+  } else if (caption) {
+    parts.push(caption);
+  }
+  const description = parts.join("\n").trim();
 
   const videoOriginal =
     post.postVideoURL_original || post.postVideo || post.postVideoURL || "";
@@ -420,7 +432,7 @@ export async function createStoryFromPost(
       videoOriginalUrl: videoOriginal || videoLow,
       videoLowUrl: videoLow || videoOriginal,
       storyCategory: category,
-      description: caption,
+      description,
     });
   }
 
@@ -431,7 +443,7 @@ export async function createStoryFromPost(
     userId,
     photoUrl: image,
     storyCategory: category,
-    description: caption,
+    description,
   });
 }
 

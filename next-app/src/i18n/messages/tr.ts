@@ -413,6 +413,8 @@ const tr: Messages = {
   shareSheetAppsSection: "Uygulamalarla paylaş",
   storyShareSuccess: "Hikayene eklendi",
   storyShareFailed: "Hikayeye eklenemedi",
+  storyShareToYourStory: "Hikayende paylaş",
+  shareStoryShort: "Hikaye",
   storyUploadFailed: "Hikaye yüklenemedi.",
   storyVideoSizeError: "Hikaye videosu en fazla 30 MB olabilir.",
   noStoriesYet: "Henüz hikaye yok.",

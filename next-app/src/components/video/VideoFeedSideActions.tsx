@@ -22,6 +22,7 @@ import {
   IconTrash,
 } from "@/components/icons/Icons";
 import { ShareSheet } from "@/components/share/ShareSheet";
+import { ShareToStoryButton } from "@/components/stories/ShareToStoryButton";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
 import { buildPostSharePayload } from "@/lib/utils/share-post";
 import { useSettings } from "@/components/settings/SettingsProvider";
@@ -215,6 +216,13 @@ export function VideoFeedSideActions({
         <ActionButton label={t("share")} onClick={handleShareClick}>
           <IconShare size={22} className="text-vibe" />
         </ActionButton>
+
+        <ShareToStoryButton
+          postId={post.id}
+          showLabel
+          labelClassName="text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_0_8px_rgba(0,0,0,0.6)]"
+          onToast={showFlash}
+        />
 
         <ActionButton label={t("save")} onClick={handleSave} disabled={!canLike}>
           <IconBookmark
