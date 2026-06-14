@@ -193,6 +193,7 @@ const en = {
   followOnInstagram: "Follow on Instagram",
   eventsGreeting: "Hello, {name}!",
   eventsSubtitle: "Let's explore what's happening nearby.",
+  worldCupDailySummary: "World Cup today",
   allEvents: "All Events",
   popularEvents: "Popular Events",
   eveningShows: "Evening Shows",

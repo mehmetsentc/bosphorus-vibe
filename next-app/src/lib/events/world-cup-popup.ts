@@ -16,6 +16,12 @@ export type WorldCupPopupDay = {
 
 export const WORLD_CUP_POPUP_TIMEZONE = "Europe/Istanbul";
 
+/** Istanbul calendar dates (inclusive) when the popup may appear. */
+export const WORLD_CUP_SEASON = {
+  start: "2026-06-11",
+  end: "2026-07-19",
+} as const;
+
 export const WORLD_CUP_POPUP_DAYS: WorldCupPopupDay[] = [
   {
     date: "2026-06-13",
@@ -43,19 +49,37 @@ export function getIstanbulDateKey(now = new Date()): string {
   }).format(now);
 }
 
-/** Today's poster, or the latest configured day on/before today. */
+export function isWorldCupSeason(now = new Date()): boolean {
+  const dateKey = getIstanbulDateKey(now);
+  return dateKey >= WORLD_CUP_SEASON.start && dateKey <= WORLD_CUP_SEASON.end;
+}
+
+/** Today's poster, latest on/before today, or first configured poster early in the season. */
 export function getActiveWorldCupPopup(now = new Date()): WorldCupPopupDay | null {
+  if (!isWorldCupSeason(now)) return null;
+
   const dateKey = getIstanbulDateKey(now);
   const exact = WORLD_CUP_POPUP_DAYS.find((day) => day.date === dateKey);
   if (exact) return exact;
 
-  const sorted = [...WORLD_CUP_POPUP_DAYS].sort((a, b) => b.date.localeCompare(a.date));
-  return sorted.find((day) => day.date <= dateKey) ?? null;
+  const sortedDesc = [...WORLD_CUP_POPUP_DAYS].sort((a, b) =>
+    b.date.localeCompare(a.date),
+  );
+  const latest = sortedDesc.find((day) => day.date <= dateKey);
+  if (latest) return latest;
+
+  const sortedAsc = [...WORLD_CUP_POPUP_DAYS].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+  return sortedAsc[0] ?? null;
 }
 
-/** Dismiss key is always "today" so each calendar day can show once. */
-export function getWorldCupPopupDismissKey(now = new Date()): string {
-  return getIstanbulDateKey(now);
+/** One auto-open per poster per Istanbul calendar day. */
+export function getWorldCupPopupDismissKey(
+  popup: WorldCupPopupDay,
+  now = new Date(),
+): string {
+  return `${popup.date}@${getIstanbulDateKey(now)}`;
 }
 
 const DISMISS_PREFIX = "bosphorus-wc-popup-dismissed-";

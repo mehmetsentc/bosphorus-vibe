@@ -194,6 +194,7 @@ const xk: Messages = {
   followOnInstagram: "Ndiq në Instagram",
   eventsGreeting: "Hello, {name}!",
   eventsSubtitle: "Let's explore what's happening nearby.",
+  worldCupDailySummary: "World Cup today",
   allEvents: "All Events",
   popularEvents: "Popular Events",
   eveningShows: "Evening Shows",

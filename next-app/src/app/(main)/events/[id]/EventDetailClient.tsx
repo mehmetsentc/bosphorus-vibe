@@ -11,6 +11,7 @@ import {
 import { ActivityUploadModal } from "@/components/upload/ActivityUploadModal";
 import { EventMediaFeed } from "@/components/events/EventMediaFeed";
 import { EventPosterCountdown } from "@/components/events/EventPosterCountdown";
+import { WorldCupPopupButton } from "@/components/events/WorldCupPopupButton";
 import { PageShell } from "@/components/layout/PageShell";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import {
@@ -93,6 +94,9 @@ export function EventDetailClient({ id }: { id: string }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{event.eventName}</p>
           <p className="truncate text-xs text-muted">{event.eventCategory}</p>
+          <div className="mt-2">
+            <WorldCupPopupButton />
+          </div>
         </div>
       </div>
 
