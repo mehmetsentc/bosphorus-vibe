@@ -74,8 +74,11 @@ export function getActiveWorldCupPopup(now = new Date()): WorldCupPopupDay | nul
   return sortedAsc[0] ?? null;
 }
 
-/** One auto-open per poster per Istanbul calendar day. */
-export function getWorldCupPopupDismissKey(
+/** Max automatic opens per poster per Istanbul calendar day (per user). */
+export const WORLD_CUP_DAILY_AUTO_OPEN_LIMIT = 3;
+
+/** Session key: poster date + viewer's Istanbul calendar day. */
+export function getWorldCupPopupSessionKey(
   popup: WorldCupPopupDay,
   now = new Date(),
 ): string {
@@ -84,11 +87,28 @@ export function getWorldCupPopupDismissKey(
 
 const DISMISS_PREFIX = "bosphorus-wc-popup-dismissed-";
 
-export function isWorldCupPopupDismissed(dateKey: string): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(`${DISMISS_PREFIX}${dateKey}`) === "1";
+export function getWorldCupPopupCloseCount(sessionKey: string): number {
+  if (typeof window === "undefined") return 0;
+  const raw = localStorage.getItem(`${DISMISS_PREFIX}${sessionKey}`);
+  if (!raw) return 0;
+  if (raw === "1") return 1;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-export function dismissWorldCupPopup(dateKey: string): void {
-  localStorage.setItem(`${DISMISS_PREFIX}${dateKey}`, "1");
+export function canAutoOpenWorldCupPopup(
+  popup: WorldCupPopupDay,
+  now = new Date(),
+): boolean {
+  const key = getWorldCupPopupSessionKey(popup, now);
+  return getWorldCupPopupCloseCount(key) < WORLD_CUP_DAILY_AUTO_OPEN_LIMIT;
+}
+
+export function recordWorldCupPopupClose(
+  popup: WorldCupPopupDay,
+  now = new Date(),
+): void {
+  const key = getWorldCupPopupSessionKey(popup, now);
+  const next = getWorldCupPopupCloseCount(key) + 1;
+  localStorage.setItem(`${DISMISS_PREFIX}${key}`, String(next));
 }

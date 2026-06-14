@@ -5,10 +5,9 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useT } from "@/components/providers/I18nProvider";
 import {
-  dismissWorldCupPopup,
+  canAutoOpenWorldCupPopup,
   getActiveWorldCupPopup,
-  getWorldCupPopupDismissKey,
-  isWorldCupPopupDismissed,
+  recordWorldCupPopupClose,
   type WorldCupPopupDay,
 } from "@/lib/events/world-cup-popup";
 import { useWorldCupPopupStore } from "@/store/worldCupPopupStore";
@@ -35,8 +34,7 @@ export function WorldCupDailyPopup() {
 
     setPopup(active);
 
-    const dismissKey = getWorldCupPopupDismissKey(active);
-    if (isWorldCupPopupDismissed(dismissKey)) return;
+    if (!canAutoOpenWorldCupPopup(active)) return;
 
     const timer = window.setTimeout(() => setOpen(true), AUTO_OPEN_DELAY_MS);
     return () => window.clearTimeout(timer);
@@ -56,7 +54,7 @@ export function WorldCupDailyPopup() {
 
   function handleClose() {
     if (popup) {
-      dismissWorldCupPopup(getWorldCupPopupDismissKey(popup));
+      recordWorldCupPopupClose(popup);
     }
     setOpen(false);
   }
