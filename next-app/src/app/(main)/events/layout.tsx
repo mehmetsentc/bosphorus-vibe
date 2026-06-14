@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EventsLayoutClient } from "@/components/events/EventsLayoutClient";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { siteUrl } from "@/lib/seo/metadata";
@@ -32,7 +33,7 @@ export default function EventsLayout({
           url: siteUrl("/events"),
         }}
       />
-      {children}
+      <EventsLayoutClient>{children}</EventsLayoutClient>
     </>
   );
 }

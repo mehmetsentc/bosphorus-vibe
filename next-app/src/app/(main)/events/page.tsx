@@ -11,7 +11,6 @@ import {
 import { EventsPopularCard } from "@/components/events/EventsPopularCard";
 import { EventsShowHighlight } from "@/components/events/EventsShowHighlight";
 import { ActivityUploadModal } from "@/components/upload/ActivityUploadModal";
-import { WorldCupDailyPopup } from "@/components/events/WorldCupDailyPopup";
 import { isSunday } from "@/lib/utils/firestore-helpers";
 import {
   getDateStrip,
@@ -118,7 +117,6 @@ export default function EventsPage() {
 
   return (
     <PageShell className="pb-8 pt-4">
-      <WorldCupDailyPopup />
       <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
         <EventsPageHeader onRefresh={refresh} refreshing={refreshing} />
 

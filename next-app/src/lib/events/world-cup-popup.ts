@@ -1,5 +1,5 @@
 /**
- * Daily World Cup popup on the Events page.
+ * Daily World Cup popup on Events routes (/events and /events/[id]).
  *
  * To add a new day:
  * 1. Drop image at public/events/world-cup/YYYY-MM-DD.png (or .jpg)
@@ -26,6 +26,11 @@ export const WORLD_CUP_POPUP_DAYS: WorldCupPopupDay[] = [
     date: "2026-06-14",
     imageSrc: "/events/world-cup/2026-06-14.png",
     alt: "FIFA World Cup 2026 — Bosphorus Sorgun günlük özet (14 Haziran)",
+  },
+  {
+    date: "2026-06-15",
+    imageSrc: "/events/world-cup/2026-06-15.png",
+    alt: "FIFA World Cup 2026 — Bosphorus Sorgun günlük özet (15 Haziran)",
   },
 ];
 
