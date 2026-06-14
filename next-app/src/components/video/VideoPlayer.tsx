@@ -79,13 +79,13 @@ export function VideoPlayer({
   const preload = isActive || isNext ? "auto" : isNear ? "metadata" : "none";
   const shouldPrime = isActive || isNext || isNear;
 
-  const feedMuted = useVideoSoundStore((s) => s.feedMuted);
-  const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
+  const reelsMuted = useVideoSoundStore((s) => s.reelsMuted);
+  const setReelsMuted = useVideoSoundStore((s) => s.setReelsMuted);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
 
-  const [isMuted, setIsMuted] = useState(feedMuted);
+  const [isMuted, setIsMuted] = useState(reelsMuted);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(() => !poster);
@@ -105,21 +105,21 @@ export function VideoPlayer({
 
   // Keep in sync when user toggles sound on another reel
   useEffect(() => {
-    setIsMuted(feedMuted);
+    setIsMuted(reelsMuted);
     const video = videoRef.current;
-    if (video && isActive) applyMuted(video, feedMuted);
-  }, [feedMuted, isActive]);
+    if (video && isActive) applyMuted(video, reelsMuted);
+  }, [reelsMuted, isActive]);
 
   // Play/pause when active state changes
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
-      setIsMuted(feedMuted);
-      applyMuted(video, feedMuted);
+      setIsMuted(reelsMuted);
+      applyMuted(video, reelsMuted);
       if (video.readyState === 0) video.load();
       video.play().catch(() => {
-        if (!feedMuted) {
+        if (!reelsMuted) {
           setIsMuted(true);
           applyMuted(video, true);
         }
@@ -142,7 +142,7 @@ export function VideoPlayer({
     }
     return () => { releasePlay(post.id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, autoPlay, videoSrc, post.id, feedMuted, requestPlay, releasePlay]);
+  }, [isActive, autoPlay, videoSrc, post.id, reelsMuted, requestPlay, releasePlay]);
 
   // Buffer adjacent slides before they become active
   useEffect(() => {
@@ -156,25 +156,24 @@ export function VideoPlayer({
     const video = videoRef.current;
     const next = !isMuted;
     setIsMuted(next);
-    setFeedMuted(next);
+    setReelsMuted(next);
     if (video) applyMuted(video, next);
-  }, [isMuted, setFeedMuted]);
+  }, [isMuted, setReelsMuted]);
 
-  // Tap: paused → play with sound; playing → pause/play toggle
   const handleVideoTap = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (video.paused) {
       setIsMuted(false);
-      setFeedMuted(false);
+      setReelsMuted(false);
       applyMuted(video, false);
       video.play().catch(() => {});
       return;
     }
 
     video.pause();
-  }, [setFeedMuted]);
+  }, [setReelsMuted]);
 
   const handleVideoError = useCallback(() => {
     const downgraded = handleAdaptiveError();

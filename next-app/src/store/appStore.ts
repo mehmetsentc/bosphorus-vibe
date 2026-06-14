@@ -264,6 +264,6 @@ export const useAppStore = create<AppStoreState>()(
 export function resetAppStore(): void {
   useAppStore.getState().resetStore();
   void useAppStore.persist.clearStorage();
-  useVideoSoundStore.setState({ feedMuted: true });
+  useVideoSoundStore.setState({ feedMuted: true, reelsMuted: false });
   void useVideoSoundStore.persist.clearStorage();
 }

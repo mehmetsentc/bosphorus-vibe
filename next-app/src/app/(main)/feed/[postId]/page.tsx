@@ -5,12 +5,13 @@ import { ReelFeed } from "@/components/reels/ReelFeed";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
-import { useFeedPosts } from "@/lib/hooks/usePosts";
+import { useReelsPosts } from "@/lib/hooks/usePosts";
 import { useSeenPosts } from "@/lib/hooks/useSeenPosts";
 import { useAccess } from "@/lib/hooks/useAccess";
+import { useVideoSoundStore } from "@/store/videoSoundStore";
 
 /**
- * Full-screen reels-style view that opens when the user taps a video in the feed.
+ * Full-screen reels opened from a feed video tap — continues with the reels feed.
  */
 export default function FeedPostViewPage({
   params,
@@ -18,6 +19,7 @@ export default function FeedPostViewPage({
   params: { postId: string };
 }) {
   const { isGuest } = useAccess();
+  const setReelsMuted = useVideoSoundStore((s) => s.setReelsMuted);
   const {
     posts,
     hasMore,
@@ -25,16 +27,21 @@ export default function FeedPostViewPage({
     loadingMore,
     refreshing,
     loadMore,
-    setPosts,
     refresh,
+    deletePost,
     postsSnapshot,
     hasMoreSnapshot,
-  } = useFeedPosts();
+  } = useReelsPosts();
   const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts({
     pinIds: [params.postId],
   });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [resetScrollToken, setResetScrollToken] = useState(0);
+
+  // User tapped a video — unlock sound for reels (gesture already happened)
+  useEffect(() => {
+    setReelsMuted(false);
+  }, [setReelsMuted]);
 
   const displayPosts = useMemo(
     () => filterPosts(posts),
@@ -55,11 +62,6 @@ export default function FeedPostViewPage({
     if (!needsMore(displayPosts.length, hasMore) || loadingMore) return;
     void loadMore();
   }, [displayPosts.length, hasMore, needsMore, loadMore, loadingMore]);
-
-  const deletePost = useCallback(
-    (postId: string) => setPosts((prev) => prev.filter((p) => p.id !== postId)),
-    [setPosts],
-  );
 
   if (loading && posts.length === 0) {
     return (
