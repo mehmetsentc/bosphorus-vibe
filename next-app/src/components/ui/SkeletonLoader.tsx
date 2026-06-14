@@ -91,8 +91,14 @@ export function ProfilePageSkeleton() {
 
 export function ReelsPageSkeleton() {
   return (
-    <div className="reels-shell-scroll flex items-center justify-center bg-black">
-      <Skeleton className="h-full w-full max-w-md rounded-none opacity-30" />
+    <div className="reels-pull-root bg-black">
+      <div className="reels-slide flex items-center justify-center bg-black">
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-2 border-gold border-t-transparent"
+          role="status"
+          aria-label="Loading"
+        />
+      </div>
     </div>
   );
 }

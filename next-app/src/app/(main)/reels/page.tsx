@@ -28,7 +28,7 @@ export default function ReelsPage() {
     }
   }, [refresh]);
 
-  if (loading) {
+  if (loading && posts.length === 0) {
     return (
       <ReelsShell>
         <ReelsPageSkeleton />

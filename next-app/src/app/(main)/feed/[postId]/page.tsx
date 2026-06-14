@@ -35,7 +35,7 @@ export default function FeedPostViewPage({
     [setPosts],
   );
 
-  if (loading) {
+  if (loading && posts.length === 0) {
     return (
       <ReelsShell>
         <ReelsPageSkeleton />

@@ -249,17 +249,17 @@ export function VideoFeedSideActions({
         {post.postUserId ? (
           <Link
             href={`/user/${post.postUserId}`}
-            className="pointer-events-auto font-semibold text-foreground drop-shadow-sm hover:underline"
+            className="pointer-events-auto font-semibold text-white drop-shadow-md hover:underline"
           >
             @{post.userName ?? "user"}
           </Link>
         ) : (
-          <p className="font-semibold text-foreground drop-shadow-sm">
+          <p className="font-semibold text-white drop-shadow-md">
             @{post.userName ?? "user"}
           </p>
         )}
         {caption && (
-          <p className="mt-1 line-clamp-3 text-sm text-foreground/85 drop-shadow-sm">
+          <p className="mt-1 line-clamp-3 text-sm text-white/90 drop-shadow-md">
             {caption}
           </p>
         )}

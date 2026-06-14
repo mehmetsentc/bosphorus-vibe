@@ -60,6 +60,7 @@ function ProfileFeedItem({
         <VideoPlayer
           post={post}
           isActive={isActive}
+          fit="cover"
           overlay={sideActions}
           showSeekBar={isActive}
         />

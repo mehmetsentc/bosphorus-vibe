@@ -18,11 +18,17 @@ import type { UserPostDoc } from "@/types";
 
 const SEEK_STEP = 10;
 
+type VideoFit = "cover" | "contain";
+
 type VideoPlayerProps = {
   post: UserPostDoc;
   isActive?: boolean;
   isNext?: boolean;
+  /** Within preload window but not active/next — metadata-only buffer */
+  isNear?: boolean;
   autoPlay?: boolean;
+  /** Reels/TikTok-style full bleed vs letterboxed detail view */
+  fit?: VideoFit;
   className?: string;
   overlay?: ReactNode;
   showSeekBar?: boolean;
@@ -46,12 +52,19 @@ export function VideoPlayer({
   post,
   isActive = true,
   isNext = false,
+  isNear = false,
   autoPlay = true,
-  className = "max-h-full max-w-full object-contain",
+  fit = "contain",
+  className,
   overlay,
   showSeekBar = true,
   onReady,
 }: VideoPlayerProps) {
+  const videoClassName =
+    className ??
+    (fit === "cover"
+      ? "absolute inset-0 h-full w-full object-cover"
+      : "max-h-full max-w-full object-contain");
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasPlayedRef = useRef(false);
 
@@ -63,7 +76,7 @@ export function VideoPlayer({
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
   } = useAdaptiveVideoSrc(post, "feed", isActive);
-  const preload = isActive || isNext ? "auto" : "none";
+  const preload = isActive || isNext ? "auto" : isNear ? "metadata" : "none";
 
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
@@ -73,7 +86,7 @@ export function VideoPlayer({
   const [isMuted, setIsMuted] = useState(true);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !poster);
   const [showPoster, setShowPoster] = useState(true);
 
   useEffect(() => {
@@ -161,7 +174,13 @@ export function VideoPlayer({
   if (!videoSrc) return null;
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-black">
+    <div
+      className={
+        fit === "cover"
+          ? "absolute inset-0 overflow-hidden bg-black"
+          : "absolute inset-0 flex items-center justify-center overflow-hidden bg-black"
+      }
+    >
       {showPoster && poster && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
@@ -176,9 +195,16 @@ export function VideoPlayer({
         playsInline
         muted={isMuted}
         preload={preload}
-        className={className}
+        className={videoClassName}
         onLoadStart={() => setLoading(true)}
         onLoadedData={() => {
+          if (isActive) setShowPoster(false);
+          if (isActive && autoPlay && videoRef.current?.paused) {
+            videoRef.current.play().catch(() => {});
+          }
+        }}
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration || 0);
           if (isActive && autoPlay && videoRef.current?.paused) {
             videoRef.current.play().catch(() => {});
           }
@@ -203,7 +229,6 @@ export function VideoPlayer({
           setCurrent(e.currentTarget.currentTime);
           setDuration(e.currentTarget.duration || 0);
         }}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
       />
 
       <button
@@ -225,7 +250,7 @@ export function VideoPlayer({
         }
       </button>
 
-      {loading && isActive && (
+      {loading && isActive && !poster && (
         <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center bg-black/30">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-vibe border-t-transparent" />
         </div>

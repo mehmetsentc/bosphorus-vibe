@@ -4,13 +4,14 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { getPostVideoUrl } from "@/lib/services/firestore";
+import { getPostVideoPoster } from "@/lib/utils/video-sources";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { VideoFeedSideActions } from "@/components/video/VideoFeedSideActions";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { pickVideoSource, prefetchVideoUrl } from "@/lib/utils/video-sources";
+import { pickVideoSource, prewarmVideoUrls } from "@/lib/utils/video-sources";
 import { REELS_VIDEO_WINDOW_RADIUS } from "@/lib/performance/app-state";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { UserPostDoc } from "@/types";
@@ -40,6 +41,7 @@ const ReelItem = memo(function ReelItem({
   post,
   isActive,
   isNext,
+  isNear,
   mountVideo,
   onBecameActive,
   onPostDeleted,
@@ -48,6 +50,7 @@ const ReelItem = memo(function ReelItem({
   post: EnrichedPost;
   isActive: boolean;
   isNext: boolean;
+  isNear: boolean;
   mountVideo: boolean;
   onBecameActive: () => void;
   onPostDeleted: () => void;
@@ -60,6 +63,8 @@ const ReelItem = memo(function ReelItem({
 
   if (!getPostVideoUrl(post)) return null;
 
+  const slidePoster = getPostVideoPoster(post) ?? post.postVideothumbnail;
+
   const sideActions = (
     <VideoFeedSideActions
       post={post}
@@ -70,11 +75,22 @@ const ReelItem = memo(function ReelItem({
 
   return (
     <div ref={ref} className="reels-slide bg-black">
+      {slidePoster && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={slidePoster}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
       {mountVideo ? (
         <VideoPlayer
           post={post}
           isActive={isActive}
           isNext={isNext}
+          isNear={isNear}
+          fit="cover"
           overlay={isActive ? sideActions : undefined}
           showSeekBar={isActive}
         />
@@ -150,15 +166,17 @@ export function ReelFeed({
     [hasMore, loadingMore, onLoadMore, onActiveChange, visiblePosts.length],
   );
 
-  // Prefetch current + next reel streams for instant playback
+  // Prewarm current + next reels for instant playback (iOS ignores link prefetch)
   useEffect(() => {
-    const current = visiblePosts[activeIndex];
-    const next = visiblePosts[activeIndex + 1];
-    for (const post of [current, next]) {
-      if (!post) continue;
-      const { src } = pickVideoSource(post, networkTier, "feed");
-      if (src) prefetchVideoUrl(src);
-    }
+    const toWarm = [
+      visiblePosts[activeIndex],
+      visiblePosts[activeIndex + 1],
+      visiblePosts[activeIndex + 2],
+    ].filter(Boolean);
+    const urls = toWarm.map((post) =>
+      pickVideoSource(post, networkTier, "feed").src,
+    ).filter(Boolean);
+    prewarmVideoUrls(urls);
   }, [activeIndex, visiblePosts, networkTier]);
 
   const openComment = useCallback((postId: string) => setCommentPostId(postId), []);
@@ -204,6 +222,7 @@ export function ReelFeed({
           post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
           isActive={i === activeIndex}
           isNext={i === activeIndex + 1}
+          isNear={Math.abs(i - activeIndex) === 2}
           mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
           onBecameActive={() => handleActive(i)}
           onPostDeleted={() => handlePostDeleted(post.id)}

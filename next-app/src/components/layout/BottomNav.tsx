@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchReelsFirstPage } from "@/lib/cache/reels-fetch";
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/components/layout/NavLink";
 import { useNavigationOptional } from "@/components/layout/NavigationProvider";
@@ -64,6 +65,9 @@ export function BottomNav() {
           <NavLink
             href="/reels"
             aria-current={active("/reels") ? "page" : undefined}
+            onPointerDown={() => {
+              void fetchReelsFirstPage().catch(() => {});
+            }}
             className="absolute -top-[22px] flex h-[58px] w-[58px] items-center justify-center rounded-full transition-transform active:scale-90"
             style={{
               background: "#e50914",

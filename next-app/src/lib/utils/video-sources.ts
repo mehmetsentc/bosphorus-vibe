@@ -129,6 +129,73 @@ export function getPostVideoVariants(post: UserPostDoc): {
   return { original, low, poster };
 }
 
+/** Guess sibling asset beside original.mov/mp4 in Firebase Storage URLs. */
+function inferSiblingAssetUrl(
+  videoUrl: string,
+  filename: string,
+): string | undefined {
+  if (!videoUrl || !/original\.[a-z0-9]+/i.test(videoUrl)) return undefined;
+  return videoUrl.replace(/original\.[a-z0-9]+/i, filename);
+}
+
+/** Client-uploaded preview.mp4 beside original — smallest, fastest start. */
+export function inferPreviewUrlFromVideo(videoUrl: string): string | undefined {
+  return inferSiblingAssetUrl(videoUrl, "preview.mp4");
+}
+
+/** Upload-time low.mp4 beside original (before Cloud Function transcode). */
+export function inferUploadLowUrlFromVideo(videoUrl: string): string | undefined {
+  return inferSiblingAssetUrl(videoUrl, "low.mp4");
+}
+
+/**
+ * Cloud Function transcode path: users/{uid}/videos/{postId}/low.mp4
+ * Used when Firestore still points low === original.
+ */
+export function inferTranscodedLowUrl(post: UserPostDoc): string | undefined {
+  if (!post.id) return undefined;
+  const original =
+    post.postVideoURL_original ||
+    post.postVideo ||
+    post.postVideoURL ||
+    "";
+  if (!original) return undefined;
+
+  try {
+    const bucket = original.match(/\/v0\/b\/([^/]+)\//)?.[1];
+    if (!bucket) return undefined;
+
+    const pathname = new URL(original).pathname;
+    const encoded = pathname.match(/\/o\/(.+)/)?.[1];
+    const storagePath = encoded
+      ? decodeURIComponent(encoded.split("?")[0] ?? encoded)
+      : "";
+    const userId =
+      post.postUserId ||
+      storagePath.match(/^users\/([^/]+)\//)?.[1] ||
+      "";
+    if (!userId) return undefined;
+
+    const lowPath = `users/${userId}/videos/${post.id}/low.mp4`;
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(lowPath)}?alt=media`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Smaller transcodes / previews — preferred for feed playback. */
+export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
+  const { original, low } = getPostVideoVariants(post);
+  const distinctLow = low && original && low !== original ? low : "";
+
+  return uniqueUrls(
+    inferPreviewUrlFromVideo(original),
+    distinctLow,
+    inferUploadLowUrlFromVideo(original),
+    inferTranscodedLowUrl(post),
+  ).filter((url) => url !== original);
+}
+
 export function hasDistinctLowQuality(post: UserPostDoc): boolean {
   const { original, low } = getPostVideoVariants(post);
   return Boolean(low && original && low !== original);
@@ -155,15 +222,17 @@ export function pickVideoSource(
   options?: PickVideoSourceOptions,
 ): { src: string; poster?: string; fallbacks: string[] } {
   const { original, low, poster } = getPostVideoVariants(post);
-  const distinctLow = low && original && low !== original;
+  const fast = getFastPlaybackCandidates(post);
 
   let ordered: string[];
   if (options?.preferHighQuality && original) {
-    ordered = distinctLow ? [original, low] : [original];
-  } else if (distinctLow || context === "feed" || context === "detail" || tier === "slow") {
-    ordered = [low, original];
+    ordered = fast.length ? [original, ...fast] : uniqueUrls(original, low);
+  } else if (context === "feed" || tier === "slow") {
+    ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
+  } else if (fast.length) {
+    ordered = [original, ...fast];
   } else {
-    ordered = [original, low];
+    ordered = uniqueUrls(low, original);
   }
 
   const candidates = uniqueUrls(...ordered);
@@ -173,7 +242,11 @@ export function pickVideoSource(
   return { src, poster, fallbacks };
 }
 
-/** Hint the browser to fetch the next clip while the user watches the current one. */
+const prewarmedUrls = new Set<string>();
+const prewarmElements: HTMLVideoElement[] = [];
+const MAX_PREWARM_ELEMENTS = 5;
+
+/** Hint the browser to fetch the next clip (desktop / Android). */
 export function prefetchVideoUrl(url: string): void {
   if (!url || typeof document === "undefined") return;
   const existing = document.querySelector(
@@ -185,6 +258,35 @@ export function prefetchVideoUrl(url: string): void {
   link.as = "video";
   link.href = url;
   document.head.appendChild(link);
+}
+
+/**
+ * Warm the HTTP cache via a hidden <video> — iOS Safari ignores link prefetch.
+ */
+export function prewarmVideoUrl(url: string): void {
+  if (!url || typeof document === "undefined" || prewarmedUrls.has(url)) return;
+  prewarmedUrls.add(url);
+  prefetchVideoUrl(url);
+
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.setAttribute("playsinline", "");
+  video.src = url;
+  video.style.cssText =
+    "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px";
+  document.body.appendChild(video);
+  video.load();
+
+  prewarmElements.push(video);
+  while (prewarmElements.length > MAX_PREWARM_ELEMENTS) {
+    prewarmElements.shift()?.remove();
+  }
+}
+
+export function prewarmVideoUrls(urls: string[]): void {
+  for (const url of urls) prewarmVideoUrl(url);
 }
 
 /**
@@ -220,8 +322,7 @@ export function hasPostVideo(post: UserPostDoc): boolean {
 
 /** Guess thumb.jpg beside original.mov/mp4 in Firebase Storage URLs. */
 export function inferThumbUrlFromVideo(videoUrl: string): string | undefined {
-  if (!videoUrl || !/original\.[a-z0-9]+/i.test(videoUrl)) return undefined;
-  return videoUrl.replace(/original\.[a-z0-9]+/i, "thumb.jpg");
+  return inferSiblingAssetUrl(videoUrl, "thumb.jpg");
 }
 
 /** Best video URL for grid frame fallback (iOS-safe). */

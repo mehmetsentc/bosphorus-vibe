@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isCacheExpired } from "@/lib/cache/constants";
 import { fetchReelsFirstPage } from "@/lib/cache/reels-fetch";
 import {
@@ -152,12 +152,25 @@ export function useReelsPosts() {
   // Fallback cursor for cache-restored sessions (DocumentSnapshot not serializable)
   const dateCursorRef = useRef<Date | null>(null);
   const fetchRef = useRef(0);
-  const [localPosts, setLocalPosts] = useState<EnrichedPost[]>([]);
-  const [hasMore, setHasMore] = useState(true);
+  const [localPosts, setLocalPosts] = useState<EnrichedPost[]>(() => {
+    if (typeof window === "undefined") return [];
+    const { reels, lastFetched: fetched } = useAppStore.getState();
+    if (reels && !isCacheExpired(fetched.reels)) return reels.posts;
+    return [];
+  });
+  const [hasMore, setHasMore] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const { reels, lastFetched: fetched } = useAppStore.getState();
+    return reels?.hasMore ?? true;
+  });
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [initialized, setInitialized] = useState(false);
+  const [initialized, setInitialized] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const { reels, lastFetched: fetched } = useAppStore.getState();
+    return reels !== null && !isCacheExpired(fetched.reels);
+  });
 
   const hasValidCache =
     hydrated && reelsCache !== null && !isCacheExpired(lastFetched);
@@ -174,6 +187,25 @@ export function useReelsPosts() {
   }, [reelsCache]);
 
   useEffect(() => {
+    function restoreFromPersist() {
+      const { reels, lastFetched: fetched } = useAppStore.getState();
+      if (!reels || isCacheExpired(fetched.reels)) return;
+      setLocalPosts(reels.posts);
+      setHasMore(reels.hasMore);
+      const lastPost = reels.posts[reels.posts.length - 1];
+      dateCursorRef.current =
+        lastPost?.timePosted instanceof Date ? lastPost.timePosted : null;
+      setInitialized(true);
+    }
+
+    if (useAppStore.persist.hasHydrated()) {
+      restoreFromPersist();
+      return;
+    }
+    return useAppStore.persist.onFinishHydration(restoreFromPersist);
+  }, []);
+
+  useLayoutEffect(() => {
     if (!hydrated) return;
     if (hasValidCache && !initialized) {
       syncFromCache();
@@ -257,7 +289,8 @@ export function useReelsPosts() {
   return {
     posts: localPosts,
     hasMore,
-    loading: !hydrated || !initialized || (!hasValidCache && fetching),
+    loading:
+      !hydrated || (localPosts.length === 0 && (!initialized || fetching)),
     loadingMore,
     refreshing,
     hasCache: hasValidCache,

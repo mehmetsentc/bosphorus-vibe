@@ -4,6 +4,11 @@ import {
   enrichPostsWithUsers,
   getFeedPostsPage,
 } from "@/lib/services/firestore";
+import {
+  hasPostVideo,
+  pickVideoSource,
+  prewarmVideoUrls,
+} from "@/lib/utils/video-sources";
 import { useAppStore } from "@/store/appStore";
 
 let inflight: Promise<void> | null = null;
@@ -23,6 +28,14 @@ export function prefetchFeedFirstPage(): Promise<void> {
         posts: enriched,
         hasMore: page.hasMore,
       });
+      if (typeof window !== "undefined") {
+        const urls = enriched
+          .filter(hasPostVideo)
+          .slice(0, 2)
+          .map((post) => pickVideoSource(post, "slow", "feed").src)
+          .filter(Boolean);
+        prewarmVideoUrls(urls);
+      }
     })()
       .catch(() => {})
       .finally(() => {
