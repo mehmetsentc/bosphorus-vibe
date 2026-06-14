@@ -129,7 +129,7 @@ export function useFeedPosts() {
   return {
     posts: localPosts,
     hasMore,
-    loading: hydrated && !hasValidCache && fetching,
+    loading: !hydrated || !initialized || (!hasValidCache && fetching),
     loadingMore,
     refreshing,
     hasCache: hasValidCache,
@@ -257,7 +257,7 @@ export function useReelsPosts() {
   return {
     posts: localPosts,
     hasMore,
-    loading: hydrated && !hasValidCache && fetching,
+    loading: !hydrated || !initialized || (!hasValidCache && fetching),
     loadingMore,
     refreshing,
     hasCache: hasValidCache,

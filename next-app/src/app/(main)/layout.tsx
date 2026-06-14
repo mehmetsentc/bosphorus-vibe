@@ -4,6 +4,7 @@ import { MainContentArea } from "@/components/layout/MainContentArea";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { RoutePrefetcher } from "@/components/layout/RoutePrefetcher";
 import { ReelsPrefetcher } from "@/components/layout/ReelsPrefetcher";
+import { FeedPrefetcher } from "@/components/layout/FeedPrefetcher";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { GuestBanner } from "@/components/onboarding/GuestBanner";
 import { LegalFooter } from "@/components/layout/LegalFooter";
@@ -21,6 +22,7 @@ export default function MainLayout({
   return (
     <>
       <RoutePrefetcher />
+      <FeedPrefetcher />
       <ReelsPrefetcher />
       <NavigationProgress />
       <AuthGuard>
