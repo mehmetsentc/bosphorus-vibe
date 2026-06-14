@@ -40,6 +40,10 @@ export function AdaptiveVideo({
   const playingId = useVideoPlayStore((s) => s.playingId);
   const [showPoster, setShowPoster] = useState(true);
 
+  useEffect(() => {
+    setShowPoster(true);
+  }, [src, post.id]);
+
   // Global singleton: pause when another video starts
   useEffect(() => {
     const el = videoRef.current;
@@ -64,26 +68,33 @@ export function AdaptiveVideo({
   if (!src) return null;
 
   return (
-    <div className="relative h-full w-full">
-      {showPoster && poster && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={poster}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+    <div className={`relative h-full w-full bg-black ${className}`.trim()}>
+      {poster && (
+        <div
+          className={`absolute inset-0 z-[2] transition-opacity duration-150 ${
+            showPoster ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={poster}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
       )}
       <video
         ref={videoRef}
         key={`${post.id}-${src}`}
         src={src}
-        poster={poster}
         loop={loop}
         muted={muted}
         autoPlay={isActive && autoPlay}
         playsInline={playsInline}
         preload={preload}
-        className={className}
+        className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
+          showPoster ? "opacity-0" : "opacity-100"
+        }`}
         onPlaying={() => {
           handleAdaptivePlaying();
           setShowPoster(false);

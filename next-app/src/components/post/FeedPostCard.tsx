@@ -88,12 +88,13 @@ function FeedPostCardInner({
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
   } = useAdaptiveVideoSrc(post, "feed", isActive);
-  const poster = getPostVideoPoster(post) || undefined;
+  const poster =
+    getPostVideoPoster(post) || post.postVideothumbnail || undefined;
   const videoPreload = isActive ? getPreloadStrategy(tier, true) : "none";
 
   useEffect(() => {
-    setIsMuted(true);
-  }, [videoSrc]);
+    setShowPoster(true);
+  }, [videoSrc, post.id]);
   const isOwn = user?.uid === post.postUserId;
   const isFollowing = post.postUserId
     ? followingIds?.has(post.postUserId)
@@ -243,28 +244,36 @@ function FeedPostCardInner({
       {/* Media */}
       {video ? (
         <div className="relative w-full bg-black">
-          <div className="relative aspect-square w-full overflow-hidden">
-            {/* Poster image — shown until video starts playing */}
-            {showPoster && poster && (
-              <OptimizedImage
-                src={poster}
-                alt=""
-                fill
-                sizes={FEED_MEDIA_SIZES}
-                priority={priority}
-                className="object-cover"
-              />
+          <div className="relative aspect-square w-full overflow-hidden bg-black">
+            {/* Thumbnail stays visible until the video actually plays */}
+            {poster && (
+              <div
+                className={`absolute inset-0 z-[2] transition-opacity duration-150 ${
+                  showPoster ? "opacity-100" : "pointer-events-none opacity-0"
+                }`}
+              >
+                <OptimizedImage
+                  src={poster}
+                  alt=""
+                  fill
+                  sizes={FEED_MEDIA_SIZES}
+                  priority={priority || isActive}
+                  className="object-cover"
+                />
+              </div>
             )}
 
             <video
               ref={videoRef}
               key={videoSrc}
               src={videoSrc}
-              poster={poster}
               loop
               playsInline
+              muted
               preload={videoPreload}
-              className="h-full w-full object-cover"
+              className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
+                showPoster ? "opacity-0" : "opacity-100"
+              }`}
               onPlaying={() => {
                 handleAdaptivePlaying();
                 setShowPoster(false);
@@ -284,9 +293,9 @@ function FeedPostCardInner({
               aria-label={showPoster ? "Oynat" : "Duraklat"}
             />
 
-            {/* Play icon — shown when paused */}
-            {showPoster && (
-              <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center">
+            {/* Play icon — only when scrolled away / paused (not during autoplay load) */}
+            {showPoster && !isActive && (
+              <div className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
                   <IconPlay size={22} className="translate-x-0.5 text-white" />
                 </div>
