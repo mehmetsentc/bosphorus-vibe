@@ -93,14 +93,21 @@ export interface TeamMemberDoc {
   isActiveToday: boolean;
 }
 
+export type NotificationType = "like" | "comment" | "repost" | "message" | "follow";
+
 export interface NotificationDoc {
   id: string;
   is_read: boolean;
   notification_text: string;
-  type: string;
+  type: NotificationType | string;
   time: Date;
   made_by_id?: string;
   made_to_id?: string;
+  post_id?: string;
+  comment_id?: string;
+  chat_id?: string;
+  actor_name?: string;
+  actor_photo?: string;
 }
 
 export type StoryCategory = "vibe" | "reels" | "events";

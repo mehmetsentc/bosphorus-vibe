@@ -1,5 +1,5 @@
 import { toDate } from "@/lib/utils/firestore-helpers";
-import type { EventDoc, StoryDoc, UserPostDoc } from "@/types";
+import type { EventDoc, StoryDoc, StoryUserGroup, UserPostDoc } from "@/types";
 import type { EnrichedPost } from "@/store/appStore";
 
 export function revivePosts(posts: UserPostDoc[]): UserPostDoc[] {
@@ -25,5 +25,13 @@ export function reviveStories(stories: StoryDoc[]): StoryDoc[] {
     ...s,
     storyPostedAt: toDate(s.storyPostedAt),
     expiredAt: s.expiredAt ? toDate(s.expiredAt) : undefined,
+  }));
+}
+
+export function reviveStoryGroups(groups: StoryUserGroup[]): StoryUserGroup[] {
+  return groups.map((g) => ({
+    ...g,
+    latestAt: toDate(g.latestAt),
+    stories: reviveStories(g.stories),
   }));
 }

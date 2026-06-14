@@ -48,6 +48,22 @@
       ]
     },
     {
+      "collectionGroup": "Notification",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "made_to_id", "order": "ASCENDING" },
+        { "fieldPath": "time", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "Notification",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "made_to_id", "order": "ASCENDING" },
+        { "fieldPath": "is_read", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "userPosts",
       "queryScope": "COLLECTION",
       "fields": [

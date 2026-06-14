@@ -338,6 +338,9 @@ export async function sendMessage(
     last_message_seen_by: [senderRef],
     deleted_by: arrayRemove(senderRef),
   });
+
+  const { notifyChatMessage } = await import("@/lib/services/notifications");
+  void notifyChatMessage(chatId, senderUid, trimmed);
 }
 
 export async function markChatSeen(

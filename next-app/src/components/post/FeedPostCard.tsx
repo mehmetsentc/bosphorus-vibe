@@ -31,6 +31,7 @@ import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
+import { FEED_VIDEO_MOUNT_DEFER_MS } from "@/lib/performance/app-state";
 import type { UserPostDoc } from "@/types";
 
 // Heavy modals — lazy loaded only when opened
@@ -63,7 +64,9 @@ function FeedPostCardInner({
   const videoRef = useRef<HTMLVideoElement>(null);
   const viewedRef = useRef(false);
   const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
-  const [isMuted, setIsMuted] = useState(true);
+  const feedMuted = useVideoSoundStore((s) => s.feedMuted);
+  const [isMuted, setIsMuted] = useState(feedMuted);
+  const [mountVideo, setMountVideo] = useState(false);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
@@ -87,14 +90,29 @@ function FeedPostCardInner({
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed", isActive);
+  } = useAdaptiveVideoSrc(post, "feed", isActive && mountVideo);
   const poster =
     getPostVideoPoster(post) || post.postVideothumbnail || undefined;
   const videoPreload = isActive ? getPreloadStrategy(tier, true) : "none";
 
   useEffect(() => {
     setShowPoster(true);
+    setMountVideo(false);
   }, [videoSrc, post.id]);
+
+  useEffect(() => {
+    if (!isActive) {
+      setMountVideo(false);
+      return;
+    }
+    const delay = priority ? FEED_VIDEO_MOUNT_DEFER_MS : 0;
+    const id = window.setTimeout(() => setMountVideo(true), delay);
+    return () => window.clearTimeout(id);
+  }, [isActive, priority]);
+
+  useEffect(() => {
+    setIsMuted(feedMuted);
+  }, [feedMuted]);
   const isOwn = user?.uid === post.postUserId;
   const isFollowing = post.postUserId
     ? followingIds?.has(post.postUserId)
@@ -109,32 +127,35 @@ function FeedPostCardInner({
     }
   }, [playingId, video, post.id]);
 
-  // Autoplay when scrolled into view (muted, iOS-safe)
+  // Autoplay when scrolled into view
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || !video || !videoSrc) return;
+    if (!el || !video || !videoSrc || !mountVideo) return;
     if (isActive) {
-      el.setAttribute("muted", "");
-      el.muted = true;
-      setIsMuted(true);
-      // On iOS with preload="none", load() must be called explicitly before play()
+      el.muted = feedMuted;
+      if (feedMuted) el.setAttribute("muted", "");
+      else el.removeAttribute("muted");
+      setIsMuted(feedMuted);
       if (el.readyState === 0) el.load();
       el.play().catch(() => {
-        // play() failed (data not ready yet) — retry when canplay fires
-        const onCanPlay = () => el.play().catch(() => {});
-        el.addEventListener("canplay", onCanPlay, { once: true });
+        if (!feedMuted) {
+          el.muted = true;
+          el.setAttribute("muted", "");
+          setIsMuted(true);
+        }
+        el.play().catch(() => {
+          const onCanPlay = () => el.play().catch(() => {});
+          el.addEventListener("canplay", onCanPlay, { once: true });
+        });
       });
       requestPlay(post.id);
     } else {
       el.pause();
-      el.setAttribute("muted", "");
-      el.muted = true;
-      setIsMuted(true);
       releasePlay(post.id);
       setShowPoster(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, video, videoSrc, post.id, requestPlay, releasePlay]);
+  }, [isActive, mountVideo, video, videoSrc, feedMuted, post.id, requestPlay, releasePlay]);
 
   // Increment view count once when post first enters viewport
   useEffect(() => {
@@ -258,18 +279,20 @@ function FeedPostCardInner({
                   fill
                   sizes={FEED_MEDIA_SIZES}
                   priority={priority || isActive}
+                  fetchPriority={priority ? "high" : undefined}
                   className="object-cover"
                 />
               </div>
             )}
 
+            {mountVideo && (
             <video
               ref={videoRef}
               key={videoSrc}
               src={videoSrc}
               loop
               playsInline
-              muted
+              muted={isMuted}
               preload={videoPreload}
               className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
                 showPoster ? "opacity-0" : "opacity-100"
@@ -284,6 +307,7 @@ function FeedPostCardInner({
                 if (handleAdaptiveError()) setShowPoster(true);
               }}
             />
+            )}
 
             {/* Play/pause tap area — covers full video */}
             <button

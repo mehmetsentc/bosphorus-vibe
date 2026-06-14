@@ -9,8 +9,11 @@ export const PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
 /** How many reel slides keep a mounted <video> (active ± radius) */
 export const REELS_VIDEO_WINDOW_RADIUS = 2;
 
+/** Defer mounting feed video until after poster paints (LCP) */
+export const FEED_VIDEO_MOUNT_DEFER_MS = 80;
+
 /** Delay before MessagesDock opens a realtime chat subscription */
-export const MESSAGES_DOCK_DEFER_MS = 4_000;
+export const MESSAGES_DOCK_DEFER_MS = 5_000;
 
 /** Defer home-feed suggestion cards until user scrolls near them */
 export const FEED_SUGGESTIONS_DEFER_MS = 1_500;

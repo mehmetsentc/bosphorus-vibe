@@ -15,10 +15,12 @@ function GridMedia({
   post,
   videoUrl,
   fallbackLabel,
+  eager = false,
 }: {
   post: UserPostDoc;
   videoUrl: string;
   fallbackLabel: string;
+  eager?: boolean;
 }) {
   const thumbCandidates = getPostGridThumbnailCandidates(post);
   const [thumbIndex, setThumbIndex] = useState(0);
@@ -39,7 +41,8 @@ function GridMedia({
       <img
         src={thumb}
         alt=""
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
         className="h-full w-full object-cover"
         onError={() => {
           if (thumbIndex + 1 < thumbCandidates.length) {
@@ -115,6 +118,7 @@ export function ProfilePostGrid({
                 post={post}
                 videoUrl={videoUrl}
                 fallbackLabel={t("postFallback")}
+                eager={index < 6}
               />
 
               {isPinned && (

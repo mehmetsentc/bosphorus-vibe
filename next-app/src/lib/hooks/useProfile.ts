@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isCacheExpired } from "@/lib/cache/constants";
 import { useStoreHydration } from "@/lib/hooks/useStoreHydration";
@@ -57,7 +57,7 @@ export function useProfile() {
           getFollowStats(uid),
           getPostsTaggingUser(uid),
         ]);
-        await cleanupOwnExpiredStories(uid).catch(() => {});
+        void cleanupOwnExpiredStories(uid).catch(() => {});
         const stories = await getStoriesByUser(uid);
 
         if (requestId !== fetchRef.current) return;
@@ -90,19 +90,21 @@ export function useProfile() {
     await fetchProfile(true);
   }, [clearProfileCache, fetchProfile]);
 
-  const data =
-    profileData?.uid === uid
-      ? profileData
-      : null;
+  const data = profileData?.uid === uid ? profileData : null;
+  const posts = data?.posts ?? [];
 
   return {
-    posts: data?.posts ?? [],
+    posts,
     taggedPosts: data?.taggedPosts ?? [],
     stories: data?.stories ?? [],
     followers: data?.followers ?? 0,
     following: data?.following ?? 0,
-    /** True only on first fetch when no cache exists */
-    loading: hydrated && Boolean(uid) && !hasValidCache && fetching,
+    loading:
+      hydrated &&
+      Boolean(uid) &&
+      posts.length === 0 &&
+      !hasValidCache &&
+      fetching,
     refreshing,
     hasCache: hasValidCache,
     refresh,

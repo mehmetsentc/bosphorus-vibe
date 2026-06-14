@@ -24,6 +24,8 @@ export type AppPreferences = {
   autoArchive: boolean;
   notifyLikes: boolean;
   notifyComments: boolean;
+  notifyReposts: boolean;
+  notifyMessages: boolean;
   notifyFollows: boolean;
   notifyEvents: boolean;
   dailyTimeLimitMinutes: number;
@@ -53,6 +55,8 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   autoArchive: false,
   notifyLikes: true,
   notifyComments: true,
+  notifyReposts: true,
+  notifyMessages: true,
   notifyFollows: true,
   notifyEvents: true,
   dailyTimeLimitMinutes: 60,

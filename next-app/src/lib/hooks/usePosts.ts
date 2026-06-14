@@ -30,12 +30,24 @@ export function useFeedPosts() {
   // Fallback cursor for cache-restored sessions (DocumentSnapshot not serializable)
   const dateCursorRef = useRef<Date | null>(null);
   const fetchRef = useRef(0);
-  const [localPosts, setLocalPosts] = useState<EnrichedPost[]>([]);
-  const [hasMore, setHasMore] = useState(true);
+  const [localPosts, setLocalPosts] = useState<EnrichedPost[]>(() => {
+    if (typeof window === "undefined") return [];
+    const { posts, lastFetched } = useAppStore.getState();
+    if (posts && !isCacheExpired(lastFetched.posts)) return posts.posts;
+    return [];
+  });
+  const [hasMore, setHasMore] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return useAppStore.getState().posts?.hasMore ?? true;
+  });
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [initialized, setInitialized] = useState(false);
+  const [initialized, setInitialized] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const { posts, lastFetched } = useAppStore.getState();
+    return posts !== null && !isCacheExpired(lastFetched.posts);
+  });
 
   const hasValidCache =
     hydrated && postsCache !== null && !isCacheExpired(lastFetched);
@@ -51,7 +63,7 @@ export function useFeedPosts() {
     setInitialized(true);
   }, [postsCache]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hydrated) return;
     if (hasValidCache && !initialized) {
       syncFromCache();
@@ -129,7 +141,8 @@ export function useFeedPosts() {
   return {
     posts: localPosts,
     hasMore,
-    loading: !hydrated || !initialized || (!hasValidCache && fetching),
+    loading:
+      !hydrated || (localPosts.length === 0 && (!initialized || fetching)),
     loadingMore,
     refreshing,
     hasCache: hasValidCache,

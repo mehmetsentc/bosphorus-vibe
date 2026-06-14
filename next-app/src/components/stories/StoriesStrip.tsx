@@ -7,12 +7,16 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useT } from "@/components/providers/I18nProvider";
 import { StoryRing } from "@/components/stories/StoryRing";
+import { isCacheExpired } from "@/lib/cache/constants";
+import { prefetchStoriesFeed } from "@/lib/cache/stories-prefetch";
+import { useStoreHydration } from "@/lib/hooks/useStoreHydration";
 import {
+  cleanupOwnExpiredStories,
   getActiveStories,
   groupStoriesByUser,
-  cleanupOwnExpiredStories,
   storyCoverUrl,
 } from "@/lib/services/stories";
+import { useAppStore } from "@/store/appStore";
 import type { StoryUserGroup } from "@/types";
 
 const StoryUploadModal = dynamic(
@@ -38,33 +42,67 @@ export function StoriesStrip({
   const { canUpload } = useAccess();
   const router = useRouter();
   const t = useT();
-  const [groups, setGroups] = useState<StoryUserGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const hydrated = useStoreHydration();
+  const storiesCache = useAppStore((s) => s.storiesFeed);
+  const storiesFetched = useAppStore((s) => s.lastFetched.storiesFeed);
+  const setStoriesFeedCache = useAppStore((s) => s.setStoriesFeedCache);
+
+  const [groups, setGroups] = useState<StoryUserGroup[]>(() => {
+    if (typeof window === "undefined") return [];
+    return useAppStore.getState().storiesFeed?.groups ?? [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const { storiesFeed, lastFetched } = useAppStore.getState();
+    return !(storiesFeed && !isCacheExpired(lastFetched.storiesFeed));
+  });
   const [uploadInternal, setUploadInternal] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const uploadOpen = uploadOpenProp ?? uploadInternal;
   const setUploadOpen = onUploadOpenChange ?? setUploadInternal;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (user?.uid) {
-        await cleanupOwnExpiredStories(user.uid).catch(() => {});
+  useEffect(() => {
+    if (!hydrated || !storiesCache || isCacheExpired(storiesFetched)) return;
+    setGroups(storiesCache.groups);
+    setLoading(false);
+  }, [hydrated, storiesCache, storiesFetched]);
+
+  const load = useCallback(
+    async (background = false) => {
+      if (!background && groups.length === 0) setLoading(true);
+      try {
+        if (user?.uid) {
+          void cleanupOwnExpiredStories(user.uid).catch(() => {});
+        }
+        const stories = await getActiveStories();
+        const grouped = await groupStoriesByUser(stories, user?.uid);
+        setGroups(grouped);
+        setStoriesFeedCache(grouped);
+      } finally {
+        setLoading(false);
       }
-      const stories = await getActiveStories();
-      const grouped = await groupStoriesByUser(stories, user?.uid);
-      setGroups(grouped);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.uid]);
+    },
+    [groups.length, setStoriesFeedCache, user?.uid],
+  );
 
   useEffect(() => {
-    load();
-    const interval = window.setInterval(load, 60_000);
+    if (!hydrated) return;
+    const { storiesFeed, lastFetched } = useAppStore.getState();
+    if (storiesFeed && !isCacheExpired(lastFetched.storiesFeed)) {
+      setGroups(storiesFeed.groups);
+      setLoading(false);
+      void load(true);
+      return;
+    }
+    void prefetchStoriesFeed().then(() => {
+      const cached = useAppStore.getState().storiesFeed;
+      if (cached) setGroups(cached.groups);
+      void load(true);
+    });
+    const interval = window.setInterval(() => void load(true), 60_000);
     return () => window.clearInterval(interval);
-  }, [load]);
+  }, [hydrated, load]);
 
   const ownGroup = useMemo(
     () => groups.find((g) => g.userId === user?.uid),

@@ -10,9 +10,10 @@ import {
   reviveEvents,
   revivePosts,
   reviveStories,
+  reviveStoryGroups,
 } from "@/lib/cache/revive";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
-import type { EventDoc, StoryDoc, TeamMemberDoc, UserPostDoc } from "@/types";
+import type { EventDoc, StoryDoc, TeamMemberDoc, UserPostDoc, StoryUserGroup } from "@/types";
 
 export type EnrichedPost = UserPostDoc & {
   userName?: string;
@@ -43,11 +44,16 @@ export type ReelsCache = {
   hasMore: boolean;
 };
 
+export type StoriesFeedCache = {
+  groups: StoryUserGroup[];
+};
+
 export type LastFetched = {
   profile: number;
   events: number;
   posts: number;
   reels: number;
+  storiesFeed: number;
   team: number;
 };
 
@@ -56,6 +62,7 @@ type AppStoreState = {
   events: EventsCache | null;
   posts: PostsCache | null;
   reels: ReelsCache | null;
+  storiesFeed: StoriesFeedCache | null;
   team: TeamMemberDoc[] | null;
   lastFetched: LastFetched;
   setProfileData: (data: ProfileCache) => void;
@@ -69,6 +76,8 @@ type AppStoreState = {
   appendReelsPosts: (posts: EnrichedPost[], hasMore?: boolean) => void;
   removeReelPost: (postId: string) => void;
   clearReelsCache: () => void;
+  setStoriesFeedCache: (groups: StoryUserGroup[]) => void;
+  clearStoriesFeedCache: () => void;
   setTeamCache: (members: TeamMemberDoc[]) => void;
   clearTeamCache: () => void;
   resetStore: () => void;
@@ -79,6 +88,7 @@ const emptyLastFetched: LastFetched = {
   events: 0,
   posts: 0,
   reels: 0,
+  storiesFeed: 0,
   team: 0,
 };
 
@@ -87,6 +97,7 @@ const initialState = {
   events: null as EventsCache | null,
   posts: null as PostsCache | null,
   reels: null as ReelsCache | null,
+  storiesFeed: null as StoriesFeedCache | null,
   team: null as TeamMemberDoc[] | null,
   lastFetched: { ...emptyLastFetched },
 };
@@ -164,6 +175,16 @@ export const useAppStore = create<AppStoreState>()(
           reels: null,
           lastFetched: { ...state.lastFetched, reels: 0 },
         })),
+      setStoriesFeedCache: (groups) =>
+        set((state) => ({
+          storiesFeed: { groups },
+          lastFetched: { ...state.lastFetched, storiesFeed: Date.now() },
+        })),
+      clearStoriesFeedCache: () =>
+        set((state) => ({
+          storiesFeed: null,
+          lastFetched: { ...state.lastFetched, storiesFeed: 0 },
+        })),
       setTeamCache: (members) =>
         set((state) => ({
           team: members,
@@ -190,6 +211,14 @@ export const useAppStore = create<AppStoreState>()(
         events: state.events,
         posts: slimPostsCache(state.posts),
         reels: slimReelsCache(state.reels),
+        storiesFeed: state.storiesFeed
+          ? {
+              groups: state.storiesFeed.groups.slice(0, 24).map((g) => ({
+                ...g,
+                stories: g.stories.slice(0, 8),
+              })),
+            }
+          : null,
         team: state.team,
         lastFetched: state.lastFetched,
       }),
@@ -219,6 +248,11 @@ export const useAppStore = create<AppStoreState>()(
           state.reels = {
             ...state.reels,
             posts: reviveEnrichedPosts(state.reels.posts),
+          };
+        }
+        if (state.storiesFeed) {
+          state.storiesFeed = {
+            groups: reviveStoryGroups(state.storiesFeed.groups),
           };
         }
       },

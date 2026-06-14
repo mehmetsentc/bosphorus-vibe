@@ -154,8 +154,13 @@ service cloud.firestore {
 
     // --- Notifications ---
     match /Notification/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isSignedIn()
+        && (resource.data.made_to_id == request.auth.uid
+            || resource.data.made_to == myUserRef());
+      allow create: if isSignedIn()
+        && request.resource.data.made_by_id == request.auth.uid
+        && request.resource.data.made_to_id is string
+        && request.resource.data.made_to_id != request.auth.uid;
       allow update: if isSignedIn()
         && resource.data.made_to_id == request.auth.uid;
       allow delete: if isAdmin();

@@ -151,6 +151,16 @@ function SettingsDetail({ slug }: { slug: SettingsSlug }) {
                 onChange={(v) => update({ notifyComments: v })}
               />
               <SettingsToggleRow
+                label={t("settingsNotifyReposts")}
+                checked={prefs.notifyReposts}
+                onChange={(v) => update({ notifyReposts: v })}
+              />
+              <SettingsToggleRow
+                label={t("settingsNotifyMessages")}
+                checked={prefs.notifyMessages}
+                onChange={(v) => update({ notifyMessages: v })}
+              />
+              <SettingsToggleRow
                 label={t("settingsNotifyFollows")}
                 checked={prefs.notifyFollows}
                 onChange={(v) => update({ notifyFollows: v })}

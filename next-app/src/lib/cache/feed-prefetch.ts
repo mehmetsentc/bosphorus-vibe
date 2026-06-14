@@ -8,6 +8,8 @@ import {
   hasPostVideo,
   pickVideoSource,
   prewarmVideoUrls,
+  getPostVideoPoster,
+  prefetchImageUrls,
 } from "@/lib/utils/video-sources";
 import { useAppStore } from "@/store/appStore";
 
@@ -29,12 +31,17 @@ export function prefetchFeedFirstPage(): Promise<void> {
         hasMore: page.hasMore,
       });
       if (typeof window !== "undefined") {
-        const urls = enriched
+        const videoUrls = enriched
           .filter(hasPostVideo)
           .slice(0, 2)
           .map((post) => pickVideoSource(post, "slow", "feed").src)
           .filter(Boolean);
-        prewarmVideoUrls(urls);
+        prewarmVideoUrls(videoUrls);
+        const posterUrls = enriched
+          .slice(0, 2)
+          .map((post) => getPostVideoPoster(post))
+          .filter(Boolean) as string[];
+        prefetchImageUrls(posterUrls);
       }
     })()
       .catch(() => {})

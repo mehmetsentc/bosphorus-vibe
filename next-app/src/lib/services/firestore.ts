@@ -488,6 +488,7 @@ export async function toggleLike(
   postId: string,
   userId: string,
   currentlyLiked: boolean,
+  actorName?: string,
 ): Promise<void> {
   const postRef = doc(getFirebaseDb(), COLLECTIONS.userPosts, postId);
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
@@ -496,6 +497,8 @@ export async function toggleLike(
     await updateDoc(postRef, { Post_liked_by: arrayRemove(userRef) });
   } else {
     await updateDoc(postRef, { Post_liked_by: arrayUnion(userRef) });
+    const { notifyPostLike } = await import("@/lib/services/notifications");
+    void notifyPostLike(postId, userId, actorName);
   }
 }
 
@@ -565,6 +568,7 @@ export async function addPostComment(
   postId: string,
   userId: string,
   text: string,
+  actorName?: string,
 ): Promise<void> {
   const db = getFirebaseDb();
   const postRef = doc(db, COLLECTIONS.userPosts, postId);
@@ -572,13 +576,16 @@ export async function addPostComment(
   const trimmed = text.trim();
   if (!trimmed) return;
 
-  await addDoc(collection(db, COLLECTIONS.postComments), {
+  const commentRef = await addDoc(collection(db, COLLECTIONS.postComments), {
     comment: trimmed,
     user: userRef,
     post: postRef,
     timePosted: serverTimestamp(),
   });
   await updateDoc(postRef, { numComments: increment(1) });
+
+  const { notifyPostComment } = await import("@/lib/services/notifications");
+  void notifyPostComment(postId, userId, commentRef.id, actorName);
 }
 
 export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
@@ -1165,6 +1172,7 @@ export async function repostUserPost(
 
   const data = snap.data();
   const sourceOwnerId = refToId(data.postUser);
+  if (!sourceOwnerId) throw new Error("Post owner not found");
   if (sourceOwnerId === userId) throw new Error("Cannot repost own post");
 
   const userRef = doc(db, COLLECTIONS.users, userId);
@@ -1185,6 +1193,10 @@ export async function repostUserPost(
   }
 
   const docRef = await addDoc(collection(db, COLLECTIONS.userPosts), postData);
+
+  const { notifyPostRepost } = await import("@/lib/services/notifications");
+  notifyPostRepost(sourceOwnerId, userId, sourcePostId);
+
   return docRef.id;
 }
 

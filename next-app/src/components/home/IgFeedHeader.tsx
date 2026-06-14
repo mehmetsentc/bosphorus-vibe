@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { IconHeart, IconPlus } from "@/components/icons/Icons";
+import { IconPlus } from "@/components/icons/Icons";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useT } from "@/components/providers/I18nProvider";
 
 export function IgFeedHeader() {
@@ -23,13 +24,7 @@ export function IgFeedHeader() {
         {t("feedForYou")}
         <span className="text-xs text-muted">▾</span>
       </button>
-      <Link
-        href="/favorites"
-        aria-label={t("favoritesTitle")}
-        className="rounded-lg p-1.5 transition hover:bg-surface-overlay"
-      >
-        <IconHeart size={24} />
-      </Link>
+      <NotificationBell />
     </header>
   );
 }

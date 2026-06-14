@@ -289,6 +289,23 @@ export function prewarmVideoUrls(urls: string[]): void {
   for (const url of urls) prewarmVideoUrl(url);
 }
 
+const prefetchedImages = new Set<string>();
+
+/** Warm poster/thumbnail HTTP cache for faster LCP. */
+export function prefetchImageUrl(url: string): void {
+  if (!url || typeof document === "undefined" || prefetchedImages.has(url)) return;
+  prefetchedImages.add(url);
+  const link = document.createElement("link");
+  link.rel = "preload";
+  link.as = "image";
+  link.href = url;
+  document.head.appendChild(link);
+}
+
+export function prefetchImageUrls(urls: string[]): void {
+  for (const url of urls) prefetchImageUrl(url);
+}
+
 /**
  * Returns the best image URL for a given context.
  */

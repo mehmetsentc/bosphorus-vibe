@@ -5,10 +5,10 @@ import { useEffect } from "react";
 import { NAV_ITEMS } from "@/components/layout/nav-config";
 import { getAccessCookie } from "@/lib/session/cookies";
 
-const EXTRA_ROUTES = ["/favorites", "/upload", "/brand", "/members"];
+const EXTRA_ROUTES = ["/favorites", "/upload", "/brand", "/members", "/notifications"];
 
-const GUEST_BLOCKED = new Set(["/profile", "/messages", "/upload", "/favorites", "/admin"]);
-const AUTH_ONLY = new Set(["/profile", "/upload", "/favorites", "/admin", "/messages"]);
+const GUEST_BLOCKED = new Set(["/profile", "/messages", "/upload", "/favorites", "/admin", "/notifications"]);
+const AUTH_ONLY = new Set(["/profile", "/upload", "/favorites", "/admin", "/messages", "/notifications"]);
 
 function routesForAccess(): string[] {
   const access = getAccessCookie();
