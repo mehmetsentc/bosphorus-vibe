@@ -40,10 +40,8 @@ function detectTier(): NetworkTier {
 
   if (typeof conn.rtt === "number" && conn.rtt > 350) return "slow";
 
-  // 4g with moderate throughput — still prefer lighter streams
-  if (effectiveType === "4g" && typeof conn.downlink === "number" && conn.downlink < 5) {
-    return "slow";
-  }
+  // 4g label but hotel Wi‑Fi is often slow — bias toward lighter streams
+  if (effectiveType === "4g") return "slow";
 
   return "fast";
 }

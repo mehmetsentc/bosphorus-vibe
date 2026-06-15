@@ -266,8 +266,8 @@ export async function createPlaybackPreviewBlob(
 
     const recorder = new MediaRecorder(stream, {
       mimeType,
-      videoBitsPerSecond: options?.videoBitsPerSecond ?? 900_000,
-      audioBitsPerSecond: 64_000,
+      videoBitsPerSecond: options?.videoBitsPerSecond ?? 500_000,
+      audioBitsPerSecond: 48_000,
     });
 
     const chunks: Blob[] = [];

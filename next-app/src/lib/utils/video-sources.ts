@@ -1,5 +1,7 @@
 import type { UserPostDoc } from "@/types";
 import type { NetworkTier } from "@/lib/hooks/useNetworkQuality";
+import { warmVideoBlobs } from "@/lib/utils/video-blob-cache";
+import { filterExistingVideoUrls } from "@/lib/utils/video-url-probe";
 
 function uniqueUrls(...urls: (string | undefined)[]): string[] {
   const seen = new Set<string>();
@@ -140,7 +142,25 @@ function inferSiblingAssetUrl(
 
 /** Client-uploaded preview.mp4 beside original — smallest, fastest start. */
 export function inferPreviewUrlFromVideo(videoUrl: string): string | undefined {
-  return inferSiblingAssetUrl(videoUrl, "preview.mp4");
+  const fromOriginal = inferSiblingAssetUrl(videoUrl, "preview.mp4");
+  if (fromOriginal) return fromOriginal;
+
+  try {
+    const pathname = new URL(videoUrl).pathname;
+    const encoded = pathname.match(/\/o\/(.+)/)?.[1];
+    if (!encoded) return undefined;
+    const storagePath = decodeURIComponent(encoded.split("?")[0] ?? encoded);
+    if (storagePath.endsWith("/preview.mp4")) return videoUrl;
+
+    const previewPath = storagePath.replace(/\/[^/]+$/, "/preview.mp4");
+    if (previewPath === storagePath) return undefined;
+
+    const bucket = videoUrl.match(/\/v0\/b\/([^/]+)\//)?.[1];
+    if (!bucket) return undefined;
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(previewPath)}?alt=media`;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Upload-time low.mp4 beside original (before Cloud Function transcode). */
@@ -199,12 +219,9 @@ export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
     candidates.push(preview);
   }
 
-  // Server transcode path — only when we know the file exists
-  if (post.videoTranscodeStatus === "done") {
-    const transcoded = inferTranscodedLowUrl(post);
-    if (transcoded && transcoded !== distinctLow) {
-      candidates.push(transcoded);
-    }
+  const transcoded = inferTranscodedLowUrl(post);
+  if (transcoded && transcoded !== distinctLow && !candidates.includes(transcoded)) {
+    candidates.push(transcoded);
   }
 
   return uniqueUrls(...candidates).filter((url) => url !== original);
@@ -344,9 +361,13 @@ export function prewarmPostVideo(
 /** Prewarm reels playback URL + poster for the next slides. */
 export function prewarmReelsPost(post: UserPostDoc, tier: NetworkTier): void {
   const { src, poster, fallbacks } = pickVideoSource(post, tier, "reels");
-  if (src) prewarmVideoUrl(src);
-  if (fallbacks[0]) prewarmVideoUrl(fallbacks[0]);
+  const candidates = [src, ...fallbacks].filter(Boolean).slice(0, 3);
+  warmVideoBlobs(candidates, "high");
   if (poster) prefetchImageUrl(poster);
+
+  void filterExistingVideoUrls(candidates).then((verified) => {
+    if (verified[0]) warmVideoBlobs([verified[0]], "high");
+  });
 }
 
 export function prewarmReelsPosts(posts: UserPostDoc[], tier: NetworkTier): void {

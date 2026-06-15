@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
+import { useReelsVideoSrc } from "@/lib/hooks/useReelsVideoSrc";
 import type { VideoPlaybackContext } from "@/lib/utils/video-sources";
 import {
   IconVolumeOff,
@@ -72,6 +73,16 @@ export function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasPlayedRef = useRef(false);
 
+  const isReels = playbackContext === "reels";
+  const shouldLoad = isActive || isNext || (isReels && isNear);
+
+  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive);
+  const adaptiveVideo = useAdaptiveVideoSrc(
+    post,
+    playbackContext,
+    !isReels && shouldLoad,
+  );
+
   const {
     src: videoSrc,
     poster,
@@ -79,11 +90,13 @@ export function VideoPlayer({
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, playbackContext, isActive || isNext);
-  const isReels = playbackContext === "reels";
+  } = isReels ? reelsVideo : adaptiveVideo;
+
+  const resolving = isReels && reelsVideo.resolving;
+
   const preload =
     isActive || isNext || (isReels && isNear) ? "auto" : "none";
-  const shouldPrime = isActive || isNext || (isReels && isNear);
+  const shouldPrime = shouldLoad;
 
   const reelsMuted = useVideoSoundStore((s) => s.reelsMuted);
   const setReelsMuted = useVideoSoundStore((s) => s.setReelsMuted);
@@ -198,7 +211,7 @@ export function VideoPlayer({
     video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration || Infinity);
   }, []);
 
-  if (!videoSrc) return null;
+  if (!videoSrc && !resolving) return null;
 
   return (
     <div
@@ -208,14 +221,15 @@ export function VideoPlayer({
           : "absolute inset-0 flex items-center justify-center overflow-hidden bg-black"
       }
     >
-      {showPoster && poster && (
+      {(showPoster || resolving) && poster && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
       )}
 
+      {videoSrc && (
       <video
         ref={videoRef}
-        key={`${post.id}-${videoSrc}`}
+        key={isReels ? post.id : `${post.id}-${videoSrc}`}
         src={videoSrc}
         poster={poster}
         loop
@@ -272,6 +286,7 @@ export function VideoPlayer({
           setDuration(e.currentTarget.duration || 0);
         }}
       />
+      )}
 
       <button
         type="button"
@@ -292,7 +307,7 @@ export function VideoPlayer({
         }
       </button>
 
-      {loading && isActive && !poster && (
+      {loading && isActive && !poster && !resolving && (
         <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center bg-black/30">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-vibe border-t-transparent" />
         </div>
