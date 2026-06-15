@@ -20,7 +20,7 @@ import {
   followUser,
   unfollowUser,
 } from "@/lib/services/friends";
-import { getPostVideoPoster, getPostGridThumbnailCandidates, pickImageSource, getVideoReelsPath, prewarmPostVideo, prefetchImageUrl } from "@/lib/utils/video-sources";
+import { getPostVideoPoster, getPostGridThumbnailCandidates, pickImageSource, getVideoReelsPath, prewarmReelsPost, prefetchImageUrl } from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
 import {
   IconPlay,
@@ -193,20 +193,20 @@ function FeedPostCardInner({
   // Prewarm + prefetch reels route while video is visible in feed
   useEffect(() => {
     if (!isActive || !video) return;
-    prewarmPostVideo(post, networkTier);
+    prewarmReelsPost(post, networkTier);
     router.prefetch(getVideoReelsPath(post.id));
   }, [isActive, video, post, networkTier, router]);
 
   const openReels = useCallback(() => {
     if (!video) return;
     setReelsMuted(false);
-    prewarmPostVideo(post, networkTier);
+    prewarmReelsPost(post, networkTier);
     router.push(getVideoReelsPath(post.id));
   }, [video, post, networkTier, router, setReelsMuted]);
 
   const handleVideoPointerDown = useCallback(() => {
     if (!video) return;
-    prewarmPostVideo(post, networkTier);
+    prewarmReelsPost(post, networkTier);
   }, [video, post, networkTier]);
 
   // Mute button (top-right corner) — toggle sound only

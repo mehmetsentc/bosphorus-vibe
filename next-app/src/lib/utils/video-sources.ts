@@ -183,18 +183,34 @@ export function inferTranscodedLowUrl(post: UserPostDoc): string | undefined {
   }
 }
 
-/** Smaller transcodes / previews — preferred for feed playback. */
+/** Smaller transcodes / previews — preferred for feed & reels playback. */
 export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
   const { original, low } = getPostVideoVariants(post);
   const distinctLow = low && original && low !== original ? low : "";
 
-  return uniqueUrls(
-    inferPreviewUrlFromVideo(original),
-    distinctLow,
-    inferUploadLowUrlFromVideo(original),
-    inferTranscodedLowUrl(post),
-  ).filter((url) => url !== original);
+  const candidates: string[] = [];
+
+  if (distinctLow) {
+    candidates.push(distinctLow);
+  }
+
+  const preview = inferPreviewUrlFromVideo(original);
+  if (preview && preview !== distinctLow) {
+    candidates.push(preview);
+  }
+
+  // Server transcode path — only when we know the file exists
+  if (post.videoTranscodeStatus === "done") {
+    const transcoded = inferTranscodedLowUrl(post);
+    if (transcoded && transcoded !== distinctLow) {
+      candidates.push(transcoded);
+    }
+  }
+
+  return uniqueUrls(...candidates).filter((url) => url !== original);
 }
+
+export type VideoPlaybackContext = "feed" | "detail" | "reels";
 
 export function hasDistinctLowQuality(post: UserPostDoc): boolean {
   const { original, low } = getPostVideoVariants(post);
@@ -218,14 +234,17 @@ type PickVideoSourceOptions = {
 export function pickVideoSource(
   post: UserPostDoc,
   tier: NetworkTier,
-  context: "feed" | "detail" = "feed",
+  context: VideoPlaybackContext = "feed",
   options?: PickVideoSourceOptions,
 ): { src: string; poster?: string; fallbacks: string[] } {
   const { original, low, poster } = getPostVideoVariants(post);
   const fast = getFastPlaybackCandidates(post);
 
   let ordered: string[];
-  if (options?.preferHighQuality && original) {
+  if (context === "reels") {
+    // Reels: always preview/low first — instant start beats full-res on swipe
+    ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
+  } else if (options?.preferHighQuality && original) {
     ordered = fast.length ? [original, ...fast] : uniqueUrls(original, low);
   } else if (context === "feed" || tier === "slow") {
     ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
@@ -244,7 +263,7 @@ export function pickVideoSource(
 
 const prewarmedUrls = new Set<string>();
 const prewarmElements: HTMLVideoElement[] = [];
-const MAX_PREWARM_ELEMENTS = 8;
+const MAX_PREWARM_ELEMENTS = 12;
 
 /** Hint the browser to fetch the next clip (desktop / Android). */
 export function prefetchVideoUrl(url: string): void {
@@ -312,10 +331,26 @@ export function getVideoReelsPath(postId: string): string {
 }
 
 /** Warm video + poster before opening reels from feed tap. */
-export function prewarmPostVideo(post: UserPostDoc, tier: NetworkTier): void {
-  const { src, poster } = pickVideoSource(post, tier, "feed");
+export function prewarmPostVideo(
+  post: UserPostDoc,
+  tier: NetworkTier,
+  context: VideoPlaybackContext = "feed",
+): void {
+  const { src, poster } = pickVideoSource(post, tier, context);
   if (src) prewarmVideoUrl(src);
   if (poster) prefetchImageUrl(poster);
+}
+
+/** Prewarm reels playback URL + poster for the next slides. */
+export function prewarmReelsPost(post: UserPostDoc, tier: NetworkTier): void {
+  const { src, poster, fallbacks } = pickVideoSource(post, tier, "reels");
+  if (src) prewarmVideoUrl(src);
+  if (fallbacks[0]) prewarmVideoUrl(fallbacks[0]);
+  if (poster) prefetchImageUrl(poster);
+}
+
+export function prewarmReelsPosts(posts: UserPostDoc[], tier: NetworkTier): void {
+  for (const post of posts) prewarmReelsPost(post, tier);
 }
 
 /**

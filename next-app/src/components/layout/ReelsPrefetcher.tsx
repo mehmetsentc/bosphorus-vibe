@@ -9,30 +9,22 @@ import { useEffect } from "react";
 import { isCacheExpired } from "@/lib/cache/constants";
 import { fetchReelsFirstPage } from "@/lib/cache/reels-fetch";
 import { useStoreHydration } from "@/lib/hooks/useStoreHydration";
-import {
-  pickVideoSource,
-  prewarmVideoUrls,
-} from "@/lib/utils/video-sources";
+import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
+import { prewarmReelsPosts } from "@/lib/utils/video-sources";
 import { useAppStore } from "@/store/appStore";
-
-function prewarmCachedReels(): void {
-  const { reels, lastFetched } = useAppStore.getState();
-  if (!reels || isCacheExpired(lastFetched.reels)) return;
-  const urls = reels.posts
-    .slice(0, 3)
-    .map((post) => pickVideoSource(post, "slow", "feed").src)
-    .filter(Boolean);
-  prewarmVideoUrls(urls);
-}
 
 export function ReelsPrefetcher() {
   const hydrated = useStoreHydration();
+  const tier = useEffectiveNetworkTier();
 
   useEffect(() => {
     if (!hydrated) return;
-    prewarmCachedReels();
+    const { reels, lastFetched } = useAppStore.getState();
+    if (reels && !isCacheExpired(lastFetched.reels)) {
+      prewarmReelsPosts(reels.posts.slice(0, 3), tier);
+    }
     void fetchReelsFirstPage().catch(() => {});
-  }, [hydrated]);
+  }, [hydrated, tier]);
 
   return null;
 }

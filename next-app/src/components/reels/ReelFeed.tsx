@@ -11,7 +11,7 @@ import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { pickVideoSource, prewarmVideoUrls } from "@/lib/utils/video-sources";
+import { prewarmReelsPosts } from "@/lib/utils/video-sources";
 import { REELS_VIDEO_WINDOW_RADIUS } from "@/lib/performance/app-state";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { UserPostDoc } from "@/types";
@@ -63,7 +63,7 @@ const ReelItem = memo(function ReelItem({
   onCommentClick: () => void;
 }) {
   const { ref } = useIntersectionActive<HTMLDivElement>({
-    threshold: 0.72,
+    threshold: 0.55,
     onVisible: onBecameActive,
   });
 
@@ -96,6 +96,7 @@ const ReelItem = memo(function ReelItem({
           isActive={isActive}
           isNext={isNext}
           isNear={isNear}
+          playbackContext="reels"
           fit="cover"
           overlay={isActive ? sideActions : undefined}
           showSeekBar={isActive}
@@ -233,7 +234,15 @@ export function ReelFeed({
     };
   }, []);
 
-  // Prewarm current + adjacent reels for instant playback
+  // Prewarm before paint — current + next 2 reels
+  useLayoutEffect(() => {
+    const slice = visiblePosts.slice(
+      Math.max(0, activeIndex - 1),
+      activeIndex + 3,
+    );
+    prewarmReelsPosts(slice, networkTier);
+  }, [activeIndex, visiblePosts, networkTier]);
+
   useEffect(() => {
     const toWarm = [
       visiblePosts[activeIndex - 1],
@@ -241,10 +250,7 @@ export function ReelFeed({
       visiblePosts[activeIndex + 1],
       visiblePosts[activeIndex + 2],
     ].filter(Boolean);
-    const urls = toWarm
-      .map((post) => pickVideoSource(post, networkTier, "feed").src)
-      .filter(Boolean);
-    prewarmVideoUrls(urls);
+    prewarmReelsPosts(toWarm, networkTier);
   }, [activeIndex, visiblePosts, networkTier]);
 
   // Jump to tapped post before paint when opening from feed
@@ -264,10 +270,7 @@ export function ReelFeed({
     const idx = visiblePosts.findIndex((p) => p.id === initialPostId);
     if (idx < 0) return;
     const toWarm = visiblePosts.slice(idx, idx + 3);
-    const urls = toWarm
-      .map((post) => pickVideoSource(post, networkTier, "feed").src)
-      .filter(Boolean);
-    prewarmVideoUrls(urls);
+    prewarmReelsPosts(toWarm, networkTier);
   }, [initialPostId, visiblePosts, networkTier]);
 
   const openComment = useCallback((postId: string) => setCommentPostId(postId), []);

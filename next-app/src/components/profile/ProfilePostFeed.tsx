@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { getPostVideoUrl } from "@/lib/services/firestore";
-import { getPostVideoPoster, pickVideoSource, prewarmVideoUrls } from "@/lib/utils/video-sources";
+import { getPostVideoPoster, prewarmReelsPosts } from "@/lib/utils/video-sources";
 import { REELS_VIDEO_WINDOW_RADIUS } from "@/lib/performance/app-state";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { VideoFeedSideActions } from "@/components/video/VideoFeedSideActions";
@@ -82,6 +82,7 @@ function ProfileFeedItem({
           isActive={isActive}
           isNext={isNext}
           isNear={isNear}
+          playbackContext="reels"
           fit="cover"
           overlay={sideActions}
           showSeekBar={isActive}
@@ -161,13 +162,8 @@ export function ProfilePostFeed({
   }, []);
 
   useEffect(() => {
-    const current = posts[activeIndex];
-    const next = posts[activeIndex + 1];
-    const urls = [current, next]
-      .filter(Boolean)
-      .map((p) => pickVideoSource(p, networkTier, "feed").src)
-      .filter(Boolean);
-    prewarmVideoUrls(urls);
+    const slice = posts.slice(activeIndex, activeIndex + 2);
+    prewarmReelsPosts(slice, networkTier);
   }, [activeIndex, posts, networkTier]);
 
   if (!posts.length) {

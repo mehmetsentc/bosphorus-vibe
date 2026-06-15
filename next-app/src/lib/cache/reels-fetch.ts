@@ -4,7 +4,7 @@ import {
   getVideoPostsPage,
   type PostsPage,
 } from "@/lib/services/firestore";
-import { pickVideoSource, prewarmVideoUrls } from "@/lib/utils/video-sources";
+import { prewarmReelsPosts } from "@/lib/utils/video-sources";
 import { useAppStore, type EnrichedPost } from "@/store/appStore";
 
 const REELS_PAGE_SIZE = 12;
@@ -46,11 +46,7 @@ export async function fetchReelsFirstPage(
       hasMore: result.hasMore,
     });
     if (typeof window !== "undefined") {
-      const urls = enriched
-        .slice(0, 3)
-        .map((post) => pickVideoSource(post, "slow", "feed").src)
-        .filter(Boolean);
-      prewarmVideoUrls(urls);
+      prewarmReelsPosts(enriched.slice(0, 3), "slow");
     }
     return result;
   })();

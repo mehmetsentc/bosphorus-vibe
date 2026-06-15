@@ -27,3 +27,6 @@ export const REELS_PAGE_SIZE = 12;
 
 /** Buffering longer than this → switch to lower-quality URL if available */
 export const VIDEO_STALL_DOWNGRADE_MS = 800;
+
+/** Reels: downgrade faster — TikTok/IG start from preview, not full original */
+export const VIDEO_STALL_DOWNGRADE_REELS_MS = 200;

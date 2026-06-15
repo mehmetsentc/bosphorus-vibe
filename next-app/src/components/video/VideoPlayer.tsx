@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
+import type { VideoPlaybackContext } from "@/lib/utils/video-sources";
 import {
   IconVolumeOff,
   IconVolumeOn,
@@ -29,6 +30,8 @@ type VideoPlayerProps = {
   autoPlay?: boolean;
   /** Reels/TikTok-style full bleed vs letterboxed detail view */
   fit?: VideoFit;
+  /** Reels always prefer preview/low for instant start */
+  playbackContext?: VideoPlaybackContext;
   className?: string;
   overlay?: ReactNode;
   showSeekBar?: boolean;
@@ -59,6 +62,7 @@ export function VideoPlayer({
   overlay,
   showSeekBar = true,
   onReady,
+  playbackContext = "detail",
 }: VideoPlayerProps) {
   const videoClassName =
     className ??
@@ -75,9 +79,11 @@ export function VideoPlayer({
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed", isActive || isNext);
-  const preload = isActive || isNext ? "auto" : isNear ? "metadata" : "none";
-  const shouldPrime = isActive || isNext || isNear;
+  } = useAdaptiveVideoSrc(post, playbackContext, isActive || isNext);
+  const isReels = playbackContext === "reels";
+  const preload =
+    isActive || isNext || (isReels && isNear) ? "auto" : "none";
+  const shouldPrime = isActive || isNext || (isReels && isNear);
 
   const reelsMuted = useVideoSoundStore((s) => s.reelsMuted);
   const setReelsMuted = useVideoSoundStore((s) => s.setReelsMuted);
@@ -133,7 +139,8 @@ export function VideoPlayer({
       requestPlay(post.id);
     } else {
       video.pause();
-      if (!isActive) {
+      // Keep buffer on adjacent reels so swipe-back / swipe-next is instant
+      if (!isActive && !isNext && !(isReels && isNear)) {
         video.currentTime = 0;
         setShowPoster(true);
         hasPlayedRef.current = false;

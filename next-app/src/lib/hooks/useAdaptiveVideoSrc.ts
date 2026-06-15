@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsOptional } from "@/components/settings/SettingsProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { VIDEO_STALL_DOWNGRADE_MS } from "@/lib/performance/app-state";
+import { VIDEO_STALL_DOWNGRADE_MS, VIDEO_STALL_DOWNGRADE_REELS_MS } from "@/lib/performance/app-state";
 import {
   hasPostVideo,
   pickVideoSource,
+  type VideoPlaybackContext,
 } from "@/lib/utils/video-sources";
 import type { UserPostDoc } from "@/types";
 
@@ -16,7 +17,7 @@ import type { UserPostDoc } from "@/types";
  */
 export function useAdaptiveVideoSrc(
   post: UserPostDoc,
-  context: "feed" | "detail",
+  context: VideoPlaybackContext,
   isActive = true,
 ) {
   const tier = useEffectiveNetworkTier();
@@ -72,11 +73,15 @@ export function useAdaptiveVideoSrc(
   const onWaiting = useCallback(() => {
     if (!isActive || srcIndex >= sources.length - 1) return;
     if (stallTimerRef.current) return;
+    const stallMs =
+      context === "reels"
+        ? VIDEO_STALL_DOWNGRADE_REELS_MS
+        : VIDEO_STALL_DOWNGRADE_MS;
     stallTimerRef.current = setTimeout(() => {
       stallTimerRef.current = null;
       downgrade();
-    }, VIDEO_STALL_DOWNGRADE_MS);
-  }, [isActive, srcIndex, sources.length, downgrade]);
+    }, stallMs);
+  }, [isActive, srcIndex, sources.length, downgrade, context]);
 
   const onPlaying = useCallback(() => {
     clearStallTimer();
