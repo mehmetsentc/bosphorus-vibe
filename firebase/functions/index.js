@@ -119,7 +119,8 @@ async function assertBackfillOrAdminAuth(req) {
     try {
       const decoded = await admin.auth().verifyIdToken(token);
       const userDoc = await admin.firestore().collection("users").doc(decoded.uid).get();
-      if (userDoc.data()?.role === "admin") return;
+      const role = String(userDoc.data()?.role || "").trim().toLowerCase();
+      if (role === "admin") return;
     } catch {
       // fall through
     }
@@ -128,6 +129,17 @@ async function assertBackfillOrAdminAuth(req) {
   const err = new Error("Unauthorized");
   err.status = 401;
   throw err;
+}
+
+async function assertCallableAdmin(context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Unauthorized");
+  }
+  const snap = await admin.firestore().collection("users").doc(context.auth.uid).get();
+  const role = String(snap.data()?.role || "").trim().toLowerCase();
+  if (role !== "admin") {
+    throw new functions.https.HttpsError("permission-denied", "Admin role required");
+  }
 }
 
 /**
@@ -313,6 +325,19 @@ exports.runVideoTranscodeBatch = functions
         error: err instanceof Error ? err.message : "Internal error",
       });
     }
+  });
+
+/** Callable batch — Firebase Auth token verified automatically (admin UI). */
+exports.adminRunTranscodeBatch = functions
+  .region(REGION)
+  .runWith(TRANSCODE_RUN_OPTS)
+  .https.onCall(async (data, context) => {
+    await assertCallableAdmin(context);
+    const limit = Math.min(
+      Math.max(parseInt(data?.limit, 10) || BATCH_SIZE, 1),
+      5,
+    );
+    return processPendingBatch(limit);
   });
 
 // --- Video thumbnail backfill (cover frame from video) ---
@@ -505,6 +530,19 @@ exports.runVideoThumbnailBatch = functions
         error: err instanceof Error ? err.message : "Internal error",
       });
     }
+  });
+
+/** Callable thumbnail batch — Firebase Auth token verified automatically (admin UI). */
+exports.adminRunThumbnailBatch = functions
+  .region(REGION)
+  .runWith(THUMBNAIL_RUN_OPTS)
+  .https.onCall(async (data, context) => {
+    await assertCallableAdmin(context);
+    const limit = Math.min(
+      Math.max(parseInt(data?.limit, 10) || THUMBNAIL_BATCH_SIZE, 1),
+      8,
+    );
+    return processPendingThumbnailBatch(limit);
   });
 
 exports.onUserDeleted = functions

@@ -17,12 +17,13 @@ import {
   type DocumentSnapshot,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
-import { getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseDb, getFirebaseFunctions } from "@/lib/firebase";
 import { getAllEvents } from "@/lib/services/firestore";
 import { postNeedsThumbnailRegen } from "@/lib/admin/video-thumbnail-backfill";
 import { postNeedsVideoTranscode } from "@/lib/admin/video-transcode";
 import { clientApiUrl } from "@/lib/client-api-url";
 import { getFirebaseEnv } from "@/lib/firebase/config";
+import { httpsCallable } from "firebase/functions";
 import { COLLECTIONS } from "@/types";
 
 const PAGE_SIZE = 100;
@@ -298,6 +299,33 @@ async function postAdminApi(
   return parseAdminResponse(res);
 }
 
+async function postAdminCallable(
+  name: "adminRunTranscodeBatch" | "adminRunThumbnailBatch",
+  limit: number,
+): Promise<Record<string, unknown>> {
+  const fn = httpsCallable(getFirebaseFunctions(), name);
+  try {
+    const result = await fn({ limit });
+    return (result.data ?? {}) as Record<string, unknown>;
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code: string }).code)
+        : "";
+    if (code === "functions/unauthenticated") {
+      throw new Error("Giriş gerekli — çıkış yapıp tekrar giriş yapın.");
+    }
+    if (code === "functions/permission-denied") {
+      throw new Error("Admin yetkisi gerekli.");
+    }
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as { message: string }).message)
+        : "İşlem başarısız";
+    throw new Error(message);
+  }
+}
+
 function cloudFunctionBatchUrl(name: string): string | null {
   const projectId = getFirebaseEnv().NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   if (!projectId) return null;
@@ -355,15 +383,23 @@ function isAuthBatchError(err: unknown): boolean {
 
 async function runBatchWithFallback(
   apiPath: string,
-  functionName: string,
+  httpFunctionName: string,
+  callableName: "adminRunTranscodeBatch" | "adminRunThumbnailBatch",
   idToken: string,
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const limit = typeof body.limit === "number" ? body.limit : 5;
   try {
-    return await postCloudFunctionBatch(functionName, idToken, body);
-  } catch (directErr) {
-    if (!isAuthBatchError(directErr)) throw directErr;
-    return postAdminApi(apiPath, idToken, body);
+    return await postAdminCallable(callableName, limit);
+  } catch (callableErr) {
+    try {
+      return await postCloudFunctionBatch(httpFunctionName, idToken, body);
+    } catch (httpErr) {
+      if (!isAuthBatchError(callableErr) && !isAuthBatchError(httpErr)) {
+        throw callableErr;
+      }
+      return postAdminApi(apiPath, idToken, body);
+    }
   }
 }
 
@@ -401,6 +437,7 @@ export async function runThumbnailBatchClient(idToken: string, batchLimit = 5) {
   const data = await runBatchWithFallback(
     "/api/admin/thumbnails/run",
     "runVideoThumbnailBatch",
+    "adminRunThumbnailBatch",
     idToken,
     { limit: batchLimit },
   );
@@ -411,6 +448,7 @@ export async function runTranscodeBatchClient(idToken: string, batchLimit = 5) {
   const data = await runBatchWithFallback(
     "/api/admin/transcode/run",
     "runVideoTranscodeBatch",
+    "adminRunTranscodeBatch",
     idToken,
     { limit: batchLimit },
   );

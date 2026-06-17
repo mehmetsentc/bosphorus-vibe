@@ -10,8 +10,8 @@
     "firebase:deploy:storage": "cd firebase && firebase deploy --only storage",
     "firebase:deploy:rules": "cd firebase && firebase deploy --only firestore:rules,storage",
     "firebase:deploy:functions": "cd firebase && firebase deploy --only functions",
-    "firebase:deploy:transcode": "cd firebase && firebase deploy --only functions:transcodeVideoPost,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch",
-    "firebase:deploy:thumbnails": "cd firebase && firebase deploy --only functions:processPendingVideoThumbnails,functions:runVideoThumbnailBatch",
+    "firebase:deploy:transcode": "cd firebase && firebase deploy --only functions:transcodeVideoPost,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch,functions:adminRunTranscodeBatch",
+    "firebase:deploy:thumbnails": "cd firebase && firebase deploy --only functions:processPendingVideoThumbnails,functions:runVideoThumbnailBatch,functions:adminRunThumbnailBatch",
     "firebase:deploy:indexes": "cd firebase && firebase deploy --only firestore:indexes"
   }
 }

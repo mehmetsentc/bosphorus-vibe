@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getFunctions, type Functions } from "firebase/functions";
 import {
   browserLocalPersistence,
   browserPopupRedirectResolver,
@@ -101,6 +102,15 @@ export function getFirebaseDb(): Firestore {
 export function getFirebaseStorage(): FirebaseStorage {
   if (!storage) storage = getStorage(getFirebaseApp());
   return storage;
+}
+
+let functionsInstance: Functions | undefined;
+
+export function getFirebaseFunctions(): Functions {
+  if (!functionsInstance) {
+    functionsInstance = getFunctions(getFirebaseApp(), "europe-central2");
+  }
+  return functionsInstance;
 }
 
 /** @deprecated Use getFirebaseAuth() — kept for gradual migration */
