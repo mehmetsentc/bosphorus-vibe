@@ -7,6 +7,7 @@ import { NavLink } from "@/components/layout/NavLink";
 import { useNavigationOptional } from "@/components/layout/NavigationProvider";
 import { NavIcon } from "@/components/layout/NavIcons";
 import { useAccess } from "@/lib/hooks/useAccess";
+import { useRole } from "@/lib/hooks/useRole";
 import { useT } from "@/components/providers/I18nProvider";
 import { BRAND_NAME } from "@/lib/brand";
 
@@ -21,6 +22,7 @@ export function SidebarNav() {
   const pendingHref = navigation?.pendingHref ?? null;
   const t = useT();
   const { isGuest } = useAccess();
+  const { isAdmin } = useRole();
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-[244px] flex-col border-r border-border bg-background px-3 py-8 md:flex">
@@ -57,6 +59,17 @@ export function SidebarNav() {
             </NavLink>
           );
         })}
+        {isAdmin && (
+          <NavLink
+            href="/admin"
+            className={`mt-2 flex items-center gap-4 rounded-lg border border-gold/20 px-3 py-3 text-[15px] transition active:scale-[0.98] hover:bg-gold/10 ${
+              pathname.startsWith("/admin") ? "font-bold text-gold" : "font-normal text-gold/80"
+            }`}
+          >
+            <span className="text-lg">⚙️</span>
+            <span>Admin Panel</span>
+          </NavLink>
+        )}
       </nav>
     </aside>
   );

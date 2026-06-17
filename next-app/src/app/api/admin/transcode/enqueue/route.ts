@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       for (const doc of snap.docs) {
         scanned += 1;
         const data = doc.data();
-        if (!postNeedsVideoTranscode(data)) continue;
+        if (!postNeedsVideoTranscode({ ...data, id: doc.id })) continue;
 
         const status = data.videoTranscodeStatus as string | undefined;
         if (status === "pending" || status === "processing") {

@@ -137,12 +137,18 @@ export async function createAdminEventClient(data: AdminEventInput): Promise<str
 
 export async function updateAdminEventClient(
   id: string,
-  data: Partial<Pick<AdminEventInput, "eventName" | "eventDescription" | "eventLocation">>,
+  data: Partial<AdminEventInput>,
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
   if (data.eventName) patch.Event_Name = data.eventName.trim();
   if (data.eventDescription !== undefined) patch.aboutEvent = data.eventDescription;
   if (data.eventLocation !== undefined) patch.Event_Location = data.eventLocation;
+  if (data.eventTimeLabel !== undefined) patch.Event_Time = data.eventTimeLabel;
+  if (data.eventDate) patch.Event_Date = new Date(data.eventDate);
+  if (data.eventCategory) patch.Category = categoryToFirestore(data.eventCategory);
+  if (data.eventImage !== undefined) patch.Event_image = data.eventImage;
+  if (data.isHighlight !== undefined) patch.isHighlight = data.isHighlight;
+  if (data.eventSortId !== undefined) patch.id = data.eventSortId;
   await updateDoc(doc(getFirebaseDb(), COLLECTIONS.eventListPortyApp, id), patch);
 }
 
@@ -199,7 +205,7 @@ async function enqueuePostsClient(
     for (const docSnap of snap.docs) {
       scanned += 1;
       const data = docSnap.data() as Record<string, unknown>;
-      if (!needsWork(data)) continue;
+      if (!needsWork({ ...data, id: docSnap.id })) continue;
 
       const status = data[statusField] as string | undefined;
       if (status === "pending" || status === "processing") {
@@ -286,6 +292,6 @@ export async function runThumbnailBatchClient(idToken: string, batchLimit = 5) {
   return runCloudBatch("runVideoThumbnailBatch", idToken, batchLimit);
 }
 
-export async function runTranscodeBatchClient(idToken: string, batchLimit = 3) {
+export async function runTranscodeBatchClient(idToken: string, batchLimit = 5) {
   return runCloudBatch("runVideoTranscodeBatch", idToken, batchLimit);
 }

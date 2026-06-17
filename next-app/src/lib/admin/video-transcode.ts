@@ -47,11 +47,37 @@ export function postNeedsVideoTranscode(data: Record<string, unknown>): boolean 
   const originalUrl = getOriginalVideoUrl(data);
   if (!originalUrl) return false;
 
+  const postId =
+    typeof data.id === "string"
+      ? data.id
+      : typeof data.postId === "string"
+        ? data.postId
+        : undefined;
+
   const status = data.videoTranscodeStatus as VideoEncodeStatus | undefined;
   if (status === "skipped") return false;
-  if (status === "done") return false;
+  if (status === "processing") return false;
+  if (status === "pending") return true;
 
+  if (hasServerEncodedVariants(data, postId)) return false;
   return true;
+}
+
+/** Server wrote standardized preview.mp4 + low.mp4 under users/{uid}/videos/{postId}/ */
+export function hasServerEncodedVariants(
+  data: Record<string, unknown>,
+  postId?: string,
+): boolean {
+  const preview = data.postVideoURL_preview;
+  if (
+    typeof preview === "string" &&
+    preview.includes("/videos/") &&
+    preview.includes("/preview.mp4")
+  ) {
+    if (!postId) return true;
+    if (preview.includes(`/videos/${postId}/`)) return true;
+  }
+  return hasServerTranscodedLow(data, postId);
 }
 
 export function getTranscodeBatchUrl(projectId: string): string {

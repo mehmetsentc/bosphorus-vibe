@@ -14,7 +14,10 @@ export function AdminTools() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 5000); };
+  const flash = (m: string) => {
+    setMsg(m);
+    setTimeout(() => setMsg(""), 6000);
+  };
 
   const withBusy = useCallback(
     async (fn: () => Promise<string>) => {
@@ -36,23 +39,20 @@ export function AdminTools() {
   );
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="font-bold">Araçlar</h2>
-        <p className="text-sm text-muted">Sistem işlemleri</p>
-      </div>
-
+    <div className="mx-auto max-w-2xl space-y-6">
       {msg && (
         <div className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-gold">
           {msg}
         </div>
       )}
 
-      {/* Transcode */}
-      <div className="space-y-3 rounded-2xl border border-border bg-surface-card p-4">
+      <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <div>
-          <h3 className="font-semibold">Video Transcode</h3>
-          <p className="text-xs text-muted">Yüklenen videoları 480p low-quality versiyonuna dönüştür</p>
+          <h3 className="font-semibold text-white">Video Encode</h3>
+          <p className="mt-1 text-xs text-white/45">
+            Tüm videoları aynı formata çevirir: preview.mp4 (360p, hızlı başlangıç) + low.mp4
+            (480p)
+          </p>
         </div>
         <div className="flex flex-col gap-2">
           <button
@@ -66,7 +66,7 @@ export function AdminTools() {
             }
             className="w-full rounded-xl bg-gold py-2.5 text-sm font-semibold text-black disabled:opacity-50"
           >
-            {busy ? "İşleniyor…" : "Transcode Kuyruğuna Al (500 video)"}
+            {busy ? "İşleniyor…" : "Encode Kuyruğuna Al (500 video)"}
           </button>
           <button
             type="button"
@@ -74,22 +74,21 @@ export function AdminTools() {
             onClick={() =>
               withBusy(async () => {
                 const token = await user!.getIdToken(true);
-                const d = await runTranscodeBatchClient(token, 3);
+                const d = await runTranscodeBatchClient(token, 5);
                 return `✓ ${d.processed} işlendi — ${d.succeeded} başarılı, ${d.failed} başarısız`;
               })
             }
-            className="w-full rounded-xl border border-border py-2.5 text-sm font-semibold disabled:opacity-50"
+            className="w-full rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/5 disabled:opacity-50"
           >
-            {busy ? "İşleniyor…" : "Transcode Çalıştır (3 video)"}
+            {busy ? "İşleniyor…" : "Encode Çalıştır (5 video)"}
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* Thumbnail backfill */}
-      <div className="space-y-3 rounded-2xl border border-border bg-surface-card p-4">
+      <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <div>
-          <h3 className="font-semibold">Video Kapak Fotoğrafı</h3>
-          <p className="text-xs text-muted">
+          <h3 className="font-semibold text-white">Video Kapak Fotoğrafı</h3>
+          <p className="mt-1 text-xs text-white/45">
             Eski videolardan kare çekerek grid/feed için kapak fotoğrafı üret
           </p>
         </div>
@@ -117,23 +116,23 @@ export function AdminTools() {
                 return `✓ ${d.processed} işlendi — ${d.succeeded} başarılı, ${d.failed} başarısız`;
               })
             }
-            className="w-full rounded-xl border border-border py-2.5 text-sm font-semibold disabled:opacity-50"
+            className="w-full rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/5 disabled:opacity-50"
           >
             {busy ? "İşleniyor…" : "Kapak Üret (5 video)"}
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* Info */}
-      <div className="rounded-2xl border border-border bg-surface-card p-4">
-        <h3 className="mb-2 font-semibold">Bilgi</h3>
-        <div className="space-y-1 text-xs text-muted">
-          <p>• Transcode: Firebase Storage&apos;daki videoları küçük boyuta indirir</p>
-          <p>• Kapak: Bozuk/siyah thumbnail&apos;leri videodan JPEG kare üretir</p>
-          <p>• Önce &ldquo;Kuyruğa Al&rdquo; → sonra &ldquo;Çalıştır&rdquo; adımlarını uygula</p>
-          <p>• Her &ldquo;Çalıştır&rdquo; birkaç video işler; tamamlanana kadar tekrarla</p>
-        </div>
-      </div>
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        <h3 className="mb-2 font-semibold text-white">Bilgi</h3>
+        <ul className="space-y-1.5 text-xs text-white/45">
+          <li>• Encode: Her videoya preview.mp4 + low.mp4 üretir (H.264, faststart)</li>
+          <li>• Kapak: Bozuk/siyah thumbnail&apos;leri videodan JPEG kare üretir</li>
+          <li>• Önce &ldquo;Kuyruğa Al&rdquo; → sonra &ldquo;Çalıştır&rdquo; adımlarını uygula</li>
+          <li>• Her &ldquo;Çalıştır&rdquo; 5 video işler; tamamlanana kadar tekrarla</li>
+          <li>• Arka planda her 10 dakikada otomatik 5 video encode edilir</li>
+        </ul>
+      </section>
     </div>
   );
 }
