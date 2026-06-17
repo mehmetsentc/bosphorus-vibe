@@ -19,13 +19,10 @@ const nextConfig = {
     },
     // Tree-shake large packages — reduces JS bundle sent to browser
     optimizePackageImports: [
-      "framer-motion",
       "firebase/app",
       "firebase/firestore",
       "firebase/storage",
       "firebase/auth",
-      "@vercel/analytics",
-      "@vercel/speed-insights",
     ],
 
     serverComponentsExternalPackages: [

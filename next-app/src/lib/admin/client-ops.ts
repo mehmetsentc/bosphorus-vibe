@@ -17,7 +17,8 @@ import {
   type DocumentSnapshot,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
-import { getFirebaseDb, getFirebaseFunctions } from "@/lib/firebase";
+import { getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseFunctions } from "@/lib/firebase-functions";
 import { getAllEvents } from "@/lib/services/firestore";
 import { postNeedsThumbnailRegen } from "@/lib/admin/video-thumbnail-backfill";
 import { postNeedsVideoTranscode } from "@/lib/admin/video-transcode";
