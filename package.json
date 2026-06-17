@@ -9,9 +9,9 @@
     "start": "cd next-app && npm start",
     "firebase:deploy:storage": "cd firebase && firebase deploy --only storage",
     "firebase:deploy:rules": "cd firebase && firebase deploy --only firestore:rules,storage",
-    "firebase:deploy:functions": "cd firebase && firebase deploy --only functions:functions",
-    "firebase:deploy:transcode": "cd firebase && firebase deploy --only functions:functions:transcodeVideoPost,functions:functions:processPendingVideoTranscodes,functions:functions:runVideoTranscodeBatch",
-    "firebase:deploy:thumbnails": "cd firebase && firebase deploy --only functions:functions:processPendingVideoThumbnails,functions:functions:runVideoThumbnailBatch",
+    "firebase:deploy:functions": "cd firebase && firebase deploy --only functions",
+    "firebase:deploy:transcode": "cd firebase && firebase deploy --only functions:transcodeVideoPost,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch",
+    "firebase:deploy:thumbnails": "cd firebase && firebase deploy --only functions:processPendingVideoThumbnails,functions:runVideoThumbnailBatch",
     "firebase:deploy:indexes": "cd firebase && firebase deploy --only firestore:indexes"
   }
 }
