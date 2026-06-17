@@ -256,8 +256,8 @@ async function parseAdminResponse(res: Response): Promise<Record<string, unknown
   if (!res.ok) {
     const message =
       typeof data.message === "string" && data.message
-        ? data.message === "Unauthorized"
-          ? "Cloud Function yetkilendirme hatası — çıkış yapıp tekrar giriş yapın."
+        ? data.message === "Unauthorized" || data.message === "Unauthorized."
+          ? "Admin oturumu geçersiz — çıkış yapıp tekrar giriş yapın."
           : data.message
         : typeof data.error === "string" &&
             !/^[A-Z_]+$/.test(data.error) &&
@@ -360,10 +360,10 @@ async function runBatchWithFallback(
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   try {
-    return await postAdminApi(apiPath, idToken, body);
-  } catch (apiErr) {
-    if (!isAuthBatchError(apiErr)) throw apiErr;
-    return postCloudFunctionBatch(functionName, idToken, body);
+    return await postCloudFunctionBatch(functionName, idToken, body);
+  } catch (directErr) {
+    if (!isAuthBatchError(directErr)) throw directErr;
+    return postAdminApi(apiPath, idToken, body);
   }
 }
 
