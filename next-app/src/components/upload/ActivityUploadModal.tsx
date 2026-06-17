@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
@@ -32,6 +32,14 @@ type ActivityUploadModalProps = {
   onSuccess: () => void;
 };
 
+type Step = "gallery" | "details";
+
+type RecentItem = {
+  file: File;
+  url: string;
+  isVideo: boolean;
+};
+
 export function ActivityUploadModal({
   open,
   event,
@@ -41,6 +49,12 @@ export function ActivityUploadModal({
   const { user, refreshProfile } = useAuth();
   const { locale } = useI18n();
   const t = useT();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const recentUrlsRef = useRef<Set<string>>(new Set());
+
+  const [step, setStep] = useState<Step>("gallery");
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [activityName, setActivityName] = useState("");
@@ -55,13 +69,20 @@ export function ActivityUploadModal({
   const [draftEnabled, setDraftEnabled] = useState(false);
 
   useEffect(() => {
-    if (!file || !open) {
+    return () => {
+      recentUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      recentUrlsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!file || !open || step !== "details") {
       setDraftEnabled(false);
       return;
     }
     const timer = window.setTimeout(() => setDraftEnabled(true), 2500);
     return () => window.clearTimeout(timer);
-  }, [file, open]);
+  }, [file, open, step]);
 
   const draft = useDraftUpload(file, user?.uid, {
     enabled: open && draftEnabled && Boolean(file),
@@ -79,8 +100,42 @@ export function ActivityUploadModal({
     };
   }, [file]);
 
+  const handleFile = useCallback(
+    (next: File | null) => {
+      setError("");
+      if (!next) return;
+
+      const sizeError = validateMediaSize(next, locale);
+      if (sizeError) {
+        setError(sizeError);
+        return;
+      }
+
+      const url = URL.createObjectURL(next);
+      recentUrlsRef.current.add(url);
+      const isVideo = isVideoFile(next);
+
+      coverBlobRef.current = null;
+      setPreviewUrl((prev) => {
+        if (prev && !recentItems.some((item) => item.url === prev)) {
+          URL.revokeObjectURL(prev);
+        }
+        return url;
+      });
+      setFile(next);
+      setStep("details");
+
+      setRecentItems((prev) => {
+        const filtered = prev.filter((p) => p.file.name !== next.name);
+        return [{ file: next, url, isVideo }, ...filtered].slice(0, 20);
+      });
+    },
+    [locale, recentItems],
+  );
+
   useEffect(() => {
     if (!open || !event) return;
+    setStep("gallery");
     setActivityName(event.eventName);
     setFile(null);
     setPreviewUrl((prev) => {
@@ -187,135 +242,275 @@ export function ActivityUploadModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 backdrop-blur-sm"
-          onClick={onClose}
+          className={`fixed inset-0 z-[100] ${
+            step === "gallery" ? "bg-black" : "flex items-end justify-center bg-black/70 backdrop-blur-sm"
+          }`}
+          onClick={step === "details" ? onClose : undefined}
         >
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28 }}
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border-t border-border bg-surface-card p-6 pb-10"
-          >
-            <h2 className="font-display text-xl font-bold">{t("uploadActivity")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("uploadActivityDesc")}</p>
+          {step === "gallery" ? (
+            <motion.div
+              key="gallery"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex h-full flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <header className="flex items-center justify-between px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-2xl leading-none text-white"
+                  aria-label={t("close")}
+                >
+                  ✕
+                </button>
+                <h1 className="text-base font-semibold text-white">{t("uploadActivity")}</h1>
+                <span className="w-6" />
+              </header>
 
-            <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-8 transition hover:border-vibe/40">
+              <div className="flex items-center justify-between px-4 py-2">
+                <button type="button" className="text-sm font-semibold text-white">
+                  {t("storyRecents")} ▾
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-sm text-white/70"
+                >
+                  {t("storySelect")}
+                </button>
+              </div>
+
               <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  handleFile(e.target.files?.[0] ?? null);
+                  e.target.value = "";
+                }}
+              />
+              <input
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*,video/*"
                 capture="environment"
                 className="hidden"
                 onChange={(e) => {
-                  const next = e.target.files?.[0] ?? null;
-                  setPreviewUrl((prev) => {
-                    if (prev) URL.revokeObjectURL(prev);
-                    return next ? URL.createObjectURL(next) : null;
-                  });
-                  coverBlobRef.current = null;
-                  setFile(next);
-                  setError("");
+                  handleFile(e.target.files?.[0] ?? null);
+                  e.target.value = "";
                 }}
               />
-              {file ? (
-                <span className="px-4 text-center text-sm text-vibe">{file.name}</span>
-              ) : (
-                <span className="text-sm text-muted">{t("selectMedia")}</span>
-              )}
-            </label>
 
-            {draft.status === "uploading" && (
-              <div className="mt-3">
-                <div className="mb-1 flex items-center justify-between text-xs text-muted">
-                  <span>{t("draftUploading")}</span>
-                  <span>{draft.progress}%</span>
-                </div>
-                <div className="h-1 overflow-hidden rounded-full bg-surface-overlay">
-                  <div
-                    className="h-full bg-vibe transition-all"
-                    style={{ width: `${draft.progress}%` }}
-                  />
+              <div className="flex-1 overflow-y-auto px-0.5 pb-8">
+                <div className="grid grid-cols-3 gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex aspect-[3/4] items-center justify-center bg-white/5"
+                  >
+                    <span className="text-3xl">📷</span>
+                  </button>
+                  {recentItems.map((item) => (
+                    <button
+                      key={item.url}
+                      type="button"
+                      onClick={() => {
+                        coverBlobRef.current = null;
+                        setFile(item.file);
+                        setPreviewUrl(item.url);
+                        setStep("details");
+                      }}
+                      className="relative aspect-[3/4] overflow-hidden bg-white/5"
+                    >
+                      {item.isVideo ? (
+                        <video
+                          src={item.url}
+                          className="h-full w-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                      {item.isVideo && (
+                        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1 text-[10px] text-white">
+                          ▶
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex aspect-[3/4] flex-col items-center justify-center gap-1 bg-white/5 text-white/50"
+                  >
+                    <span className="text-2xl">+</span>
+                    <span className="px-2 text-center text-[10px]">{t("selectFromGallery")}</span>
+                  </button>
                 </div>
               </div>
-            )}
-            {draft.status === "ready" && (
-              <p className="mt-2 text-xs text-vibe">{t("draftUploadReady")}</p>
-            )}
 
-            {isVideo && file && previewUrl && (
-              <VideoCoverPicker
-                file={file}
-                previewUrl={previewUrl}
-                onCoverChange={(blob) => {
-                  coverBlobRef.current = blob;
-                }}
+              {error && (
+                <p className="px-4 pb-4 text-center text-sm text-red-400">{error}</p>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="details"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28 }}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border-t border-border bg-surface-card p-6 pb-10"
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError("");
+                    setStep("gallery");
+                  }}
+                  className="text-sm text-muted hover:text-foreground"
+                >
+                  ← {t("selectFromGallery")}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-sm text-muted hover:text-foreground"
+                  aria-label={t("close")}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <h2 className="font-display text-xl font-bold">{t("uploadActivity")}</h2>
+              <p className="mt-1 text-sm text-muted">{t("uploadActivityDesc")}</p>
+
+              {file && previewUrl && (
+                <div className="relative mt-4 overflow-hidden rounded-xl border border-border bg-black/40">
+                  {isVideo ? (
+                    <video
+                      src={previewUrl}
+                      className="max-h-48 w-full object-contain"
+                      muted
+                      playsInline
+                      controls
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={previewUrl}
+                      alt=""
+                      className="max-h-48 w-full object-contain"
+                    />
+                  )}
+                  <p className="truncate px-3 py-2 text-xs text-muted">{file.name}</p>
+                </div>
+              )}
+
+              {draft.status === "uploading" && (
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between text-xs text-muted">
+                    <span>{t("draftUploading")}</span>
+                    <span>{draft.progress}%</span>
+                  </div>
+                  <div className="h-1 overflow-hidden rounded-full bg-surface-overlay">
+                    <div
+                      className="h-full bg-vibe transition-all"
+                      style={{ width: `${draft.progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {draft.status === "ready" && (
+                <p className="mt-2 text-xs text-vibe">{t("draftUploadReady")}</p>
+              )}
+
+              {isVideo && file && previewUrl && (
+                <VideoCoverPicker
+                  file={file}
+                  previewUrl={previewUrl}
+                  onCoverChange={(blob) => {
+                    coverBlobRef.current = blob;
+                  }}
+                  className="mt-4"
+                />
+              )}
+
+              <div className="mt-4 space-y-3">
+                <Field label={t("activityName")}>
+                  <input
+                    type="text"
+                    value={activityName}
+                    onChange={(e) => setActivityName(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm text-foreground outline-none focus:border-vibe/50"
+                  />
+                </Field>
+
+                <Field label={t("location")}>
+                  <input
+                    type="text"
+                    value={locating ? t("locationFetching") : location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm text-foreground outline-none focus:border-vibe/50"
+                  />
+                </Field>
+
+                <Field label={t("participantCount")}>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={participantCount}
+                    onChange={(e) => setParticipantCount(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm text-foreground outline-none focus:border-vibe/50"
+                  />
+                </Field>
+              </div>
+
+              <TagPeoplePicker
+                value={taggedPeople}
+                onChange={setTaggedPeople}
                 className="mt-4"
               />
-            )}
 
-            <div className="mt-4 space-y-3">
-              <Field label={t("activityName")}>
-                <input
-                  type="text"
-                  value={activityName}
-                  onChange={(e) => setActivityName(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm outline-none focus:border-vibe/50"
-                />
-              </Field>
-
-              <Field label={t("location")}>
-                <input
-                  type="text"
-                  value={locating ? t("locationFetching") : location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm outline-none focus:border-vibe/50"
-                />
-              </Field>
-
-              <Field label={t("participantCount")}>
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  placeholder="0"
-                  value={participantCount}
-                  onChange={(e) => setParticipantCount(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm outline-none focus:border-vibe/50"
-                />
-              </Field>
-            </div>
-
-            <TagPeoplePicker
-              value={taggedPeople}
-              onChange={setTaggedPeople}
-              className="mt-4"
-            />
-
-            {uploading && (
-              <div className="mt-4">
-                <div className="h-2 overflow-hidden rounded-full bg-surface-overlay">
-                  <motion.div
-                    className="h-full bg-vibe"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                  />
+              {uploading && (
+                <div className="mt-4">
+                  <div className="h-2 overflow-hidden rounded-full bg-surface-overlay">
+                    <motion.div
+                      className="h-full bg-vibe"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-center text-xs text-muted">{progress}%</p>
                 </div>
-                <p className="mt-1 text-center text-xs text-muted">{progress}%</p>
-              </div>
-            )}
+              )}
 
-            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+              {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
-            <button
-              type="button"
-              disabled={!file || uploading || locating}
-              onClick={handleUpload}
-              className="mt-4 w-full rounded-xl gold-gradient py-3 text-sm font-bold text-black disabled:opacity-40"
-            >
-              {uploading ? t("uploading") : t("upload")}
-            </button>
-          </motion.div>
+              <button
+                type="button"
+                disabled={!file || uploading || locating}
+                onClick={handleUpload}
+                className="mt-4 w-full rounded-xl gold-gradient py-3 text-sm font-bold text-black disabled:opacity-40"
+              >
+                {uploading ? t("uploading") : t("upload")}
+              </button>
+            </motion.div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
