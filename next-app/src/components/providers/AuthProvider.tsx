@@ -23,6 +23,7 @@ type AuthState = {
   user: User | null;
   profile: UserDoc | null;
   loading: boolean;
+  profileLoading: boolean;
   authError: string | null;
   refreshProfile: () => Promise<void>;
 };
@@ -31,6 +32,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   profile: null,
   loading: true,
+  profileLoading: false,
   authError: null,
   refreshProfile: async () => {},
 });
@@ -52,12 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserDoc | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   const refreshProfile = useCallback(async () => {
     if (!user) return;
-    const doc = await getUserDoc(user.uid);
-    setProfile(doc);
+    setProfileLoading(true);
+    try {
+      const doc = await getUserDoc(user.uid);
+      setProfile(doc);
+    } finally {
+      setProfileLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -75,17 +83,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unsubscribe = onAuthStateChanged(auth, (next) => {
           if (!active) return;
           setUser(next);
-          setLoading(false);
 
           void (async () => {
             if (next) {
               setAccessCookie(next.isAnonymous ? "guest" : "auth");
               void syncSession(next);
+              setProfileLoading(true);
               try {
                 const doc = await getUserDoc(next.uid);
                 if (active) setProfile(doc);
               } catch (err) {
                 console.error("Profile load failed:", err);
+                if (active) setProfile(null);
+              } finally {
+                if (active) {
+                  setProfileLoading(false);
+                  setLoading(false);
+                }
               }
               return;
             }
@@ -93,7 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (getAccessCookie() === "auth") {
               clearAccessCookie();
             }
-            if (active) setProfile(null);
+            if (active) {
+              setProfile(null);
+              setProfileLoading(false);
+              setLoading(false);
+            }
           })();
         });
 
@@ -122,8 +140,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, profile, loading, authError, refreshProfile }),
-    [user, profile, loading, authError, refreshProfile],
+    () => ({ user, profile, loading, profileLoading, authError, refreshProfile }),
+    [user, profile, loading, profileLoading, authError, refreshProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

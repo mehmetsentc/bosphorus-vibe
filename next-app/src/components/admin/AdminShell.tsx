@@ -22,11 +22,11 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, loading } = useAuth();
+  const { user, loading, profileLoading } = useAuth();
   const { isAdmin } = useRole();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0c0c0c]">
         <div className="h-9 w-9 animate-spin rounded-full border-2 border-gold border-t-transparent" />
