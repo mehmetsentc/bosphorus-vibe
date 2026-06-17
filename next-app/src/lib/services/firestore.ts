@@ -21,7 +21,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { videoTranscodeStatusForUpload } from "@/lib/admin/video-transcode";
+import { videoEncodeStatusForUpload } from "@/lib/media/video-encode";
 import { compressImage, videoThumbnailFromFile, isImageBlob, createPlaceholderThumbnail } from "@/lib/utils/media-compress";
 import { hasPostVideo } from "@/lib/utils/video-sources";
 import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
@@ -96,6 +96,7 @@ function mapPost(id: string, data: Record<string, unknown>): UserPostDoc {
     postVideo: sanitizeMediaUrl(data.postVideo),
     postVideoURL: sanitizeMediaUrl(data.postVideoURL),
     postVideoURL_original: sanitizeMediaUrl(data.postVideoURL_original),
+    postVideoURL_preview: sanitizeMediaUrl(data.postVideoURL_preview),
     postVideoURL_low: sanitizeMediaUrl(data.postVideoURL_low),
     postVideothumbnail: sanitizeMediaUrl(data.postVideothumbnail),
     timePosted: toDate(data.timePosted ?? data.createdAt),
@@ -705,10 +706,15 @@ export async function uploadVideoPost(
   options?: {
     thumbnailBlob?: Blob;
     getThumbnailBlob?: () => Blob | null | undefined;
-    /** Skip client-side preview encode — avoids iOS decoder conflict during edit preview */
+    /** Skip client preview encode during edit-screen preview (iOS decoder conflict) */
     skipClientPreview?: boolean;
   },
-): Promise<{ originalUrl: string; lowUrl: string; thumbnailUrl: string }> {
+): Promise<{
+  originalUrl: string;
+  previewUrl: string;
+  lowUrl: string;
+  thumbnailUrl: string;
+}> {
   onProgress(2);
 
   const stamp = Date.now();
@@ -718,38 +724,41 @@ export async function uploadVideoPost(
   let originalPct = 0;
   const originalUrl = await uploadBlob(file, `${basePath}/original.${ext}`, (pct) => {
     originalPct = pct;
-    onProgress(5 + Math.round(originalPct * 0.72));
+    onProgress(5 + Math.round(originalPct * 0.65));
   });
 
-  let lowUrl = originalUrl;
+  let previewUrl = "";
   if (!options?.skipClientPreview) {
     const { createPlaybackPreviewBlob } = await import("@/lib/utils/media-compress");
-    let previewPct = 0;
     const previewBlob = await createPlaybackPreviewBlob(file).catch(() => null);
     if (previewBlob) {
-      lowUrl = await uploadBlob(previewBlob, `${basePath}/preview.mp4`, (pct) => {
-        previewPct = pct;
-        onProgress(77 + Math.round(previewPct * 0.08));
+      previewUrl = await uploadBlob(previewBlob, `${basePath}/preview.mp4`, (pct) => {
+        onProgress(72 + Math.round(pct * 0.12));
       });
     }
   }
 
-  onProgress(88);
+  const playbackUrl = previewUrl || originalUrl;
+
+  onProgress(86);
   const custom =
     options?.getThumbnailBlob?.() ?? options?.thumbnailBlob ?? null;
   const thumbnail =
     custom && isImageBlob(custom)
       ? custom
-      : options?.skipClientPreview
-        ? await createPlaceholderThumbnail()
-        : await videoThumbnailFromFile(file).catch(() => createPlaceholderThumbnail());
+      : await videoThumbnailFromFile(file).catch(() => createPlaceholderThumbnail());
 
   const thumbnailUrl = await uploadBlob(thumbnail, `${basePath}/thumb.jpg`, (pct) => {
-    onProgress(88 + Math.round(pct * 0.12));
+    onProgress(86 + Math.round(pct * 0.14));
   });
 
   onProgress(100);
-  return { originalUrl, lowUrl, thumbnailUrl };
+  return {
+    originalUrl,
+    previewUrl: playbackUrl,
+    lowUrl: playbackUrl,
+    thumbnailUrl,
+  };
 }
 
 /** Re-upload cover after draft video is already in Storage (user picked a new frame). */
@@ -780,15 +789,18 @@ export async function createVideoPost(
   userId: string,
   tags: PostTag[] = [],
   location?: string,
+  previewUrl?: string,
 ): Promise<string> {
+  const playbackUrl = previewUrl || lowUrl;
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const docRef = await addDoc(collection(getFirebaseDb(), COLLECTIONS.userPosts), {
     postVideo: originalUrl,
-    postVideoURL: lowUrl,
+    postVideoURL: playbackUrl,
     postVideoURL_original: originalUrl,
+    postVideoURL_preview: playbackUrl !== originalUrl ? playbackUrl : undefined,
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
-    videoTranscodeStatus: videoTranscodeStatusForUpload(),
+    videoTranscodeStatus: videoEncodeStatusForUpload(),
     videoThumbnailStatus: "done",
     postDescription: caption,
     postTitle: caption.slice(0, 80),
@@ -940,6 +952,7 @@ export type ActivityUploadInput = {
 export type ActivityMediaUrls = {
   originalUrl: string;
   lowUrl: string;
+  previewUrl?: string;
   thumbUrl?: string;
 };
 
@@ -1030,12 +1043,17 @@ export async function createActivityPostFromMedia(
   };
 
   if (isVideo) {
+    const playbackUrl = urls.previewUrl || urls.lowUrl;
     postData.postVideo = urls.originalUrl;
-    postData.postVideoURL = urls.lowUrl;
+    postData.postVideoURL = playbackUrl;
     postData.postVideoURL_original = urls.originalUrl;
+    postData.postVideoURL_preview =
+      urls.previewUrl && urls.previewUrl !== urls.originalUrl
+        ? urls.previewUrl
+        : undefined;
     postData.postVideoURL_low = urls.lowUrl;
     postData.postVideothumbnail = urls.thumbUrl ?? urls.lowUrl;
-    postData.videoTranscodeStatus = videoTranscodeStatusForUpload();
+    postData.videoTranscodeStatus = videoEncodeStatusForUpload();
     if (urls.thumbUrl) {
       postData.videoThumbnailStatus = "done";
     }
@@ -1232,7 +1250,7 @@ export async function replaceUserPostVideo(
     postVideoURL_original: originalUrl,
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
-    videoTranscodeStatus: videoTranscodeStatusForUpload(),
+    videoTranscodeStatus: videoEncodeStatusForUpload(),
     videoThumbnailStatus: "done",
     DateUpdated: serverTimestamp(),
   });

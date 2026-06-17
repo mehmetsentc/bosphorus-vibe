@@ -25,6 +25,7 @@ export type DraftStatus = "idle" | "uploading" | "ready" | "error";
 export type DraftResult = {
   isVideo: boolean;
   originalUrl: string;
+  previewUrl?: string;
   lowUrl: string;
   thumbnailUrl?: string;
   /** Story cover — image URL or video poster */
@@ -56,6 +57,8 @@ type DraftUploadOptions = {
   mode?: DraftUploadMode;
   /** Latest cover frame / custom image — read when uploading thumb.jpg */
   thumbnailRef?: RefObject<Blob | null>;
+  /** Defer client preview encode while edit-screen video is decoding (iOS) */
+  skipClientPreview?: boolean;
 };
 
 async function runDraftUpload(
@@ -64,6 +67,7 @@ async function runDraftUpload(
   mode: DraftUploadMode,
   onProgress: (pct: number) => void,
   thumbnailRef?: RefObject<Blob | null>,
+  skipClientPreview?: boolean,
 ): Promise<DraftResult> {
   const isVideo = isVideoFile(file);
 
@@ -95,16 +99,16 @@ async function runDraftUpload(
   }
 
   if (isVideo) {
-    const { originalUrl, lowUrl, thumbnailUrl } = await uploadVideoPost(
+    const { originalUrl, previewUrl, lowUrl, thumbnailUrl } = await uploadVideoPost(
       file,
       userId,
       onProgress,
       {
         getThumbnailBlob: () => thumbnailRef?.current ?? null,
-        skipClientPreview: true,
+        skipClientPreview,
       },
     );
-    return { isVideo: true, originalUrl, lowUrl, thumbnailUrl };
+    return { isVideo: true, originalUrl, previewUrl, lowUrl, thumbnailUrl };
   }
 
   const { originalUrl, lowUrl } = await uploadImagePost(file, userId, onProgress);
@@ -121,6 +125,7 @@ export function useDraftUpload(
   const enabled = opts.enabled ?? true;
   const mode = opts.mode ?? "post";
   const thumbnailRef = opts.thumbnailRef;
+  const skipClientPreview = opts.skipClientPreview ?? false;
 
   const [state, setState] = useState<DraftState>(IDLE);
   const abortRef = useRef(false);
@@ -143,7 +148,7 @@ export function useDraftUpload(
       if (!abortRef.current) {
         setState((s) => ({ ...s, progress: pct }));
       }
-    }, thumbnailRef)
+    }, thumbnailRef, skipClientPreview)
       .then((result) => {
         if (!abortRef.current) {
           resultRef.current = result;
@@ -174,7 +179,7 @@ export function useDraftUpload(
     return () => {
       abortRef.current = true;
     };
-  }, [file, userId, enabled, mode]);
+  }, [file, userId, enabled, mode, skipClientPreview]);
 
   const waitUntilReady = useCallback(async (): Promise<DraftResult> => {
     if (resultRef.current) return resultRef.current;

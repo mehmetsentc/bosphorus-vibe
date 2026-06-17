@@ -22,7 +22,7 @@ import {
   uploadStoryImage,
   uploadStoryVideo,
 } from "@/lib/services/stories";
-import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
+import { isVideoFile, validateMediaSize, ensureVideoCoverBlob } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
   markReelsRefreshPending,
@@ -94,6 +94,18 @@ function CreateUploadFlowInner() {
     mode: kind === "story" ? "story" : "post",
     thumbnailRef: coverBlobRef,
   });
+
+  useEffect(() => {
+    if (!file || !isVideoFile(file)) return;
+    let cancelled = false;
+    void ensureVideoCoverBlob(file, coverBlobRef.current).then((blob) => {
+      if (!cancelled && !coverBlobRef.current) coverBlobRef.current = blob;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
+
   const [storyCategory, setStoryCategory] = useState<StoryCategory>(initialStoryCategory);
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
   const [location, setLocation] = useState<string | null>(null);
@@ -221,6 +233,7 @@ function CreateUploadFlowInner() {
   async function resolveDraftOrUpload(): Promise<{
     isVideo: boolean;
     originalUrl: string;
+    previewUrl?: string;
     lowUrl: string;
     thumbnailUrl?: string;
     photoUrl?: string;
@@ -268,14 +281,18 @@ function CreateUploadFlowInner() {
     const fullCaption = [textOverlay, sticker, caption].filter(Boolean).join("\n").trim();
 
     try {
+      if (file && isVideoFile(file)) {
+        coverBlobRef.current = await ensureVideoCoverBlob(file, coverBlobRef.current);
+      }
+
       const media = await resolveDraftOrUpload();
       setProgress(95);
 
       let thumbnailUrl = media.thumbnailUrl;
-      if (media.isVideo && coverBlobRef.current) {
+      if (media.isVideo) {
         thumbnailUrl = await uploadVideoCoverForPost(
           media.originalUrl,
-          coverBlobRef.current,
+          coverBlobRef.current!,
         );
       }
 
@@ -302,6 +319,7 @@ function CreateUploadFlowInner() {
           user.uid,
           taggedPeople,
           location ?? undefined,
+          media.previewUrl,
         );
       } else {
         await createImagePost(

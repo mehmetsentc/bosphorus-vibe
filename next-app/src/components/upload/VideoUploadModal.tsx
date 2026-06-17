@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   createVideoPost,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/services/firestore";
 import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
 import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
-import { isVideoFile, validateMediaSize } from "@/lib/utils/media-compress";
+import { isVideoFile, validateMediaSize, ensureVideoCoverBlob } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
   markReelsRefreshPending,
@@ -40,11 +40,32 @@ export function VideoUploadModal({
   const [error, setError] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const coverBlobRef = useRef<Blob | null>(null);
+  const [draftEnabled, setDraftEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!file || !open) {
+      setDraftEnabled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setDraftEnabled(true), 2000);
+    return () => window.clearTimeout(timer);
+  }, [file, open]);
 
   const draft = useDraftUpload(file, user?.uid, {
-    enabled: open && Boolean(file),
+    enabled: open && draftEnabled && Boolean(file),
     thumbnailRef: coverBlobRef,
   });
+
+  useEffect(() => {
+    if (!file || !isVideoFile(file)) return;
+    let cancelled = false;
+    void ensureVideoCoverBlob(file, coverBlobRef.current).then((blob) => {
+      if (!cancelled && !coverBlobRef.current) coverBlobRef.current = blob;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   async function handleUpload() {
     if (!file || !user) return;
@@ -60,6 +81,8 @@ export function VideoUploadModal({
     setUploading(true);
     setError("");
     try {
+      coverBlobRef.current = await ensureVideoCoverBlob(file, coverBlobRef.current);
+
       let media;
       try {
         media = await draft.waitUntilReady();
@@ -68,13 +91,10 @@ export function VideoUploadModal({
         media = { isVideo: true, ...result };
       }
       setProgress(95);
-      let thumbnailUrl = media.thumbnailUrl ?? "";
-      if (coverBlobRef.current) {
-        thumbnailUrl = await uploadVideoCoverForPost(
-          media.originalUrl,
-          coverBlobRef.current,
-        );
-      }
+      const thumbnailUrl = await uploadVideoCoverForPost(
+        media.originalUrl,
+        coverBlobRef.current,
+      );
       await createVideoPost(
         media.originalUrl,
         media.lowUrl,
@@ -82,6 +102,8 @@ export function VideoUploadModal({
         caption,
         user.uid,
         taggedPeople,
+        undefined,
+        media.previewUrl,
       );
       invalidateFeedCaches();
       markReelsRefreshPending();

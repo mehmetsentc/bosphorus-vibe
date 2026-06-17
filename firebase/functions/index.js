@@ -7,13 +7,20 @@ const ffmpeg = require("fluent-ffmpeg");
 const ffmpegStatic = require("ffmpeg-static");
 const axios = require("axios");
 
+const {
+  VIDEO_ENCODE_PROFILE,
+  standardEncodePaths,
+  buildFirebaseDownloadUrl,
+  runFfmpegEncode,
+} = require("./video-encode");
+
 admin.initializeApp();
 
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const REGION = "europe-central2";
 const TRANSCODE_RUN_OPTS = { memory: "2GB", timeoutSeconds: 540 };
-const BATCH_SIZE = 3;
+const BATCH_SIZE = 5;
 
 function getPostUserId(data) {
   const ref = data.postUser;
@@ -35,12 +42,16 @@ function getOriginalVideoUrl(data) {
 }
 
 function hasServerTranscodedLow(data, postId) {
+  const preview = data.postVideoURL_preview || "";
   const low = data.postVideoURL_low || "";
   const original = getOriginalVideoUrl(data);
+  if (preview && preview !== original && preview.includes(`/videos/${postId}/`)) {
+    return true;
+  }
   if (!low || low === original) return false;
 
   const decoded = decodeStoragePathFromUrl(low);
-  if (decoded && decoded.includes(`/videos/${postId}/low.mp4`)) return true;
+  if (decoded && decoded.includes(`/videos/${postId}/`)) return true;
   return low.includes(`/videos/${postId}/`);
 }
 
@@ -120,7 +131,7 @@ async function assertBackfillOrAdminAuth(req) {
 }
 
 /**
- * Download original, transcode to 480p H.264, upload low.mp4, update Firestore.
+ * Download original from GCS, encode preview + low MP4, upload, update Firestore.
  */
 async function transcodeVideoForPost(postId, data, docRef) {
   const originalUrl = getOriginalVideoUrl(data);
@@ -132,7 +143,6 @@ async function transcodeVideoForPost(postId, data, docRef) {
     return { ok: false, reason: "no_video" };
   }
 
-  const low = data.postVideoURL_low;
   if (hasServerTranscodedLow(data, postId)) {
     await docRef.update({
       videoTranscodeStatus: "done",
@@ -141,8 +151,19 @@ async function transcodeVideoForPost(postId, data, docRef) {
     return { ok: true, reason: "already_done" };
   }
 
+  const userId = getPostUserId(data);
+  if (!userId) {
+    await docRef.update({
+      videoTranscodeStatus: "failed",
+      videoTranscodeError: "missing postUser",
+      videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return { ok: false, reason: "no_user" };
+  }
+
   const tmpInput = path.join(os.tmpdir(), `${postId}_orig`);
-  const tmpOutput = path.join(os.tmpdir(), `${postId}_low.mp4`);
+  const tmpPreview = path.join(os.tmpdir(), `${postId}_preview.mp4`);
+  const tmpLow = path.join(os.tmpdir(), `${postId}_low.mp4`);
 
   await docRef.update({
     videoTranscodeStatus: "processing",
@@ -150,56 +171,53 @@ async function transcodeVideoForPost(postId, data, docRef) {
   });
 
   try {
-    const response = await axios.get(originalUrl, {
-      responseType: "arraybuffer",
-      timeout: 120000,
-      maxContentLength: 500 * 1024 * 1024,
-    });
-    fs.writeFileSync(tmpInput, Buffer.from(response.data));
-
-    await new Promise((resolve, reject) => {
-      ffmpeg(tmpInput)
-        .videoFilter(
-          "scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease:flags=lanczos",
-        )
-        .videoCodec("libx264")
-        .addOption("-crf", "28")
-        .addOption("-preset", "fast")
-        .addOption("-profile:v", "baseline")
-        .addOption("-level", "3.0")
-        .audioCodec("aac")
-        .audioBitrate("64k")
-        .addOption("-movflags", "+faststart")
-        .format("mp4")
-        .on("end", resolve)
-        .on("error", reject)
-        .save(tmpOutput);
-    });
-
-    const bucket = admin.storage().bucket();
-    const userId = getPostUserId(data);
-    if (!userId) {
-      throw new Error("missing postUser");
+    const storagePath = decodeStoragePathFromUrl(originalUrl);
+    if (!storagePath) {
+      throw new Error("cannot decode storage path from original URL");
     }
 
-    const storagePath = `users/${userId}/videos/${postId}/low.mp4`;
-    const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const bucket = admin.storage().bucket();
+    await bucket.file(storagePath).download({ destination: tmpInput });
 
-    await bucket.upload(tmpOutput, {
-      destination: storagePath,
+    await runFfmpegEncode(
+      tmpInput,
+      tmpPreview,
+      VIDEO_ENCODE_PROFILE.serverPreview,
+    );
+    await runFfmpegEncode(tmpInput, tmpLow, VIDEO_ENCODE_PROFILE.serverLow);
+
+    const paths = standardEncodePaths(userId, postId);
+    const previewToken =
+      Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const lowToken =
+      Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+    await bucket.upload(tmpPreview, {
+      destination: paths.preview,
       metadata: {
         contentType: "video/mp4",
-        metadata: { firebaseStorageDownloadTokens: token },
+        metadata: { firebaseStorageDownloadTokens: previewToken },
+      },
+    });
+    await bucket.upload(tmpLow, {
+      destination: paths.low,
+      metadata: {
+        contentType: "video/mp4",
+        metadata: { firebaseStorageDownloadTokens: lowToken },
       },
     });
 
-    const lowUrl =
-      `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/` +
-      `${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+    const previewUrl = buildFirebaseDownloadUrl(
+      bucket.name,
+      paths.preview,
+      previewToken,
+    );
+    const lowUrl = buildFirebaseDownloadUrl(bucket.name, paths.low, lowToken);
 
     await docRef.update({
+      postVideoURL_preview: previewUrl,
       postVideoURL_low: lowUrl,
-      postVideoURL: lowUrl,
+      postVideoURL: previewUrl,
       videoTranscodeStatus: "done",
       videoTranscodeError: admin.firestore.FieldValue.delete(),
       videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -217,8 +235,9 @@ async function transcodeVideoForPost(postId, data, docRef) {
     });
     return { ok: false, reason: "failed", error: message };
   } finally {
-    if (fs.existsSync(tmpInput)) fs.unlinkSync(tmpInput);
-    if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput);
+    for (const f of [tmpInput, tmpPreview, tmpLow]) {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+    }
   }
 }
 
@@ -256,11 +275,11 @@ exports.transcodeVideoPost = functions
     return null;
   });
 
-/** Every 30 minutes — process a small batch of queued videos. */
+/** Every 10 minutes — process queued video encodes. */
 exports.processPendingVideoTranscodes = functions
   .region(REGION)
   .runWith(TRANSCODE_RUN_OPTS)
-  .pubsub.schedule("every 30 minutes")
+  .pubsub.schedule("every 10 minutes")
   .onRun(async () => {
     const summary = await processPendingBatch(BATCH_SIZE);
     functions.logger.info("processPendingVideoTranscodes", summary);

@@ -15,6 +15,7 @@ import { getCurrentLocationLabel } from "@/lib/utils/geolocation";
 import {
   isVideoFile,
   validateMediaSize,
+  ensureVideoCoverBlob,
 } from "@/lib/utils/media-compress";
 import {
   invalidateFeedCaches,
@@ -58,7 +59,7 @@ export function ActivityUploadModal({
       setDraftEnabled(false);
       return;
     }
-    const timer = window.setTimeout(() => setDraftEnabled(true), 400);
+    const timer = window.setTimeout(() => setDraftEnabled(true), 2500);
     return () => window.clearTimeout(timer);
   }, [file, open]);
 
@@ -66,6 +67,17 @@ export function ActivityUploadModal({
     enabled: open && draftEnabled && Boolean(file),
     thumbnailRef: coverBlobRef,
   });
+
+  useEffect(() => {
+    if (!file || !isVideoFile(file)) return;
+    let cancelled = false;
+    void ensureVideoCoverBlob(file, coverBlobRef.current).then((blob) => {
+      if (!cancelled && !coverBlobRef.current) coverBlobRef.current = blob;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   useEffect(() => {
     if (!open || !event) return;
@@ -106,6 +118,10 @@ export function ActivityUploadModal({
     setUploading(true);
     setError("");
     try {
+      if (isVideoFile(file)) {
+        coverBlobRef.current = await ensureVideoCoverBlob(file, coverBlobRef.current);
+      }
+
       const meta = {
         userId: user.uid,
         eventId: event.id,
@@ -123,7 +139,6 @@ export function ActivityUploadModal({
         if (isVideoFile(file)) {
           const result = await uploadVideoPost(file, user.uid, setProgress, {
             getThumbnailBlob: () => coverBlobRef.current,
-            skipClientPreview: true,
           });
           media = { isVideo: true, ...result };
         } else {
@@ -133,16 +148,17 @@ export function ActivityUploadModal({
       }
 
       let thumbUrl = media.thumbnailUrl;
-      if (media.isVideo && coverBlobRef.current) {
+      if (media.isVideo) {
         thumbUrl = await uploadVideoCoverForPost(
           media.originalUrl,
-          coverBlobRef.current,
+          coverBlobRef.current!,
         );
       }
 
       const urls = {
         originalUrl: media.originalUrl,
         lowUrl: media.lowUrl,
+        previewUrl: media.isVideo ? media.previewUrl : undefined,
         thumbUrl: media.isVideo ? thumbUrl ?? media.thumbnailUrl : media.lowUrl,
       };
 

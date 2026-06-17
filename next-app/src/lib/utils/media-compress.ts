@@ -1,5 +1,6 @@
 import type { Locale } from "@/i18n/detect";
 import { getMessage } from "@/i18n/messages";
+import { VIDEO_ENCODE_PROFILE } from "@/lib/media/video-encode";
 
 const IMAGE_LOW_MAX_WIDTH = 1280;
 const IMAGE_LOW_QUALITY = 0.65;
@@ -214,14 +215,28 @@ export async function videoThumbnailFromFile(file: File): Promise<Blob> {
   }
 }
 
+/** Use manual cover when set; otherwise extract a frame from the video (Instagram-style). */
+export async function ensureVideoCoverBlob(
+  file: File,
+  existing?: Blob | null,
+): Promise<Blob> {
+  if (existing && isImageBlob(existing)) return existing;
+  return videoThumbnailFromFile(file);
+}
+
+
 /**
- * Lightweight playback preview (≈1 Mbps) via video.captureStream + MediaRecorder.
- * Runs in parallel with original upload so Reels can start quickly; Cloud Function
- * later replaces this with a proper FFmpeg transcode.
+ * Lightweight playback preview via video.captureStream + MediaRecorder.
+ * Runs after original upload; Cloud Function later replaces with FFmpeg encode.
  */
 export async function createPlaybackPreviewBlob(
   file: File,
-  options?: { videoBitsPerSecond?: number; playbackRate?: number; maxDurationSec?: number },
+  options?: {
+    videoBitsPerSecond?: number;
+    audioBitsPerSecond?: number;
+    playbackRate?: number;
+    maxDurationSec?: number;
+  },
 ): Promise<Blob | null> {
   if (typeof document === "undefined" || typeof MediaRecorder === "undefined") {
     return null;
@@ -242,7 +257,8 @@ export async function createPlaybackPreviewBlob(
       8000,
     );
 
-    const maxDuration = options?.maxDurationSec ?? 180;
+    const maxDuration =
+      options?.maxDurationSec ?? VIDEO_ENCODE_PROFILE.clientPreview.maxDurationSec;
     if (!Number.isFinite(video.duration) || video.duration <= 0 || video.duration > maxDuration) {
       return null;
     }
@@ -266,8 +282,12 @@ export async function createPlaybackPreviewBlob(
 
     const recorder = new MediaRecorder(stream, {
       mimeType,
-      videoBitsPerSecond: options?.videoBitsPerSecond ?? 500_000,
-      audioBitsPerSecond: 48_000,
+      videoBitsPerSecond:
+        options?.videoBitsPerSecond ??
+        VIDEO_ENCODE_PROFILE.clientPreview.videoBitsPerSecond,
+      audioBitsPerSecond:
+        options?.audioBitsPerSecond ??
+        VIDEO_ENCODE_PROFILE.clientPreview.audioBitsPerSecond,
     });
 
     const chunks: Blob[] = [];
@@ -284,7 +304,7 @@ export async function createPlaybackPreviewBlob(
       recorder.onerror = () => reject(new Error("record failed"));
     });
 
-    const rate = options?.playbackRate ?? 2;
+    const rate = options?.playbackRate ?? VIDEO_ENCODE_PROFILE.clientPreview.playbackRate;
     video.playbackRate = rate;
     recorder.start(500);
     await video.play();

@@ -113,6 +113,7 @@ export function getPostVideoPoster(post: UserPostDoc): string | undefined {
 
 export function getPostVideoVariants(post: UserPostDoc): {
   original: string;
+  preview: string;
   low: string;
   poster?: string;
 } {
@@ -121,6 +122,10 @@ export function getPostVideoVariants(post: UserPostDoc): {
     post.postVideo ||
     post.postVideoURL ||
     "";
+  const preview =
+    post.postVideoURL_preview ||
+    inferPreviewUrlFromVideo(original) ||
+    "";
   const low =
     post.postVideoURL_low ||
     post.postVideoURL ||
@@ -128,7 +133,7 @@ export function getPostVideoVariants(post: UserPostDoc): {
     "";
   const poster = getPostVideoPoster(post);
 
-  return { original, low, poster };
+  return { original, preview, low, poster };
 }
 
 /** Guess sibling asset beside original.mov/mp4 in Firebase Storage URLs. */
@@ -213,30 +218,78 @@ export function inferTranscodedLowUrl(post: UserPostDoc): string | undefined {
   }
 }
 
+/** Server-encoded preview.mp4: users/{uid}/videos/{postId}/preview.mp4 */
+export function inferTranscodedPreviewUrl(post: UserPostDoc): string | undefined {
+  if (!post.id) return undefined;
+  const original =
+    post.postVideoURL_original ||
+    post.postVideo ||
+    post.postVideoURL ||
+    "";
+  if (!original) return undefined;
+
+  try {
+    const bucket = original.match(/\/v0\/b\/([^/]+)\//)?.[1];
+    if (!bucket) return undefined;
+
+    const userId =
+      post.postUserId ||
+      decodeStoragePathFromUrl(original)?.match(/^users\/([^/]+)\//)?.[1] ||
+      "";
+    if (!userId) return undefined;
+
+    const previewPath = `users/${userId}/videos/${post.id}/preview.mp4`;
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(previewPath)}?alt=media`;
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeStoragePathFromUrl(url: string): string | null {
+  try {
+    const pathname = new URL(url).pathname;
+    const encoded = pathname.match(/\/o\/(.+)/)?.[1];
+    if (!encoded) return null;
+    return decodeURIComponent(encoded.split("?")[0] ?? encoded);
+  } catch {
+    return null;
+  }
+}
+
 /** Smaller transcodes / previews — preferred for feed & reels playback. */
 export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
-  const { original, low } = getPostVideoVariants(post);
-  const distinctLow = low && original && low !== original ? low : "";
-
+  const { original, preview, low } = getPostVideoVariants(post);
   const candidates: string[] = [];
 
+  const distinctPreview =
+    preview && preview !== original ? preview : "";
+  if (distinctPreview) {
+    candidates.push(distinctPreview);
+  }
+
+  const uploadPreview = inferPreviewUrlFromVideo(original);
+  if (uploadPreview && uploadPreview !== distinctPreview) {
+    candidates.push(uploadPreview);
+  }
+
+  const serverPreview = inferTranscodedPreviewUrl(post);
+  if (serverPreview && !candidates.includes(serverPreview)) {
+    candidates.push(serverPreview);
+  }
+
+  const distinctLow = low && low !== original && low !== distinctPreview ? low : "";
   if (distinctLow) {
     candidates.push(distinctLow);
   }
 
-  const preview = inferPreviewUrlFromVideo(original);
-  if (preview && preview !== distinctLow) {
-    candidates.push(preview);
-  }
-
   const activityLow = inferActivityLowUrl(original);
-  if (activityLow && activityLow !== distinctLow && !candidates.includes(activityLow)) {
+  if (activityLow && !candidates.includes(activityLow)) {
     candidates.push(activityLow);
   }
 
-  const transcoded = inferTranscodedLowUrl(post);
-  if (transcoded && transcoded !== distinctLow && !candidates.includes(transcoded)) {
-    candidates.push(transcoded);
+  const transcodedLow = inferTranscodedLowUrl(post);
+  if (transcodedLow && !candidates.includes(transcodedLow)) {
+    candidates.push(transcodedLow);
   }
 
   return uniqueUrls(...candidates).filter((url) => url !== original);

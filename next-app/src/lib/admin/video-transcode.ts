@@ -1,9 +1,9 @@
-export type VideoTranscodeStatus =
-  | "pending"
-  | "processing"
-  | "done"
-  | "failed"
-  | "skipped";
+export type { VideoEncodeStatus as VideoTranscodeStatus } from "@/lib/media/video-encode";
+export {
+  videoEncodeStatusForUpload as videoTranscodeStatusForUpload,
+  isEncodedPlaybackUrl,
+} from "@/lib/media/video-encode";
+import type { VideoEncodeStatus } from "@/lib/media/video-encode";
 
 export function getOriginalVideoUrl(data: Record<string, unknown>): string {
   const original =
@@ -16,6 +16,12 @@ export function hasServerTranscodedLow(
   data: Record<string, unknown>,
   postId?: string,
 ): boolean {
+  const preview = data.postVideoURL_preview;
+  if (typeof preview === "string" && preview.includes("/videos/")) {
+    if (!postId) return true;
+    if (preview.includes(`/videos/${postId}/`)) return true;
+  }
+
   const low = data.postVideoURL_low;
   if (typeof low !== "string" || !low) return false;
   const original = getOriginalVideoUrl(data);
@@ -41,15 +47,11 @@ export function postNeedsVideoTranscode(data: Record<string, unknown>): boolean 
   const originalUrl = getOriginalVideoUrl(data);
   if (!originalUrl) return false;
 
-  const status = data.videoTranscodeStatus as VideoTranscodeStatus | undefined;
+  const status = data.videoTranscodeStatus as VideoEncodeStatus | undefined;
   if (status === "skipped") return false;
   if (status === "done") return false;
 
   return true;
-}
-
-export function videoTranscodeStatusForUpload(): VideoTranscodeStatus {
-  return "pending";
 }
 
 export function getTranscodeBatchUrl(projectId: string): string {
