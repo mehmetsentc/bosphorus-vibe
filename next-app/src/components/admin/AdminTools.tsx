@@ -3,8 +3,8 @@
 import { useCallback, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
-  enqueueThumbnailRegenClient,
-  enqueueTranscodeClient,
+  enqueueThumbnailViaApi,
+  enqueueTranscodeViaApi,
   runThumbnailBatchClient,
   runTranscodeBatchClient,
 } from "@/lib/admin/client-ops";
@@ -60,7 +60,8 @@ export function AdminTools() {
             disabled={busy}
             onClick={() =>
               withBusy(async () => {
-                const d = await enqueueTranscodeClient(500);
+                const token = await user!.getIdToken(true);
+                const d = await enqueueTranscodeViaApi(token, 500);
                 return `✓ ${d.marked} video sıraya alındı (${d.scanned} tarandı)`;
               })
             }
@@ -98,7 +99,8 @@ export function AdminTools() {
             disabled={busy}
             onClick={() =>
               withBusy(async () => {
-                const d = await enqueueThumbnailRegenClient(500);
+                const token = await user!.getIdToken(true);
+                const d = await enqueueThumbnailViaApi(token, 500);
                 return `✓ ${d.marked} video sıraya alındı (${d.scanned} tarandı)`;
               })
             }

@@ -250,37 +250,50 @@ export function enqueueTranscodeClient(maxMark = 500) {
   );
 }
 
-async function runCloudBatch(
-  functionName: "runVideoThumbnailBatch" | "runVideoTranscodeBatch",
+async function parseAdminResponse(res: Response): Promise<Record<string, unknown>> {
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const message =
+      typeof data.message === "string" && data.message
+        ? data.message
+        : typeof data.error === "string" &&
+            !/^[A-Z_]+$/.test(data.error) &&
+            data.error.length < 200
+          ? data.error
+          : res.status === 503
+            ? "Sunucu yapılandırması eksik (TRANSCODE_BACKFILL_SECRET). Vercel env kontrol edin."
+            : res.status === 401 || res.status === 403
+              ? "Admin oturumu geçersiz — çıkış yapıp tekrar giriş yapın."
+              : "İşlem başarısız";
+    throw new Error(message);
+  }
+  return data;
+}
+
+async function postAdminApi(
+  path: string,
   idToken: string,
-  batchLimit: number,
-): Promise<{ processed: number; succeeded: number; failed: number }> {
+  body?: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   let res: Response;
   try {
-    res = await fetch(clientApiUrl(`/api/admin/functions/${functionName}`), {
+    res = await fetch(clientApiUrl(path), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${idToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ limit: batchLimit }),
+      body: JSON.stringify(body ?? {}),
+      credentials: "include",
       cache: "no-store",
     });
   } catch {
     throw new Error("Sunucuya bağlanılamadı — sayfayı yenileyip tekrar deneyin");
   }
+  return parseAdminResponse(res);
+}
 
-  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) {
-    const message =
-      typeof data.message === "string"
-        ? data.message
-        : typeof data.error === "string"
-          ? data.error
-          : "İşlem başarısız";
-    throw new Error(message);
-  }
-
+function batchResult(data: Record<string, unknown>) {
   return {
     processed: typeof data.processed === "number" ? data.processed : 0,
     succeeded: typeof data.succeeded === "number" ? data.succeeded : 0,
@@ -288,10 +301,38 @@ async function runCloudBatch(
   };
 }
 
+export async function enqueueTranscodeViaApi(idToken: string, maxMark = 500) {
+  const data = await postAdminApi("/api/admin/transcode/enqueue", idToken, {
+    limit: maxMark,
+  });
+  return {
+    scanned: typeof data.scanned === "number" ? data.scanned : 0,
+    marked: typeof data.marked === "number" ? data.marked : 0,
+    alreadyQueued: typeof data.alreadyQueued === "number" ? data.alreadyQueued : 0,
+  };
+}
+
+export async function enqueueThumbnailViaApi(idToken: string, maxMark = 500) {
+  const data = await postAdminApi("/api/admin/thumbnails/enqueue", idToken, {
+    limit: maxMark,
+  });
+  return {
+    scanned: typeof data.scanned === "number" ? data.scanned : 0,
+    marked: typeof data.marked === "number" ? data.marked : 0,
+    alreadyQueued: typeof data.alreadyQueued === "number" ? data.alreadyQueued : 0,
+  };
+}
+
 export async function runThumbnailBatchClient(idToken: string, batchLimit = 5) {
-  return runCloudBatch("runVideoThumbnailBatch", idToken, batchLimit);
+  const data = await postAdminApi("/api/admin/thumbnails/run", idToken, {
+    limit: batchLimit,
+  });
+  return batchResult(data);
 }
 
 export async function runTranscodeBatchClient(idToken: string, batchLimit = 5) {
-  return runCloudBatch("runVideoTranscodeBatch", idToken, batchLimit);
+  const data = await postAdminApi("/api/admin/transcode/run", idToken, {
+    limit: batchLimit,
+  });
+  return batchResult(data);
 }

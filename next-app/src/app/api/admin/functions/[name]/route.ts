@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/api/auth";
 import { apiError, apiOk, GENERIC_ERROR } from "@/lib/api/errors";
 
 const ALLOWED_FUNCTIONS = new Set([
@@ -18,15 +19,33 @@ function cloudFunctionUrl(name: string): string | null {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  try {
+    await requireAdmin(request);
+  } catch (e) {
+    const msg =
+      e instanceof Error && e.message === "FORBIDDEN"
+        ? "Admin yetkisi gerekli."
+        : "Oturum gerekli.";
+    return apiError(
+      e instanceof Error && e.message === "FORBIDDEN" ? 403 : 401,
+      "FORBIDDEN",
+      msg,
+    );
+  }
+
   const { name } = await context.params;
   const url = cloudFunctionUrl(name);
   if (!url) {
-    return apiError(404, "NOT_FOUND", "Unknown function.");
+    return apiError(404, "NOT_FOUND", "Bilinmeyen fonksiyon.");
   }
 
-  const auth = request.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) {
-    return apiError(401, "UNAUTHORIZED", "Authorization required.");
+  const secret = process.env.TRANSCODE_BACKFILL_SECRET?.trim();
+  if (!secret) {
+    return apiError(
+      503,
+      "TRANSCODE_NOT_CONFIGURED",
+      "TRANSCODE_BACKFILL_SECRET sunucuda tanımlı değil.",
+    );
   }
 
   let body = "{}";
@@ -41,7 +60,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const res = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: auth,
+        Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
       },
       body,
@@ -61,6 +80,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return apiOk(data);
   } catch {
-    return apiError(502, "FUNCTION_UNREACHABLE", GENERIC_ERROR);
+    return apiError(502, "FUNCTION_UNREACHABLE", "Cloud Function'a ulaşılamadı.");
   }
 }

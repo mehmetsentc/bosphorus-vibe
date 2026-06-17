@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     return apiError(
       503,
       "THUMBNAIL_NOT_CONFIGURED",
-      "TRANSCODE_BACKFILL_SECRET or FIREBASE_PROJECT_ID is missing on the server.",
+      "TRANSCODE_BACKFILL_SECRET veya FIREBASE_PROJECT_ID sunucuda tanımlı değil. Vercel env ayarlarını kontrol edin.",
     );
   }
 
