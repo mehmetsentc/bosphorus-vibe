@@ -140,6 +140,16 @@ function inferSiblingAssetUrl(
   return videoUrl.replace(/original\.[a-z0-9]+/i, filename);
 }
 
+/** Activity uploads: users/.../activities/{id}/low.mp4 beside original.mov */
+export function inferActivityLowUrl(videoUrl: string): string | undefined {
+  if (!videoUrl.includes("/activities/")) return undefined;
+  const lowMp4 = inferSiblingAssetUrl(videoUrl, "low.mp4");
+  if (lowMp4) return lowMp4;
+  const m = videoUrl.match(/original\.([a-z0-9]+)/i);
+  if (m) return videoUrl.replace(/original\.[a-z0-9]+/i, `low.${m[1]}`);
+  return undefined;
+}
+
 /** Client-uploaded preview.mp4 beside original — smallest, fastest start. */
 export function inferPreviewUrlFromVideo(videoUrl: string): string | undefined {
   const fromOriginal = inferSiblingAssetUrl(videoUrl, "preview.mp4");
@@ -219,6 +229,11 @@ export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
     candidates.push(preview);
   }
 
+  const activityLow = inferActivityLowUrl(original);
+  if (activityLow && activityLow !== distinctLow && !candidates.includes(activityLow)) {
+    candidates.push(activityLow);
+  }
+
   const transcoded = inferTranscodedLowUrl(post);
   if (transcoded && transcoded !== distinctLow && !candidates.includes(transcoded)) {
     candidates.push(transcoded);
@@ -258,12 +273,11 @@ export function pickVideoSource(
   const fast = getFastPlaybackCandidates(post);
 
   let ordered: string[];
-  if (context === "reels") {
-    // Reels: always preview/low first — instant start beats full-res on swipe
+  if (context === "reels" || context === "feed") {
     ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
   } else if (options?.preferHighQuality && original) {
     ordered = fast.length ? [original, ...fast] : uniqueUrls(original, low);
-  } else if (context === "feed" || tier === "slow") {
+  } else if (tier === "slow") {
     ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
   } else if (fast.length) {
     ordered = [original, ...fast];

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { dedupePostsById } from "@/lib/utils/dedupe-posts";
 import { persist, createJSONStorage } from "zustand/middleware";
 import {
   PERSIST_POSTS_MAX,
@@ -132,15 +133,17 @@ export const useAppStore = create<AppStoreState>()(
           lastFetched: { ...state.lastFetched, posts: Date.now() },
         })),
       appendFeedPosts: (newPosts, hasMore) =>
-        set((state) => ({
-          posts: state.posts
-            ? {
-                ...state.posts,
-                posts: [...state.posts.posts, ...newPosts],
-                hasMore: hasMore ?? state.posts.hasMore,
-              }
-            : { posts: newPosts, hasMore: hasMore ?? true },
-        })),
+        set((state) => {
+          const merged = state.posts
+            ? [...state.posts.posts, ...newPosts]
+            : newPosts;
+          return {
+            posts: {
+              posts: dedupePostsById(merged),
+              hasMore: hasMore ?? state.posts?.hasMore ?? true,
+            },
+          };
+        }),
       clearPostsCache: () =>
         set((state) => ({
           posts: null,
@@ -152,15 +155,17 @@ export const useAppStore = create<AppStoreState>()(
           lastFetched: { ...state.lastFetched, reels: Date.now() },
         })),
       appendReelsPosts: (newPosts, hasMore) =>
-        set((state) => ({
-          reels: state.reels
-            ? {
-                ...state.reels,
-                posts: [...state.reels.posts, ...newPosts],
-                hasMore: hasMore ?? state.reels.hasMore,
-              }
-            : { posts: newPosts, hasMore: hasMore ?? true },
-        })),
+        set((state) => {
+          const merged = state.reels
+            ? [...state.reels.posts, ...newPosts]
+            : newPosts;
+          return {
+            reels: {
+              posts: dedupePostsById(merged),
+              hasMore: hasMore ?? state.reels?.hasMore ?? true,
+            },
+          };
+        }),
       removeReelPost: (postId) =>
         set((state) => ({
           reels: state.reels

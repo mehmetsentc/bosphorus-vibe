@@ -8,6 +8,7 @@ import {
   REELS_PAGE_SIZE,
 } from "@/lib/performance/app-state";
 import { useStoreHydration } from "@/lib/hooks/useStoreHydration";
+import { dedupePostsById } from "@/lib/utils/dedupe-posts";
 import {
   enrichPostsWithUsers,
   getFeedPostsPage,
@@ -30,10 +31,11 @@ export function useFeedPosts() {
   // Fallback cursor for cache-restored sessions (DocumentSnapshot not serializable)
   const dateCursorRef = useRef<Date | null>(null);
   const fetchRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const [localPosts, setLocalPosts] = useState<EnrichedPost[]>(() => {
     if (typeof window === "undefined") return [];
     const { posts, lastFetched } = useAppStore.getState();
-    if (posts && !isCacheExpired(lastFetched.posts)) return posts.posts;
+    if (posts && !isCacheExpired(lastFetched.posts)) return dedupePostsById(posts.posts);
     return [];
   });
   const [hasMore, setHasMore] = useState(() => {
@@ -59,13 +61,13 @@ export function useFeedPosts() {
 
   const syncFromCache = useCallback(() => {
     if (!postsCache) return;
-    postsRef.current = postsCache.posts;
+    const deduped = dedupePostsById(postsCache.posts);
+    postsRef.current = deduped;
     hasMoreRef.current = postsCache.hasMore;
-    setLocalPosts(postsCache.posts);
+    setLocalPosts(deduped);
     setHasMore(postsCache.hasMore);
     cursorRef.current = null;
-    // Use last post's timePosted as Date cursor so loadMore doesn't restart from page 1
-    const lastPost = postsCache.posts[postsCache.posts.length - 1];
+    const lastPost = deduped[deduped.length - 1];
     dateCursorRef.current = lastPost?.timePosted instanceof Date ? lastPost.timePosted : null;
     setInitialized(true);
   }, [postsCache]);
@@ -81,8 +83,6 @@ export function useFeedPosts() {
     async (force = false) => {
       if (!force && postsCache && !isCacheExpired(lastFetched)) {
         syncFromCache();
-        postsRef.current = postsCache.posts;
-        hasMoreRef.current = postsCache.hasMore;
         return;
       }
 
@@ -99,11 +99,12 @@ export function useFeedPosts() {
         if (requestId !== fetchRef.current) return;
 
         cursorRef.current = page.lastDoc;
-        postsRef.current = enriched;
+        const deduped = dedupePostsById(enriched);
+        postsRef.current = deduped;
         hasMoreRef.current = page.hasMore;
-        setLocalPosts(enriched);
+        setLocalPosts(deduped);
         setHasMore(page.hasMore);
-        setPostsCache({ posts: enriched, hasMore: page.hasMore });
+        setPostsCache({ posts: deduped, hasMore: page.hasMore });
         setInitialized(true);
       } finally {
         if (requestId === fetchRef.current) {
@@ -121,7 +122,9 @@ export function useFeedPosts() {
   }, [hydrated, fetchFirstPage]);
 
   const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || loadingMoreRef.current) return;
+    if (!initialized && postsRef.current.length > 0) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const cursor = cursorRef.current ?? dateCursorRef.current;
@@ -131,18 +134,17 @@ export function useFeedPosts() {
       hasMoreRef.current = page.hasMore;
       setHasMore(page.hasMore);
       const enriched = await enrichPostsWithUsers(page.posts);
-      setLocalPosts((prev) => {
-        const existingIds = new Set(prev.map((p) => p.id));
-        const fresh = enriched.filter((p) => !existingIds.has(p.id));
-        const next = [...prev, ...fresh];
-        postsRef.current = next;
-        return next;
-      });
-      appendFeedPosts(enriched, page.hasMore);
+      const existingIds = new Set(postsRef.current.map((p) => p.id));
+      const fresh = enriched.filter((p) => !existingIds.has(p.id));
+      const next = dedupePostsById([...postsRef.current, ...fresh]);
+      postsRef.current = next;
+      setLocalPosts(next);
+      if (fresh.length) appendFeedPosts(fresh, page.hasMore);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, appendFeedPosts]);
+  }, [hasMore, loadingMore, initialized, appendFeedPosts]);
 
   const refresh = useCallback(async () => {
     clearPostsCache();
@@ -179,10 +181,11 @@ export function useReelsPosts() {
   // Fallback cursor for cache-restored sessions (DocumentSnapshot not serializable)
   const dateCursorRef = useRef<Date | null>(null);
   const fetchRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const [localPosts, setLocalPosts] = useState<EnrichedPost[]>(() => {
     if (typeof window === "undefined") return [];
     const { reels, lastFetched: fetched } = useAppStore.getState();
-    if (reels && !isCacheExpired(fetched.reels)) return reels.posts;
+    if (reels && !isCacheExpired(fetched.reels)) return dedupePostsById(reels.posts);
     return [];
   });
   const [hasMore, setHasMore] = useState(() => {
@@ -209,13 +212,13 @@ export function useReelsPosts() {
 
   const syncFromCache = useCallback(() => {
     if (!reelsCache) return;
-    postsRef.current = reelsCache.posts;
+    const deduped = dedupePostsById(reelsCache.posts);
+    postsRef.current = deduped;
     hasMoreRef.current = reelsCache.hasMore;
-    setLocalPosts(reelsCache.posts);
+    setLocalPosts(deduped);
     setHasMore(reelsCache.hasMore);
     cursorRef.current = null;
-    // Use last post's timePosted as Date cursor so loadMore doesn't restart from page 1
-    const lastPost = reelsCache.posts[reelsCache.posts.length - 1];
+    const lastPost = deduped[deduped.length - 1];
     dateCursorRef.current = lastPost?.timePosted instanceof Date ? lastPost.timePosted : null;
     setInitialized(true);
   }, [reelsCache]);
@@ -286,7 +289,8 @@ export function useReelsPosts() {
   }, [hydrated, fetchFirstPage]);
 
   const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const cursor = cursorRef.current ?? dateCursorRef.current;
@@ -296,15 +300,14 @@ export function useReelsPosts() {
       hasMoreRef.current = page.hasMore;
       setHasMore(page.hasMore);
       const enriched = await enrichPostsWithUsers(page.posts);
-      setLocalPosts((prev) => {
-        const existingIds = new Set(prev.map((p) => p.id));
-        const fresh = enriched.filter((p) => !existingIds.has(p.id));
-        const next = [...prev, ...fresh];
-        postsRef.current = next;
-        return next;
-      });
-      appendReelsPosts(enriched, page.hasMore);
+      const existingIds = new Set(postsRef.current.map((p) => p.id));
+      const fresh = enriched.filter((p) => !existingIds.has(p.id));
+      const next = dedupePostsById([...postsRef.current, ...fresh]);
+      postsRef.current = next;
+      setLocalPosts(next);
+      if (fresh.length) appendReelsPosts(fresh, page.hasMore);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   }, [hasMore, loadingMore, appendReelsPosts]);

@@ -10,6 +10,7 @@ import {
   shouldLoadMoreForUnseen,
   type DisplayPostsOptions,
 } from "@/lib/utils/seenPosts";
+import { dedupePostsById } from "@/lib/utils/dedupe-posts";
 
 /**
  * Filters posts for display while keeping items visible for the current session
@@ -23,11 +24,12 @@ function filterWithSessionLock<T extends { id: string }>(
 ): T[] {
   if (!posts.length) return posts;
 
+  const unique = dedupePostsById(posts);
   const pinSet = new Set(options?.pinIds ?? []);
   const seen = getSeenPostIds(userId);
   const out: T[] = [];
 
-  for (const post of posts) {
+  for (const post of unique) {
     const wasLocked = locked.has(post.id);
     const isUnseen = !seen.has(post.id) || pinSet.has(post.id);
     if (isUnseen || wasLocked) {
@@ -39,8 +41,8 @@ function filterWithSessionLock<T extends { id: string }>(
   if (out.length > 0) return out;
 
   // Recycle when every post in batch was seen before this session
-  for (const post of posts) locked.add(post.id);
-  return posts;
+  for (const post of unique) locked.add(post.id);
+  return unique;
 }
 
 export function useSeenPosts(options?: DisplayPostsOptions) {

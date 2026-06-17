@@ -8,9 +8,8 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
-import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
+import { useReelsVideoSrc } from "@/lib/hooks/useReelsVideoSrc";
 import { useHideLikeCounts } from "@/lib/hooks/useSettingsEffects";
-import { getPreloadStrategy } from "@/lib/hooks/useNetworkQuality";
 import {
   getPostCaption,
   getPostVideoUrl,
@@ -87,6 +86,7 @@ function FeedPostCardInner({
   const hideLikeCounts = useHideLikeCounts();
   const { ref, isActive } = useIntersectionActive<HTMLElement>({
     threshold: 0.55,
+    rootMargin: "120px 0px",
   });
 
   const video = getPostVideoUrl(post);
@@ -94,11 +94,11 @@ function FeedPostCardInner({
   const caption = getPostCaption(post);
   const {
     src: videoSrc,
-    tier,
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed", isActive && mountVideo);
+    resolving: videoResolving,
+  } = useReelsVideoSrc(post, Boolean(video && mountVideo), isActive);
   const thumbCandidates = useMemo(
     () => getPostGridThumbnailCandidates(post),
     [post],
@@ -108,7 +108,7 @@ function FeedPostCardInner({
     getPostVideoPoster(post) ||
     post.postVideothumbnail ||
     undefined;
-  const videoPreload = isActive ? getPreloadStrategy(tier, true) : "none";
+  const videoPreload = isActive ? "auto" : "none";
 
   useEffect(() => {
     setShowPoster(true);
@@ -118,14 +118,14 @@ function FeedPostCardInner({
   // Prefetch poster early so feed never flashes black
   useEffect(() => {
     if (!video) return;
-    for (const url of thumbCandidates.slice(0, 3)) {
+    for (const url of thumbCandidates.slice(0, 5)) {
       prefetchImageUrl(url);
     }
-  }, [video, thumbCandidates]);
+  }, [video, thumbCandidates, post.id]);
 
   useEffect(() => {
-    if (isActive) setMountVideo(true);
-  }, [isActive]);
+    if (isActive || priority) setMountVideo(true);
+  }, [isActive, priority]);
 
   useEffect(() => {
     setIsMuted(feedMuted);
@@ -299,10 +299,10 @@ function FeedPostCardInner({
         <div className="relative w-full bg-black">
           <div className="relative aspect-square w-full overflow-hidden bg-black">
             {/* Thumbnail — stays on top until video actually plays */}
-            {thumbSrc && (
+            {(showPoster || videoResolving) && thumbSrc && (
               <div
                 className={`absolute inset-0 z-[4] transition-opacity duration-200 ${
-                  showPoster ? "opacity-100" : "pointer-events-none opacity-0"
+                  showPoster || videoResolving ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}

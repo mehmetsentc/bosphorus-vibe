@@ -1,21 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   createActivityPostFromMedia,
-  createActivityUpload,
+  uploadImagePost,
+  uploadVideoCoverForPost,
+  uploadVideoPost,
 } from "@/lib/services/firestore";
-import { useActivityDraftUpload } from "@/lib/hooks/useActivityDraftUpload";
+import { useDraftUpload } from "@/lib/hooks/useDraftUpload";
+import { VideoCoverPicker } from "@/components/upload/VideoCoverPicker";
 import { getCurrentLocationLabel } from "@/lib/utils/geolocation";
 import {
-  compressImage,
-  compressVideo,
   isVideoFile,
   validateMediaSize,
 } from "@/lib/utils/media-compress";
-import { invalidateFeedCaches } from "@/lib/utils/invalidate-feed-cache";
+import {
+  invalidateFeedCaches,
+  markReelsRefreshPending,
+} from "@/lib/utils/invalidate-feed-cache";
 import { useI18n, useT } from "@/components/providers/I18nProvider";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import type { EventDoc, PostTag } from "@/types";
@@ -37,6 +41,7 @@ export function ActivityUploadModal({
   const { locale } = useI18n();
   const t = useT();
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [activityName, setActivityName] = useState("");
   const [location, setLocation] = useState("");
   const [participantCount, setParticipantCount] = useState("");
@@ -45,13 +50,32 @@ export function ActivityUploadModal({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [taggedPeople, setTaggedPeople] = useState<PostTag[]>([]);
+  const coverBlobRef = useRef<Blob | null>(null);
+  const [draftEnabled, setDraftEnabled] = useState(false);
 
-  const draft = useActivityDraftUpload(file, user?.uid, open && Boolean(file));
+  useEffect(() => {
+    if (!file || !open) {
+      setDraftEnabled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setDraftEnabled(true), 400);
+    return () => window.clearTimeout(timer);
+  }, [file, open]);
+
+  const draft = useDraftUpload(file, user?.uid, {
+    enabled: open && draftEnabled && Boolean(file),
+    thumbnailRef: coverBlobRef,
+  });
 
   useEffect(() => {
     if (!open || !event) return;
     setActivityName(event.eventName);
     setFile(null);
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    coverBlobRef.current = null;
     setParticipantCount("");
     setError("");
     setProgress(0);
@@ -92,30 +116,41 @@ export function ActivityUploadModal({
         tags: taggedPeople,
       };
 
+      let media;
       try {
-        const urls = await draft.waitUntilReady();
-        setProgress(95);
-        await createActivityPostFromMedia(urls, meta);
+        media = await draft.waitUntilReady();
       } catch {
-        setProgress(2);
-        const isVideo = isVideoFile(file);
-        let compressed: Awaited<ReturnType<typeof compressVideo>> | null = null;
-        const lowBlob = isVideo
-          ? (compressed = await compressVideo(file)).video
-          : await compressImage(file, locale);
-        await createActivityUpload(
-          {
-            ...meta,
-            isVideo,
-            originalFile: file,
-            lowQualityBlob: lowBlob,
-            thumbnailBlob: compressed?.thumbnail,
-          },
-          setProgress,
+        if (isVideoFile(file)) {
+          const result = await uploadVideoPost(file, user.uid, setProgress, {
+            getThumbnailBlob: () => coverBlobRef.current,
+            skipClientPreview: true,
+          });
+          media = { isVideo: true, ...result };
+        } else {
+          const result = await uploadImagePost(file, user.uid, setProgress);
+          media = { isVideo: false, ...result };
+        }
+      }
+
+      let thumbUrl = media.thumbnailUrl;
+      if (media.isVideo && coverBlobRef.current) {
+        thumbUrl = await uploadVideoCoverForPost(
+          media.originalUrl,
+          coverBlobRef.current,
         );
       }
 
+      const urls = {
+        originalUrl: media.originalUrl,
+        lowUrl: media.lowUrl,
+        thumbUrl: media.isVideo ? thumbUrl ?? media.thumbnailUrl : media.lowUrl,
+      };
+
+      setProgress(95);
+      await createActivityPostFromMedia(urls, meta);
+
       invalidateFeedCaches();
+      markReelsRefreshPending();
       await refreshProfile();
       onSuccess();
       onClose();
@@ -126,6 +161,8 @@ export function ActivityUploadModal({
       setUploading(false);
     }
   }
+
+  const isVideo = file ? isVideoFile(file) : false;
 
   return (
     <AnimatePresence>
@@ -152,16 +189,21 @@ export function ActivityUploadModal({
               <input
                 type="file"
                 accept="image/*,video/*"
+                capture="environment"
                 className="hidden"
                 onChange={(e) => {
-                  setFile(e.target.files?.[0] ?? null);
+                  const next = e.target.files?.[0] ?? null;
+                  setPreviewUrl((prev) => {
+                    if (prev) URL.revokeObjectURL(prev);
+                    return next ? URL.createObjectURL(next) : null;
+                  });
+                  coverBlobRef.current = null;
+                  setFile(next);
                   setError("");
                 }}
               />
               {file ? (
-                <span className="px-4 text-center text-sm text-vibe">
-                  {file.name}
-                </span>
+                <span className="px-4 text-center text-sm text-vibe">{file.name}</span>
               ) : (
                 <span className="text-sm text-muted">{t("selectMedia")}</span>
               )}
@@ -183,6 +225,17 @@ export function ActivityUploadModal({
             )}
             {draft.status === "ready" && (
               <p className="mt-2 text-xs text-vibe">{t("draftUploadReady")}</p>
+            )}
+
+            {isVideo && file && previewUrl && (
+              <VideoCoverPicker
+                file={file}
+                previewUrl={previewUrl}
+                onCoverChange={(blob) => {
+                  coverBlobRef.current = blob;
+                }}
+                className="mt-4"
+              />
             )}
 
             <div className="mt-4 space-y-3">
