@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { mintIdTokenForUid } from "@/lib/firebase/mint-id-token";
 
 const CF_REGION = "europe-central2";
 
@@ -16,14 +17,32 @@ export function cloudFunctionUrl(name: string): string | null {
   return `https://${CF_REGION}-${projectId}.cloudfunctions.net/${name}`;
 }
 
+async function resolveAuthToken(
+  request: NextRequest,
+  adminUid: string,
+): Promise<string | null> {
+  try {
+    return await mintIdTokenForUid(adminUid);
+  } catch {
+    const secret = process.env.TRANSCODE_BACKFILL_SECRET?.trim();
+    if (secret) return secret;
+
+    const authHeader = request.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      return authHeader.slice(7);
+    }
+    return null;
+  }
+}
+
 /**
  * Call a HTTPS Cloud Function after admin auth on the Next.js route.
- * Forwards the caller's Firebase ID token so CF can verify admin role
- * (no TRANSCODE_BACKFILL_SECRET required on Vercel).
+ * Prefers TRANSCODE_BACKFILL_SECRET; otherwise mints a fresh admin ID token.
  */
 export async function callCloudFunction(
   name: string,
   request: NextRequest,
+  adminUid: string,
   body: Record<string, unknown>,
 ): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const url = cloudFunctionUrl(name);
@@ -35,12 +54,12 @@ export async function callCloudFunction(
     };
   }
 
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+  const token = await resolveAuthToken(request, adminUid);
+  if (!token) {
     return {
       ok: false,
       status: 401,
-      data: { error: "Authorization header gerekli." },
+      data: { error: "Authorization gerekli." },
     };
   }
 
@@ -48,7 +67,7 @@ export async function callCloudFunction(
     const res = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: authHeader,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),

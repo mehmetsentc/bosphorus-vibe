@@ -47,7 +47,9 @@ export async function POST(request: NextRequest) {
     // optional body
   }
 
-  const result = await callCloudFunction("runVideoThumbnailBatch", request, { limit });
+  const result = await callCloudFunction("runVideoThumbnailBatch", request, adminUid, {
+    limit,
+  });
 
   if (!result.ok) {
     return apiError(

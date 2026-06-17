@@ -39,7 +39,9 @@ export async function POST(request: NextRequest) {
     // optional body
   }
 
-  const result = await callCloudFunction("runVideoTranscodeBatch", request, { limit });
+  const result = await callCloudFunction("runVideoTranscodeBatch", request, adminUid, {
+    limit,
+  });
 
   if (!result.ok) {
     const err = result.data.error;

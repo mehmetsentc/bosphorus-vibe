@@ -22,6 +22,7 @@ import { getAllEvents } from "@/lib/services/firestore";
 import { postNeedsThumbnailRegen } from "@/lib/admin/video-thumbnail-backfill";
 import { postNeedsVideoTranscode } from "@/lib/admin/video-transcode";
 import { clientApiUrl } from "@/lib/client-api-url";
+import { getFirebaseEnv } from "@/lib/firebase/config";
 import { COLLECTIONS } from "@/types";
 
 const PAGE_SIZE = 100;
@@ -297,6 +298,75 @@ async function postAdminApi(
   return parseAdminResponse(res);
 }
 
+function cloudFunctionBatchUrl(name: string): string | null {
+  const projectId = getFirebaseEnv().NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (!projectId) return null;
+  return `https://europe-central2-${projectId}.cloudfunctions.net/${name}`;
+}
+
+async function postCloudFunctionBatch(
+  name: string,
+  idToken: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const url = cloudFunctionBatchUrl(name);
+  if (!url) {
+    throw new Error("Firebase project ID tanımlı değil.");
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error("Cloud Function'a bağlanılamadı.");
+  }
+
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const err = data.error;
+    throw new Error(
+      err === "Unauthorized"
+        ? "Cloud Function yetkilendirme hatası — çıkış yapıp tekrar giriş yapın."
+        : typeof err === "string"
+          ? err
+          : "İşlem başarısız",
+    );
+  }
+  return data;
+}
+
+function isAuthBatchError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const m = err.message.toLowerCase();
+  return (
+    m.includes("unauthorized") ||
+    m.includes("yetkilendirme") ||
+    m.includes("oturum geçersiz")
+  );
+}
+
+async function runBatchWithFallback(
+  apiPath: string,
+  functionName: string,
+  idToken: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  try {
+    return await postAdminApi(apiPath, idToken, body);
+  } catch (apiErr) {
+    if (!isAuthBatchError(apiErr)) throw apiErr;
+    return postCloudFunctionBatch(functionName, idToken, body);
+  }
+}
+
 function batchResult(data: Record<string, unknown>) {
   return {
     processed: typeof data.processed === "number" ? data.processed : 0,
@@ -328,15 +398,21 @@ export async function enqueueThumbnailViaApi(idToken: string, maxMark = 500) {
 }
 
 export async function runThumbnailBatchClient(idToken: string, batchLimit = 5) {
-  const data = await postAdminApi("/api/admin/thumbnails/run", idToken, {
-    limit: batchLimit,
-  });
+  const data = await runBatchWithFallback(
+    "/api/admin/thumbnails/run",
+    "runVideoThumbnailBatch",
+    idToken,
+    { limit: batchLimit },
+  );
   return batchResult(data);
 }
 
 export async function runTranscodeBatchClient(idToken: string, batchLimit = 5) {
-  const data = await postAdminApi("/api/admin/transcode/run", idToken, {
-    limit: batchLimit,
-  });
+  const data = await runBatchWithFallback(
+    "/api/admin/transcode/run",
+    "runVideoTranscodeBatch",
+    idToken,
+    { limit: batchLimit },
+  );
   return batchResult(data);
 }

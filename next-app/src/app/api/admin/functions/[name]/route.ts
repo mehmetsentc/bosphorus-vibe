@@ -11,8 +11,10 @@ const ALLOWED_FUNCTIONS = new Set([
 type RouteContext = { params: Promise<{ name: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  let adminUid: string;
   try {
-    await requireAdmin(request);
+    const decoded = await requireAdmin(request);
+    adminUid = decoded.uid;
   } catch (e) {
     const msg =
       e instanceof Error && e.message === "FORBIDDEN"
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     body = {};
   }
 
-  const result = await callCloudFunction(name, request, body);
+  const result = await callCloudFunction(name, request, adminUid, body);
 
   if (!result.ok) {
     const message =
