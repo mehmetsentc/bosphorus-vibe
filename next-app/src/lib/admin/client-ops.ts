@@ -255,13 +255,17 @@ async function parseAdminResponse(res: Response): Promise<Record<string, unknown
   if (!res.ok) {
     const message =
       typeof data.message === "string" && data.message
-        ? data.message
+        ? data.message === "Unauthorized"
+          ? "Cloud Function yetkilendirme hatası — çıkış yapıp tekrar giriş yapın."
+          : data.message
         : typeof data.error === "string" &&
             !/^[A-Z_]+$/.test(data.error) &&
             data.error.length < 200
-          ? data.error
+          ? data.error === "Unauthorized"
+            ? "Cloud Function yetkilendirme hatası — çıkış yapıp tekrar giriş yapın."
+            : data.error
           : res.status === 503
-            ? "Sunucu yapılandırması eksik (TRANSCODE_BACKFILL_SECRET). Vercel env kontrol edin."
+            ? "Sunucu yapılandırması eksik. Vercel env kontrol edin."
             : res.status === 401 || res.status === 403
               ? "Admin oturumu geçersiz — çıkış yapıp tekrar giriş yapın."
               : "İşlem başarısız";

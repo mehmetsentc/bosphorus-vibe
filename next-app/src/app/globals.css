@@ -102,11 +102,28 @@ body {
 }
 
 .input-field {
-  @apply w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition;
+  @apply w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted outline-none transition;
 }
 
 .input-field:focus {
   border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+}
+
+/* Admin panel is always dark — inputs must not inherit light theme tokens */
+.admin-panel {
+  color-scheme: dark;
+}
+
+.admin-panel .input-field {
+  @apply border-white/15 bg-white/[0.06] text-white placeholder:text-white/35;
+}
+
+.admin-panel .input-field:focus {
+  @apply border-gold/50 bg-white/[0.08];
+}
+
+.admin-panel .input-field option {
+  @apply bg-[#111] text-white;
 }
 
 .action-icon-btn {

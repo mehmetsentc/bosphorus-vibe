@@ -1,9 +1,17 @@
 import { NextRequest } from "next/server";
-import { getThumbnailBatchUrl } from "@/lib/admin/video-thumbnail-backfill";
+import { callCloudFunction } from "@/lib/admin/call-cloud-function";
 import { requireAdmin } from "@/lib/api/auth";
 import { apiError, apiOk, GENERIC_ERROR } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/security/audit-log";
 import { rateLimit, rateLimitKey } from "@/lib/security/rate-limit";
+
+function cfErrorMessage(error: unknown): string {
+  if (typeof error !== "string") return GENERIC_ERROR;
+  if (error === "Unauthorized") {
+    return "Cloud Function yetkilendirme hatası — admin hesabınızı kontrol edin.";
+  }
+  return error;
+}
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -13,23 +21,20 @@ export async function POST(request: NextRequest) {
     const decoded = await requireAdmin(request);
     adminUid = decoded.uid;
   } catch (e) {
-    const msg = e instanceof Error && e.message === "FORBIDDEN" ? "Forbidden." : "Unauthorized.";
-    return apiError(e instanceof Error && e.message === "FORBIDDEN" ? 403 : 401, "FORBIDDEN", msg);
+    const msg =
+      e instanceof Error && e.message === "FORBIDDEN"
+        ? "Admin yetkisi gerekli."
+        : "Oturum geçersiz — çıkış yapıp tekrar giriş yapın.";
+    return apiError(
+      e instanceof Error && e.message === "FORBIDDEN" ? 403 : 401,
+      "FORBIDDEN",
+      msg,
+    );
   }
 
   const limited = rateLimit(rateLimitKey(ip, adminUid));
   if (!limited.ok) {
-    return apiError(429, "RATE_LIMIT", "Too many requests.");
-  }
-
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const secret = process.env.TRANSCODE_BACKFILL_SECRET;
-  if (!projectId || !secret) {
-    return apiError(
-      503,
-      "THUMBNAIL_NOT_CONFIGURED",
-      "TRANSCODE_BACKFILL_SECRET veya FIREBASE_PROJECT_ID sunucuda tanımlı değil. Vercel env ayarlarını kontrol edin.",
-    );
+    return apiError(429, "RATE_LIMIT", "Çok fazla istek. Biraz bekleyin.");
   }
 
   let limit = 5;
@@ -42,40 +47,28 @@ export async function POST(request: NextRequest) {
     // optional body
   }
 
-  try {
-    const res = await fetch(getThumbnailBatchUrl(projectId), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${secret}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ limit }),
-      cache: "no-store",
-    });
+  const result = await callCloudFunction("runVideoThumbnailBatch", request, { limit });
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return apiError(
-        res.status >= 400 && res.status < 600 ? res.status : 502,
-        "THUMBNAIL_RUN_FAILED",
-        typeof data.error === "string" ? data.error : GENERIC_ERROR,
-      );
-    }
-
-    await writeAuditLog("admin_thumbnail_run", adminUid, {
-      ip,
-      limit,
-      processed: data.processed ?? 0,
-      succeeded: data.succeeded ?? 0,
-      failed: data.failed ?? 0,
-    });
-
-    return apiOk({
-      processed: data.processed ?? 0,
-      succeeded: data.succeeded ?? 0,
-      failed: data.failed ?? 0,
-    });
-  } catch {
-    return apiError(502, "THUMBNAIL_RUN_FAILED", GENERIC_ERROR);
+  if (!result.ok) {
+    return apiError(
+      result.status >= 400 && result.status < 600 ? result.status : 502,
+      "THUMBNAIL_RUN_FAILED",
+      cfErrorMessage(result.data.error),
+    );
   }
+
+  const data = result.data;
+  await writeAuditLog("admin_thumbnail_run", adminUid, {
+    ip,
+    limit,
+    processed: data.processed ?? 0,
+    succeeded: data.succeeded ?? 0,
+    failed: data.failed ?? 0,
+  });
+
+  return apiOk({
+    processed: data.processed ?? 0,
+    succeeded: data.succeeded ?? 0,
+    failed: data.failed ?? 0,
+  });
 }

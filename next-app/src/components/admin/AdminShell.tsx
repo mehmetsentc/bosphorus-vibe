@@ -94,7 +94,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white">
+    <div className="admin-panel min-h-screen bg-[#0c0c0c] text-white">
       {/* Mobile header */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-white/10 bg-[#0c0c0c]/95 px-4 py-3 backdrop-blur-md lg:hidden">
         <div>
