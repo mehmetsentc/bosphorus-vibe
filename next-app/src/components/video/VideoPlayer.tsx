@@ -74,7 +74,9 @@ export function VideoPlayer({
   const hasPlayedRef = useRef(false);
 
   const isReels = playbackContext === "reels";
-  const shouldLoad = isActive || isNext || (isReels && isNear);
+  const shouldLoad = isReels
+    ? isActive || isNext
+    : isActive || isNext || isNear;
 
   const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive);
   const adaptiveVideo = useAdaptiveVideoSrc(
@@ -95,7 +97,7 @@ export function VideoPlayer({
   const resolving = isReels && reelsVideo.resolving;
 
   const preload =
-    isActive || isNext || (isReels && isNear) ? "auto" : "none";
+    isActive ? "auto" : isNext ? "metadata" : "none";
   const shouldPrime = shouldLoad;
 
   const reelsMuted = useVideoSoundStore((s) => s.reelsMuted);
@@ -103,6 +105,18 @@ export function VideoPlayer({
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
+
+  // Unmount / leave preload window → release decoder (iOS limit)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isReels) return;
+    if (shouldLoad) return;
+    video.pause();
+    applyMuted(video, true);
+    video.removeAttribute("src");
+    video.load();
+    releasePlay(post.id);
+  }, [shouldLoad, isReels, releasePlay, post.id]);
 
   const [isMuted, setIsMuted] = useState(reelsMuted);
   const [current, setCurrent] = useState(0);
@@ -115,11 +129,14 @@ export function VideoPlayer({
     hasPlayedRef.current = false;
   }, [videoSrc, post.id, networkTier]);
 
-  // Another video started → pause this one
+  // Another video started → pause + mute this one (iOS audio bleed)
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (playingId !== null && playingId !== post.id) video.pause();
+    if (playingId !== null && playingId !== post.id) {
+      video.pause();
+      applyMuted(video, true);
+    }
   }, [playingId, post.id]);
 
   // Keep in sync when user toggles sound on another reel
@@ -152,7 +169,7 @@ export function VideoPlayer({
       requestPlay(post.id);
     } else {
       video.pause();
-      // Keep buffer on adjacent reels so swipe-back / swipe-next is instant
+      applyMuted(video, true);
       if (!isActive && !isNext && !(isReels && isNear)) {
         video.currentTime = 0;
         setShowPoster(true);
@@ -211,7 +228,7 @@ export function VideoPlayer({
     video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration || Infinity);
   }, []);
 
-  if (!videoSrc && !resolving) return null;
+  if (!videoSrc && !resolving && !poster) return null;
 
   return (
     <div
@@ -230,6 +247,7 @@ export function VideoPlayer({
       <video
         ref={videoRef}
         key={isReels ? post.id : `${post.id}-${videoSrc}`}
+        data-reel-id={post.id}
         src={videoSrc}
         poster={poster}
         loop
@@ -307,7 +325,7 @@ export function VideoPlayer({
         }
       </button>
 
-      {loading && isActive && !poster && !resolving && (
+      {loading && isActive && !resolving && (
         <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center bg-black/30">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-vibe border-t-transparent" />
         </div>

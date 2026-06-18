@@ -296,7 +296,7 @@ export function ReelFeed({
           post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
           isActive={i === activeIndex}
           isNext={i === activeIndex + 1}
-          isNear={Math.abs(i - activeIndex) === 2}
+          isNear={false}
           mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
           onBecameActive={() => handleActive(i)}
           onPostDeleted={() => handlePostDeleted(post.id)}

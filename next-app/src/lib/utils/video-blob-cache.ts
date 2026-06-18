@@ -17,6 +17,12 @@ export function getCachedVideoBlobUrl(remoteUrl: string): string | null {
   return cache.get(remoteUrl)?.blobUrl ?? null;
 }
 
+/** True when blobUrl is still the live entry for remoteUrl (not revoked by trim). */
+export function isVideoBlobUrlValid(remoteUrl: string, blobUrl: string | null): boolean {
+  if (!blobUrl) return false;
+  return getCachedVideoBlobUrl(remoteUrl) === blobUrl;
+}
+
 export function prefetchVideoBlob(
   remoteUrl: string,
   priority: "high" | "low" = "low",

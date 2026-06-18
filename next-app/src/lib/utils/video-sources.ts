@@ -295,6 +295,26 @@ export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
   return uniqueUrls(...candidates).filter((url) => url !== original);
 }
 
+/**
+ * Reels ABR ladder — smallest first for instant start, upgrade while playing.
+ * preview → low → original (Instagram-style).
+ */
+export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
+  const { original, low, preview } = getPostVideoVariants(post);
+  const fast = getFastPlaybackCandidates(post);
+
+  const previews = fast.filter(
+    (u) => u.includes("/preview.mp4") || (preview && u === preview),
+  );
+  const lows = fast.filter(
+    (u) =>
+      u.includes("/low.mp4") ||
+      (low && u === low && u !== original),
+  );
+
+  return uniqueUrls(...previews, ...lows, low, original);
+}
+
 export type VideoPlaybackContext = "feed" | "detail" | "reels";
 
 export function hasDistinctLowQuality(post: UserPostDoc): boolean {
@@ -326,7 +346,9 @@ export function pickVideoSource(
   const fast = getFastPlaybackCandidates(post);
 
   let ordered: string[];
-  if (context === "reels" || context === "feed") {
+  if (context === "reels") {
+    ordered = getReelsPlaybackLadder(post);
+  } else if (context === "feed") {
     ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
   } else if (options?.preferHighQuality && original) {
     ordered = fast.length ? [original, ...fast] : uniqueUrls(original, low);
@@ -347,7 +369,15 @@ export function pickVideoSource(
 
 const prewarmedUrls = new Set<string>();
 const prewarmElements: HTMLVideoElement[] = [];
-const MAX_PREWARM_ELEMENTS = 12;
+/** Hidden prewarm videos also consume iOS decoders — keep tiny. */
+const MAX_PREWARM_ELEMENTS = 3;
+
+function disposePrewarmVideo(video: HTMLVideoElement): void {
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+  video.remove();
+}
 
 /** Hint the browser to fetch the next clip (desktop / Android). */
 export function prefetchVideoUrl(url: string): void {
@@ -384,7 +414,8 @@ export function prewarmVideoUrl(url: string): void {
 
   prewarmElements.push(video);
   while (prewarmElements.length > MAX_PREWARM_ELEMENTS) {
-    prewarmElements.shift()?.remove();
+    const old = prewarmElements.shift();
+    if (old) disposePrewarmVideo(old);
   }
 }
 

@@ -8,6 +8,18 @@
 
 import { create } from "zustand";
 
+/** Pause + mute every reel video except the active post (iOS audio bleed fix). */
+export function pauseAllVideosExcept(activeId: string | null): void {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll("video[data-reel-id]").forEach((node) => {
+    const video = node as HTMLVideoElement;
+    if (video.dataset.reelId === activeId) return;
+    video.pause();
+    video.muted = true;
+    video.setAttribute("muted", "");
+  });
+}
+
 type VideoPlayState = {
   /** ID of the currently playing video (post.id or any unique string). */
   playingId: string | null;
@@ -19,7 +31,10 @@ type VideoPlayState = {
 
 export const useVideoPlayStore = create<VideoPlayState>()((set, get) => ({
   playingId: null,
-  requestPlay: (id) => set({ playingId: id }),
+  requestPlay: (id) => {
+    pauseAllVideosExcept(id);
+    set({ playingId: id });
+  },
   releasePlay: (id) => {
     if (get().playingId === id) set({ playingId: null });
   },

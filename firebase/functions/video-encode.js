@@ -8,18 +8,18 @@ const VIDEO_ENCODE_PROFILE = {
   profile: "baseline",
   level: "3.0",
   serverPreview: {
-    maxWidth: 640,
-    maxHeight: 360,
-    crf: "30",
+    maxWidth: 854,
+    maxHeight: 480,
+    crf: "28",
     preset: "veryfast",
     audioBitrate: "64k",
   },
   serverLow: {
-    maxWidth: 854,
-    maxHeight: 480,
-    crf: "28",
+    maxWidth: 1280,
+    maxHeight: 720,
+    crf: "26",
     preset: "fast",
-    audioBitrate: "64k",
+    audioBitrate: "96k",
   },
 };
 

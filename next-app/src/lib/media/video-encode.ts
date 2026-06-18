@@ -25,21 +25,21 @@ export const VIDEO_ENCODE_PROFILE = {
     playbackRate: 2,
     maxDurationSec: 180,
   },
-  /** Server FFmpeg — instant playback tier */
+  /** Server FFmpeg — instant playback tier (fast start, still readable) */
   serverPreview: {
-    maxWidth: 640,
-    maxHeight: 360,
-    crf: "30",
+    maxWidth: 854,
+    maxHeight: 480,
+    crf: "28",
     preset: "veryfast",
     audioBitrate: "64k",
   },
   /** Server FFmpeg — feed/reels quality tier */
   serverLow: {
-    maxWidth: 854,
-    maxHeight: 480,
-    crf: "28",
+    maxWidth: 1280,
+    maxHeight: 720,
+    crf: "26",
     preset: "fast",
-    audioBitrate: "64k",
+    audioBitrate: "96k",
   },
 } as const;
 
