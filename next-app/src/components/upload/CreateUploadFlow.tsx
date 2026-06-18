@@ -282,7 +282,13 @@ function CreateUploadFlowInner() {
 
     try {
       if (file && isVideoFile(file)) {
-        coverBlobRef.current = await ensureVideoCoverBlob(file, coverBlobRef.current);
+        try {
+          coverBlobRef.current = await ensureVideoCoverBlob(file, coverBlobRef.current);
+        } catch (thumbErr) {
+          // Frame extraction failed (e.g. iOS canvas.toBlob returned null).
+          // Keep whatever cover we already have (or null). Draft already has thumb.jpg.
+          console.error("[CreateUpload] ensureVideoCoverBlob failed:", thumbErr);
+        }
       }
 
       const media = await resolveDraftOrUpload();

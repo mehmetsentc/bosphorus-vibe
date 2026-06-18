@@ -796,8 +796,7 @@ export async function createVideoPost(
     postVideo: originalUrl,
     postVideoURL: playbackUrl,
     postVideoURL_original: originalUrl,
-    postVideoURL_preview:
-      previewUrl && previewUrl !== originalUrl ? previewUrl : undefined,
+    ...(previewUrl && previewUrl !== originalUrl ? { postVideoURL_preview: previewUrl } : {}),
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
     videoTranscodeStatus: videoEncodeStatusForUpload(),
