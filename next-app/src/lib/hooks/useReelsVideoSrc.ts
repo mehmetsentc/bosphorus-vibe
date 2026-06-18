@@ -1,19 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSettingsOptional } from "@/components/settings/SettingsProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import {
-  getPostVideoVariants,
-  getReelsPlaybackLadder,
-  getReelsStartIndex,
+  getReelsImmediatePlayback,
   hasPostVideo,
 } from "@/lib/utils/video-sources";
-import { filterExistingVideoUrls } from "@/lib/utils/video-url-probe";
 import type { UserPostDoc } from "@/types";
 
 /**
- * Reels: one stable stream URL per post — low/original on fast networks,
- * preview on slow. No mid-play src changes (prevents 3–4s restart loops).
+ * Reels: instant playback from Firestore URLs — no blocking HEAD probe.
  */
 export function useReelsVideoSrc(
   post: UserPostDoc,
@@ -21,70 +18,43 @@ export function useReelsVideoSrc(
   _isActive: boolean,
 ) {
   const tier = useEffectiveNetworkTier();
-  const ladder = useMemo(() => {
-    if (!hasPostVideo(post)) return [] as string[];
-    return getReelsPlaybackLadder(post);
-  }, [post]);
+  const settings = useSettingsOptional();
+  const preferHighQuality = settings?.prefs.mediaQuality === "high";
 
-  const { original, poster } = useMemo(() => getPostVideoVariants(post), [post]);
-
-  const [resolvedUrls, setResolvedUrls] = useState<string[]>([]);
-  const [srcIndex, setSrcIndex] = useState(0);
-  const resolveGen = useRef(0);
-  const startIndexSetFor = useRef<string | null>(null);
-
-  useEffect(() => {
-    startIndexSetFor.current = null;
-    setSrcIndex(0);
-    setResolvedUrls([]);
-  }, [post.id]);
-
-  useEffect(() => {
-    if (!shouldLoad || !ladder.length) {
-      setResolvedUrls([]);
-      return;
+  const playback = useMemo(() => {
+    if (!hasPostVideo(post)) {
+      return { src: "", fallbacks: [] as string[], poster: undefined as string | undefined };
     }
+    return getReelsImmediatePlayback(post, tier, { preferHighQuality });
+  }, [post, tier, preferHighQuality]);
 
-    const gen = ++resolveGen.current;
+  const urls = useMemo(() => {
+    const all = [playback.src, ...playback.fallbacks].filter(Boolean);
+    return [...new Set(all)];
+  }, [playback]);
 
-    void (async () => {
-      const existing = await filterExistingVideoUrls(ladder);
-      if (resolveGen.current !== gen) return;
-      if (existing.length > 0) {
-        setResolvedUrls(existing);
-      } else if (original) {
-        setResolvedUrls([original]);
-      } else {
-        setResolvedUrls(ladder);
-      }
-    })();
-  }, [shouldLoad, ladder, original, post.id]);
+  const [srcIndex, setSrcIndex] = useState(0);
 
   useEffect(() => {
-    if (!resolvedUrls.length || startIndexSetFor.current === post.id) return;
-    startIndexSetFor.current = post.id;
-    setSrcIndex(getReelsStartIndex(resolvedUrls, tier, original));
-  }, [resolvedUrls, tier, original, post.id]);
+    setSrcIndex(0);
+  }, [post.id, playback.src]);
 
-  const playbackSrc = resolvedUrls[srcIndex] ?? resolvedUrls[0] ?? "";
-  const resolving = shouldLoad && !playbackSrc && ladder.length > 0;
+  const playbackSrc = shouldLoad ? (urls[srcIndex] ?? urls[0] ?? "") : "";
+  const resolving = shouldLoad && !playbackSrc && hasPostVideo(post);
 
-  const onWaiting = useCallback(() => {
-    // No mid-play quality changes — buffering is normal for progressive MP4
-  }, []);
-
+  const onWaiting = useCallback(() => {}, []);
   const onPlaying = useCallback(() => {}, []);
 
   const onError = useCallback((): boolean => {
-    if (srcIndex <= 0) return false;
-    setSrcIndex((i) => Math.max(0, i - 1));
+    if (srcIndex >= urls.length - 1) return false;
+    setSrcIndex((i) => i + 1);
     return true;
-  }, [srcIndex]);
+  }, [srcIndex, urls.length]);
 
   return {
     src: playbackSrc,
     remoteSrc: playbackSrc,
-    poster,
+    poster: playback.poster,
     tier,
     resolving,
     onWaiting,

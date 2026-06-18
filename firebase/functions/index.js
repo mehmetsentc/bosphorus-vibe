@@ -20,7 +20,9 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const REGION = "europe-central2";
 const TRANSCODE_RUN_OPTS = { memory: "2GB", timeoutSeconds: 540 };
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 15;
+const MAX_BATCH_LIMIT = 15;
+const STORAGE_MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 function getPostUserId(data) {
   const ref = data.postUser;
@@ -142,6 +144,24 @@ async function assertCallableAdmin(context) {
   }
 }
 
+async function cleanupUploadSessionFiles(originalStoragePath) {
+  const match = originalStoragePath.match(
+    /^users\/([^/]+)\/uploads\/([^/]+)\//,
+  );
+  if (!match) return;
+  const prefix = `users/${match[1]}/uploads/${match[2]}/`;
+  try {
+    const bucket = admin.storage().bucket();
+    const [files] = await bucket.getFiles({ prefix });
+    await Promise.all(
+      files.map((file) => file.delete().catch(() => {})),
+    );
+    functions.logger.info(`cleanupUploadSessionFiles: removed ${files.length} under ${prefix}`);
+  } catch (err) {
+    functions.logger.warn("cleanupUploadSessionFiles failed", err);
+  }
+}
+
 /**
  * Download original from GCS, encode preview + low MP4, upload, update Firestore.
  */
@@ -191,12 +211,14 @@ async function transcodeVideoForPost(postId, data, docRef) {
     const bucket = admin.storage().bucket();
     await bucket.file(storagePath).download({ destination: tmpInput });
 
-    await runFfmpegEncode(
-      tmpInput,
-      tmpPreview,
-      VIDEO_ENCODE_PROFILE.serverPreview,
-    );
-    await runFfmpegEncode(tmpInput, tmpLow, VIDEO_ENCODE_PROFILE.serverLow);
+    await Promise.all([
+      runFfmpegEncode(
+        tmpInput,
+        tmpPreview,
+        VIDEO_ENCODE_PROFILE.serverPreview,
+      ),
+      runFfmpegEncode(tmpInput, tmpLow, VIDEO_ENCODE_PROFILE.serverLow),
+    ]);
 
     const paths = standardEncodePaths(userId, postId);
     const previewToken =
@@ -204,20 +226,22 @@ async function transcodeVideoForPost(postId, data, docRef) {
     const lowToken =
       Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-    await bucket.upload(tmpPreview, {
-      destination: paths.preview,
-      metadata: {
-        contentType: "video/mp4",
-        metadata: { firebaseStorageDownloadTokens: previewToken },
-      },
+    const uploadMeta = (token) => ({
+      contentType: "video/mp4",
+      cacheControl: STORAGE_MEDIA_CACHE_CONTROL,
+      metadata: { firebaseStorageDownloadTokens: token },
     });
-    await bucket.upload(tmpLow, {
-      destination: paths.low,
-      metadata: {
-        contentType: "video/mp4",
-        metadata: { firebaseStorageDownloadTokens: lowToken },
-      },
-    });
+
+    await Promise.all([
+      bucket.upload(tmpPreview, {
+        destination: paths.preview,
+        metadata: uploadMeta(previewToken),
+      }),
+      bucket.upload(tmpLow, {
+        destination: paths.low,
+        metadata: uploadMeta(lowToken),
+      }),
+    ]);
 
     const previewUrl = buildFirebaseDownloadUrl(
       bucket.name,
@@ -234,6 +258,10 @@ async function transcodeVideoForPost(postId, data, docRef) {
       videoTranscodeError: admin.firestore.FieldValue.delete(),
       videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    if (storagePath.includes("/uploads/")) {
+      await cleanupUploadSessionFiles(storagePath);
+    }
 
     functions.logger.info(`transcodeVideoForPost: done postId=${postId}`);
     return { ok: true, reason: "transcoded" };
@@ -287,11 +315,11 @@ exports.transcodeVideoPost = functions
     return null;
   });
 
-/** Every 10 minutes — process queued video encodes. */
+/** Every 5 minutes — process queued video encodes. */
 exports.processPendingVideoTranscodes = functions
   .region(REGION)
   .runWith(TRANSCODE_RUN_OPTS)
-  .pubsub.schedule("every 10 minutes")
+  .pubsub.schedule("every 5 minutes")
   .onRun(async () => {
     const summary = await processPendingBatch(BATCH_SIZE);
     functions.logger.info("processPendingVideoTranscodes", summary);
@@ -315,7 +343,7 @@ exports.runVideoTranscodeBatch = functions
       await assertBackfillOrAdminAuth(req);
       const limit = Math.min(
         Math.max(parseInt(req.body?.limit, 10) || BATCH_SIZE, 1),
-        5,
+        MAX_BATCH_LIMIT,
       );
       const summary = await processPendingBatch(limit);
       res.json(summary);
@@ -335,7 +363,7 @@ exports.adminRunTranscodeBatch = functions
     await assertCallableAdmin(context);
     const limit = Math.min(
       Math.max(parseInt(data?.limit, 10) || BATCH_SIZE, 1),
-      5,
+      MAX_BATCH_LIMIT,
     );
     return processPendingBatch(limit);
   });
@@ -382,6 +410,7 @@ async function uploadThumbJpeg(storagePath, localPath) {
     destination: storagePath,
     metadata: {
       contentType: "image/jpeg",
+      cacheControl: STORAGE_MEDIA_CACHE_CONTROL,
       metadata: { firebaseStorageDownloadTokens: token },
     },
   });

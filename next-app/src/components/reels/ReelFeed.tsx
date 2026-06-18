@@ -243,16 +243,6 @@ export function ReelFeed({
     prewarmReelsPosts(slice, networkTier);
   }, [activeIndex, visiblePosts, networkTier]);
 
-  useEffect(() => {
-    const toWarm = [
-      visiblePosts[activeIndex - 1],
-      visiblePosts[activeIndex],
-      visiblePosts[activeIndex + 1],
-      visiblePosts[activeIndex + 2],
-    ].filter(Boolean);
-    prewarmReelsPosts(toWarm, networkTier);
-  }, [activeIndex, visiblePosts, networkTier]);
-
   // Jump to tapped post before paint when opening from feed
   useLayoutEffect(() => {
     if (initialScrollDone.current || !initialPostId || !containerRef.current) return;

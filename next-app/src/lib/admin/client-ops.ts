@@ -389,7 +389,7 @@ async function runBatchWithFallback(
   idToken: string,
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const limit = typeof body.limit === "number" ? body.limit : 5;
+  const limit = typeof body.limit === "number" ? body.limit : 15;
   try {
     return await postAdminCallable(callableName, limit);
   } catch (callableErr) {

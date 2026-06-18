@@ -1,7 +1,5 @@
 import type { UserPostDoc } from "@/types";
 import type { NetworkTier } from "@/lib/hooks/useNetworkQuality";
-import { warmVideoBlobs } from "@/lib/utils/video-blob-cache";
-import { filterExistingVideoUrls } from "@/lib/utils/video-url-probe";
 
 function uniqueUrls(...urls: (string | undefined)[]): string[] {
   const seen = new Set<string>();
@@ -314,24 +312,98 @@ export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
   return uniqueUrls(...previews, ...lows, low, original);
 }
 
-/** Stable start URL for reels — no mid-play src swaps (avoids restart loops). */
+/** Firestore-backed URLs only — tokenized, no inference (instant playback). */
+export function getTrustedVideoUrls(post: UserPostDoc): {
+  original: string;
+  preview: string;
+  low: string;
+  primary: string;
+} {
+  const original =
+    post.postVideoURL_original ||
+    post.postVideo ||
+    "";
+  const preview = post.postVideoURL_preview || "";
+  const low =
+    post.postVideoURL_low && post.postVideoURL_low !== original
+      ? post.postVideoURL_low
+      : "";
+  const primary = post.postVideoURL || "";
+  return {
+    original: original || primary,
+    preview,
+    low,
+    primary,
+  };
+}
+
+type ReelsPlaybackOptions = {
+  preferHighQuality?: boolean;
+};
+
+/**
+ * Instant reels playback URL from Firestore — no HEAD probe gate.
+ * Preview-first for fast start; inferred URLs only as error fallbacks.
+ */
+export function getReelsImmediatePlayback(
+  post: UserPostDoc,
+  tier: NetworkTier,
+  options?: ReelsPlaybackOptions,
+): { src: string; fallbacks: string[]; poster?: string } {
+  const { original, preview, low, primary } = getTrustedVideoUrls(post);
+  const poster = getPostVideoPoster(post);
+  const preferHigh = options?.preferHighQuality === true;
+
+  const ordered: string[] = [];
+
+  if (preferHigh && tier === "fast") {
+    if (low) ordered.push(low);
+    if (original) ordered.push(original);
+    if (preview) ordered.push(preview);
+    if (primary && !ordered.includes(primary)) ordered.push(primary);
+  } else if (tier === "slow") {
+    if (preview) ordered.push(preview);
+    if (low) ordered.push(low);
+    if (primary && !ordered.includes(primary)) ordered.push(primary);
+    if (original) ordered.push(original);
+  } else {
+    if (preview) ordered.push(preview);
+    if (low) ordered.push(low);
+    if (primary && !ordered.includes(primary)) ordered.push(primary);
+    if (original) ordered.push(original);
+  }
+
+  if (!ordered.length) {
+    ordered.push(...getReelsPlaybackLadder(post));
+  } else {
+    for (const url of getReelsPlaybackLadder(post)) {
+      if (!ordered.includes(url)) ordered.push(url);
+    }
+  }
+
+  const playable = uniqueUrls(...ordered).filter(Boolean);
+  const src = pickPlayableSrc(playable) || playable[0] || "";
+  const fallbacks = playable.filter((url) => url !== src);
+  return { src, fallbacks, poster };
+}
+
+/** @deprecated Use getReelsImmediatePlayback — kept for ladder ordering */
 export function getReelsStartIndex(
   urls: string[],
   tier: NetworkTier,
   original?: string,
 ): number {
   if (!urls.length) return 0;
+  const previewIdx = urls.findIndex((u) => u.includes("/preview.mp4"));
+  if (previewIdx >= 0) return previewIdx;
   if (tier === "slow") return 0;
-
   const lowIdx = urls.findIndex((u) => u.includes("/low.mp4"));
   if (lowIdx >= 0) return lowIdx;
-
   if (original) {
     const origIdx = urls.indexOf(original);
     if (origIdx >= 0) return origIdx;
   }
-
-  return urls.length - 1;
+  return 0;
 }
 
 export type VideoPlaybackContext = "feed" | "detail" | "reels";
@@ -374,7 +446,7 @@ export function pickVideoSource(
   } else if (tier === "slow") {
     ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
   } else if (fast.length) {
-    ordered = [original, ...fast];
+    ordered = [...fast, original];
   } else {
     ordered = uniqueUrls(low, original);
   }
@@ -477,14 +549,9 @@ export function prewarmPostVideo(
 
 /** Prewarm reels playback URL + poster for the next slides. */
 export function prewarmReelsPost(post: UserPostDoc, tier: NetworkTier): void {
-  const { src, poster, fallbacks } = pickVideoSource(post, tier, "reels");
-  const candidates = [src, ...fallbacks].filter(Boolean).slice(0, 3);
-  warmVideoBlobs(candidates, "high");
+  const { src, poster } = getReelsImmediatePlayback(post, tier);
+  if (src) prewarmVideoUrl(src);
   if (poster) prefetchImageUrl(poster);
-
-  void filterExistingVideoUrls(candidates).then((verified) => {
-    if (verified[0]) warmVideoBlobs([verified[0]], "high");
-  });
 }
 
 export function prewarmReelsPosts(posts: UserPostDoc[], tier: NetworkTier): void {

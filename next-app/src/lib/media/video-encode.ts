@@ -12,6 +12,10 @@ export type VideoEncodeStatus =
   | "failed"
   | "skipped";
 
+/** Long-lived cache for immutable encoded media (Firebase Storage + CDN edge). */
+export const STORAGE_MEDIA_CACHE_CONTROL =
+  "public, max-age=31536000, immutable";
+
 /** Standard output container — H.264 baseline MP4 with faststart. */
 export const VIDEO_ENCODE_PROFILE = {
   container: "mp4",
@@ -20,8 +24,8 @@ export const VIDEO_ENCODE_PROFILE = {
   level: "3.0",
   /** Client MediaRecorder — smallest, fastest publish */
   clientPreview: {
-    videoBitsPerSecond: 650_000,
-    audioBitsPerSecond: 48_000,
+    videoBitsPerSecond: 900_000,
+    audioBitsPerSecond: 64_000,
     playbackRate: 2,
     maxDurationSec: 180,
   },

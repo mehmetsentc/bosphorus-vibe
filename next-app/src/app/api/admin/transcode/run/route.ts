@@ -29,11 +29,11 @@ export async function POST(request: NextRequest) {
     return apiError(429, "RATE_LIMIT", "Çok fazla istek. Biraz bekleyin.");
   }
 
-  let limit = 3;
+  let limit = 15;
   try {
     const body = await request.json().catch(() => ({}));
     if (typeof body?.limit === "number" && body.limit > 0) {
-      limit = Math.min(Math.floor(body.limit), 5);
+      limit = Math.min(Math.floor(body.limit), 15);
     }
   } catch {
     // optional body

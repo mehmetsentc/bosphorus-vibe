@@ -21,6 +21,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { STORAGE_MEDIA_CACHE_CONTROL } from "@/lib/media/video-encode";
 import { videoEncodeStatusForUpload } from "@/lib/media/video-encode";
 import { compressImage, videoThumbnailFromFile, isImageBlob, createPlaceholderThumbnail } from "@/lib/utils/media-compress";
 import { hasPostVideo } from "@/lib/utils/video-sources";
@@ -682,7 +683,9 @@ export function uploadVideo(
 ): Promise<string> {
   const path = `users/${userId}/uploads/${Date.now()}_${file.name}`;
   const storageRef = ref(getFirebaseStorage(), path);
-  const task = uploadBytesResumable(storageRef, file);
+  const task = uploadBytesResumable(storageRef, file, {
+    cacheControl: STORAGE_MEDIA_CACHE_CONTROL,
+  });
 
   return new Promise((resolve, reject) => {
     task.on(
@@ -797,7 +800,8 @@ export async function createVideoPost(
     postVideo: originalUrl,
     postVideoURL: playbackUrl,
     postVideoURL_original: originalUrl,
-    postVideoURL_preview: playbackUrl !== originalUrl ? playbackUrl : undefined,
+    postVideoURL_preview:
+      previewUrl && previewUrl !== originalUrl ? previewUrl : undefined,
     postVideoURL_low: lowUrl,
     postVideothumbnail: thumbnailUrl,
     videoTranscodeStatus: videoEncodeStatusForUpload(),
@@ -918,6 +922,7 @@ export function uploadBlob(
   const storageRef = ref(getFirebaseStorage(), storagePath);
   const task = uploadBytesResumable(storageRef, blob, {
     contentType: contentTypeForUpload(storagePath, blob),
+    cacheControl: STORAGE_MEDIA_CACHE_CONTROL,
   });
 
   return new Promise((resolve, reject) => {
