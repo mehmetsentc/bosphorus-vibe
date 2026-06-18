@@ -72,6 +72,14 @@ export function VideoPlayer({
       : "max-h-full max-w-full object-contain");
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasPlayedRef = useRef(false);
+  const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearLoadingTimer = useCallback(() => {
+    if (loadingTimerRef.current) {
+      clearTimeout(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+    }
+  }, []);
 
   const isReels = playbackContext === "reels";
   const shouldLoad = isReels
@@ -127,7 +135,15 @@ export function VideoPlayer({
   useEffect(() => {
     setShowPoster(true);
     hasPlayedRef.current = false;
-  }, [videoSrc, post.id, networkTier]);
+  }, [post.id, networkTier]);
+
+  // Reels: only reset when the post changes — not when error-fallback swaps src
+  useEffect(() => {
+    if (!isReels) {
+      setShowPoster(true);
+      hasPlayedRef.current = false;
+    }
+  }, [isReels, videoSrc]);
 
   // Another video started → pause + mute this one (iOS audio bleed)
   useEffect(() => {
@@ -151,6 +167,7 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     if (isActive && autoPlay) {
+      if (isReels && !videoSrc) return;
       setIsMuted(reelsMuted);
       applyMuted(video, reelsMuted);
       if (video.readyState === 0) video.load();
@@ -179,7 +196,18 @@ export function VideoPlayer({
     }
     return () => { releasePlay(post.id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, autoPlay, videoSrc, post.id, reelsMuted, requestPlay, releasePlay]);
+  }, [isActive, autoPlay, post.id, reelsMuted, requestPlay, releasePlay, isReels, videoSrc]);
+
+  useEffect(() => () => clearLoadingTimer(), [clearLoadingTimer]);
+
+  // Reels: apply new src only before first play (error fallback)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isReels || !isActive || !autoPlay || !videoSrc) return;
+    if (hasPlayedRef.current) return;
+    if (video.readyState === 0) video.load();
+    video.play().catch(() => {});
+  }, [isReels, isActive, autoPlay, videoSrc]);
 
   // Buffer adjacent slides before they become active
   useEffect(() => {
@@ -286,10 +314,16 @@ export function VideoPlayer({
         }}
         onError={handleVideoError}
         onWaiting={() => {
-          setLoading(true);
+          if (isReels) {
+            clearLoadingTimer();
+            loadingTimerRef.current = setTimeout(() => setLoading(true), 600);
+          } else {
+            setLoading(true);
+          }
           handleAdaptiveWaiting();
         }}
         onPlaying={() => {
+          clearLoadingTimer();
           handleAdaptivePlaying();
           hasPlayedRef.current = true;
           setLoading(false);

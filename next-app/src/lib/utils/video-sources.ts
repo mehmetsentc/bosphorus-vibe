@@ -296,8 +296,7 @@ export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
 }
 
 /**
- * Reels ABR ladder — smallest first for instant start, upgrade while playing.
- * preview → low → original (Instagram-style).
+ * Reels fallback ladder — smallest → largest (used only on playback errors).
  */
 export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
   const { original, low, preview } = getPostVideoVariants(post);
@@ -313,6 +312,26 @@ export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
   );
 
   return uniqueUrls(...previews, ...lows, low, original);
+}
+
+/** Stable start URL for reels — no mid-play src swaps (avoids restart loops). */
+export function getReelsStartIndex(
+  urls: string[],
+  tier: NetworkTier,
+  original?: string,
+): number {
+  if (!urls.length) return 0;
+  if (tier === "slow") return 0;
+
+  const lowIdx = urls.findIndex((u) => u.includes("/low.mp4"));
+  if (lowIdx >= 0) return lowIdx;
+
+  if (original) {
+    const origIdx = urls.indexOf(original);
+    if (origIdx >= 0) return origIdx;
+  }
+
+  return urls.length - 1;
 }
 
 export type VideoPlaybackContext = "feed" | "detail" | "reels";

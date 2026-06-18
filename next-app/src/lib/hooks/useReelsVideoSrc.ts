@@ -2,30 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { VIDEO_STALL_DOWNGRADE_REELS_MS } from "@/lib/performance/app-state";
-import {
-  getCachedVideoBlobUrl,
-  isVideoBlobUrlValid,
-  prefetchVideoBlob,
-} from "@/lib/utils/video-blob-cache";
 import {
   getPostVideoVariants,
   getReelsPlaybackLadder,
+  getReelsStartIndex,
   hasPostVideo,
 } from "@/lib/utils/video-sources";
 import { filterExistingVideoUrls } from "@/lib/utils/video-url-probe";
 import type { UserPostDoc } from "@/types";
 
-const UPGRADE_DELAY_FAST_MS = 1_200;
-const UPGRADE_DELAY_SLOW_MS = 2_500;
-
 /**
- * Reels: preview for instant start, upgrade to low/original while playing (IG-style).
+ * Reels: one stable stream URL per post — low/original on fast networks,
+ * preview on slow. No mid-play src changes (prevents 3–4s restart loops).
  */
 export function useReelsVideoSrc(
   post: UserPostDoc,
   shouldLoad: boolean,
-  isActive: boolean,
+  _isActive: boolean,
 ) {
   const tier = useEffectiveNetworkTier();
   const ladder = useMemo(() => {
@@ -37,8 +30,14 @@ export function useReelsVideoSrc(
 
   const [resolvedUrls, setResolvedUrls] = useState<string[]>([]);
   const [srcIndex, setSrcIndex] = useState(0);
-  const [blobSrc, setBlobSrc] = useState<string | null>(null);
   const resolveGen = useRef(0);
+  const startIndexSetFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    startIndexSetFor.current = null;
+    setSrcIndex(0);
+    setResolvedUrls([]);
+  }, [post.id]);
 
   useEffect(() => {
     if (!shouldLoad || !ladder.length) {
@@ -48,11 +47,8 @@ export function useReelsVideoSrc(
 
     const gen = ++resolveGen.current;
 
-    const blobCached = ladder.filter((u) => getCachedVideoBlobUrl(u));
-    if (blobCached.length) setResolvedUrls(blobCached);
-
     void (async () => {
-      const existing = await filterExistingVideoUrls(ladder.slice(0, 4));
+      const existing = await filterExistingVideoUrls(ladder);
       if (resolveGen.current !== gen) return;
       if (existing.length > 0) {
         setResolvedUrls(existing);
@@ -64,127 +60,30 @@ export function useReelsVideoSrc(
     })();
   }, [shouldLoad, ladder, original, post.id]);
 
-  const remoteSrc = resolvedUrls[srcIndex] ?? resolvedUrls[0] ?? "";
-
   useEffect(() => {
-    if (!shouldLoad || !remoteSrc) return;
+    if (!resolvedUrls.length || startIndexSetFor.current === post.id) return;
+    startIndexSetFor.current = post.id;
+    setSrcIndex(getReelsStartIndex(resolvedUrls, tier, original));
+  }, [resolvedUrls, tier, original, post.id]);
 
-    const cached = getCachedVideoBlobUrl(remoteSrc);
-    if (cached) {
-      setBlobSrc(cached);
-      return;
-    }
-
-    setBlobSrc(null);
-    const prefetch = prefetchVideoBlob(remoteSrc, isActive ? "high" : "low");
-    if (!prefetch) return;
-    void prefetch
-      .then((url) => setBlobSrc(url))
-      .catch(() => setBlobSrc(null));
-  }, [shouldLoad, remoteSrc, isActive, post.id]);
-
-  useEffect(() => {
-    setSrcIndex(0);
-    setBlobSrc(null);
-  }, [post.id]);
-
-  const safeBlob =
-    blobSrc && isVideoBlobUrlValid(remoteSrc, blobSrc) ? blobSrc : null;
-  const playbackSrc = safeBlob || remoteSrc;
+  const playbackSrc = resolvedUrls[srcIndex] ?? resolvedUrls[0] ?? "";
   const resolving = shouldLoad && !playbackSrc && ladder.length > 0;
 
-  const maxQualityIndex = useMemo(() => {
-    if (!resolvedUrls.length) return 0;
-    if (tier === "slow") return 0;
-    return resolvedUrls.length - 1;
-  }, [resolvedUrls, tier]);
-
-  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const upgradeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearStallTimer = useCallback(() => {
-    if (stallTimerRef.current) {
-      clearTimeout(stallTimerRef.current);
-      stallTimerRef.current = null;
-    }
+  const onWaiting = useCallback(() => {
+    // No mid-play quality changes — buffering is normal for progressive MP4
   }, []);
 
-  const clearUpgradeTimer = useCallback(() => {
-    if (upgradeTimerRef.current) {
-      clearTimeout(upgradeTimerRef.current);
-      upgradeTimerRef.current = null;
-    }
-  }, []);
+  const onPlaying = useCallback(() => {}, []);
 
-  const downgrade = useCallback((): boolean => {
+  const onError = useCallback((): boolean => {
     if (srcIndex <= 0) return false;
     setSrcIndex((i) => Math.max(0, i - 1));
-    setBlobSrc(null);
     return true;
   }, [srcIndex]);
 
-  const tryUpgrade = useCallback(() => {
-    if (!isActive || srcIndex >= maxQualityIndex) return;
-    setSrcIndex((i) => Math.min(i + 1, maxQualityIndex));
-    setBlobSrc(null);
-  }, [isActive, srcIndex, maxQualityIndex]);
-
-  const scheduleUpgrade = useCallback(() => {
-    clearUpgradeTimer();
-    if (!isActive || srcIndex >= maxQualityIndex) return;
-    const delay =
-      tier === "fast" ? UPGRADE_DELAY_FAST_MS : UPGRADE_DELAY_SLOW_MS;
-    upgradeTimerRef.current = setTimeout(() => {
-      upgradeTimerRef.current = null;
-      tryUpgrade();
-    }, delay);
-  }, [clearUpgradeTimer, isActive, srcIndex, maxQualityIndex, tier, tryUpgrade]);
-
-  const onWaiting = useCallback(() => {
-    if (!isActive || srcIndex <= 0) return;
-    if (stallTimerRef.current) return;
-    stallTimerRef.current = setTimeout(() => {
-      stallTimerRef.current = null;
-      downgrade();
-    }, VIDEO_STALL_DOWNGRADE_REELS_MS);
-  }, [isActive, srcIndex, downgrade]);
-
-  const onPlaying = useCallback(() => {
-    clearStallTimer();
-    scheduleUpgrade();
-  }, [clearStallTimer, scheduleUpgrade]);
-
-  const onError = useCallback((): boolean => {
-    clearStallTimer();
-    clearUpgradeTimer();
-    if (srcIndex < resolvedUrls.length - 1) {
-      setSrcIndex((i) => i + 1);
-      setBlobSrc(null);
-      return true;
-    }
-    return downgrade();
-  }, [
-    clearStallTimer,
-    clearUpgradeTimer,
-    srcIndex,
-    resolvedUrls.length,
-    downgrade,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      clearStallTimer();
-      clearUpgradeTimer();
-    };
-  }, [clearStallTimer, clearUpgradeTimer]);
-
-  useEffect(() => {
-    if (!isActive) clearUpgradeTimer();
-  }, [isActive, clearUpgradeTimer]);
-
   return {
     src: playbackSrc,
-    remoteSrc,
+    remoteSrc: playbackSrc,
     poster,
     tier,
     resolving,
