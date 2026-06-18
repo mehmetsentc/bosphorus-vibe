@@ -6,8 +6,7 @@ import {
 } from "@/lib/services/firestore";
 import { prewarmReelsPosts } from "@/lib/utils/video-sources";
 import { useAppStore, type EnrichedPost } from "@/store/appStore";
-
-const REELS_PAGE_SIZE = 12;
+import { REELS_PAGE_SIZE } from "@/lib/performance/app-state";
 
 type ReelsPageResult = {
   posts: EnrichedPost[];

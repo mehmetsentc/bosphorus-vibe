@@ -356,18 +356,20 @@ export function getReelsImmediatePlayback(
 
   const ordered: string[] = [];
 
-  if (preferHigh && tier === "fast") {
-    if (low) ordered.push(low);
-    if (original) ordered.push(original);
-    if (preview) ordered.push(preview);
-    if (primary && !ordered.includes(primary)) ordered.push(primary);
-  } else if (tier === "slow") {
+  if (tier === "slow") {
+    // Slow network: preview → low → original
     if (preview) ordered.push(preview);
     if (low) ordered.push(low);
     if (primary && !ordered.includes(primary)) ordered.push(primary);
     if (original) ordered.push(original);
+  } else if (tier === "fast" || preferHigh) {
+    // Fast network / user chose high quality: original (720p) first
+    if (original) ordered.push(original);
+    if (primary && !ordered.includes(primary)) ordered.push(primary);
+    if (low) ordered.push(low);
+    if (preview && !ordered.includes(preview)) ordered.push(preview);
   } else {
-    // Normal network: prefer low.mp4 (480p) first; preview is tiny fallback
+    // Normal network: low.mp4 (480p) first; preview tiny fallback
     if (low) ordered.push(low);
     if (primary && !ordered.includes(primary)) ordered.push(primary);
     if (original && !ordered.includes(original)) ordered.push(original);
@@ -449,9 +451,12 @@ export function pickVideoSource(
   } else if (context === "feed") {
     if (tier === "slow") {
       // Slow network: smallest first (preview → low → original)
-      ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
+      ordered = uniqueUrls(...lows, low, ...previews, original);
+    } else if (tier === "fast") {
+      // Fast network (WiFi/5G): original (720p+) first, low as fallback
+      ordered = uniqueUrls(original, ...lows, low, ...previews);
     } else {
-      // Normal/fast network: min 480p — prefer low.mp4 over preview
+      // Normal network: low.mp4 (480p) first, original next, preview as last resort
       ordered = uniqueUrls(...lows, low, original, ...previews);
     }
   } else if (options?.preferHighQuality && original) {

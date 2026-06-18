@@ -28,10 +28,20 @@ export default function ReelsPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [resetScrollToken, setResetScrollToken] = useState(0);
 
-  const displayPosts = useMemo(
-    () => filterPosts(posts),
-    [posts, filterPosts],
-  );
+  // Unseen posts first (session-locked = already shown this session stay visible).
+  // When hasMore=false and the unseen pool is exhausted, append seen posts at the
+  // end so the user can keep scrolling (TikTok/IG recycle behaviour).
+  const displayPosts = useMemo(() => {
+    const unseen = filterPosts(posts);
+    // Still have more server pages to load — don't recycle yet
+    if (hasMore) return unseen;
+    // All pages loaded: if unseen pool covers all posts, we're done
+    if (unseen.length >= posts.length) return unseen;
+    // Append seen posts that aren't already in the unseen list
+    const unseenIds = new Set(unseen.map((p) => p.id));
+    const seenTail = posts.filter((p) => !unseenIds.has(p.id));
+    return [...unseen, ...seenTail];
+  }, [posts, filterPosts, hasMore]);
 
   const handleRefresh = useCallback(async () => {
     await refreshWithUnseen(
@@ -49,10 +59,16 @@ export default function ReelsPage() {
     }
   }, [handleRefresh]);
 
+  // Load more while server has pages AND unseen pool is small.
+  // (cycling appends seen posts, so we only load from server while hasMore=true)
+  const unseenCount = useMemo(
+    () => filterPosts(posts).length,
+    [posts, filterPosts],
+  );
   useEffect(() => {
-    if (!needsMore(displayPosts.length, hasMore) || loadingMore) return;
+    if (!needsMore(unseenCount, hasMore) || loadingMore) return;
     void loadMore();
-  }, [displayPosts.length, hasMore, needsMore, loadMore, loadingMore]);
+  }, [unseenCount, hasMore, needsMore, loadMore, loadingMore]);
 
   if (loading && posts.length === 0) {
     return (
