@@ -343,7 +343,8 @@ function CreateUploadFlowInner() {
       router.push(kind === "reel" ? "/reels" : "/home");
     } catch (err) {
       console.error("[CreateUpload]", err);
-      setError(t("uploadFailed"));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || t("uploadFailed"));
     } finally {
       setUploading(false);
     }
