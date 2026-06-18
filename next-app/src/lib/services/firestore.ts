@@ -772,16 +772,12 @@ export async function uploadVideoCoverForPost(
   if (!isImageBlob(coverBlob)) {
     throw new Error("Cover must be an image");
   }
-  try {
-    const pathname = new URL(videoOriginalUrl).pathname;
-    const encoded = pathname.match(/\/o\/(.+)/)?.[1];
-    if (!encoded) throw new Error("Invalid video URL");
-    const storagePath = decodeURIComponent(encoded.split("?")[0] ?? encoded);
-    const thumbPath = storagePath.replace(/original\.[a-z0-9]+$/i, "thumb.jpg");
-    return uploadBlob(coverBlob, thumbPath);
-  } catch {
-    throw new Error("Cannot upload cover for this video");
-  }
+  const pathname = new URL(videoOriginalUrl).pathname;
+  const encoded = pathname.match(/\/o\/(.+)/)?.[1];
+  if (!encoded) throw new Error("Invalid video URL");
+  const storagePath = decodeURIComponent(encoded.split("?")[0] ?? encoded);
+  const thumbPath = storagePath.replace(/original\.[a-z0-9]+$/i, "thumb.jpg");
+  return await uploadBlob(coverBlob, thumbPath);
 }
 
 export async function createVideoPost(

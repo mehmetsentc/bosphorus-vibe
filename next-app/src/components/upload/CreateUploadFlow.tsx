@@ -289,11 +289,17 @@ function CreateUploadFlowInner() {
       setProgress(95);
 
       let thumbnailUrl = media.thumbnailUrl;
-      if (media.isVideo) {
-        thumbnailUrl = await uploadVideoCoverForPost(
-          media.originalUrl,
-          coverBlobRef.current!,
-        );
+      if (media.isVideo && coverBlobRef.current) {
+        try {
+          thumbnailUrl = await uploadVideoCoverForPost(
+            media.originalUrl,
+            coverBlobRef.current,
+          );
+        } catch (coverErr) {
+          // Cover re-upload failed — draft already saved thumb.jpg, so fall back to it.
+          console.error("[CreateUpload] cover upload failed, using draft thumbnail:", coverErr);
+          thumbnailUrl = media.thumbnailUrl ?? thumbnailUrl;
+        }
       }
 
       if (kind === "story") {
