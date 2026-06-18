@@ -209,11 +209,12 @@ export function ReelFeed({
     (index: number) => {
       setActiveIndex(index);
       onActiveChange?.(index);
-      if (hasMore && !loadingMore && onLoadMore && index >= visiblePosts.length - 2) {
-        onLoadMore();
+      // Trigger early — don't gate on loadingMore; the hook's own ref prevents doubles
+    if (hasMore && onLoadMore && index >= visiblePosts.length - 3) {
+        void onLoadMore();
       }
     },
-    [hasMore, loadingMore, onLoadMore, onActiveChange, visiblePosts.length],
+    [hasMore, onLoadMore, onActiveChange, visiblePosts.length],
   );
 
   // Mark reel as seen when user swipes to the next one

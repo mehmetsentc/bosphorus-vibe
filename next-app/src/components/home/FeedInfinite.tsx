@@ -169,7 +169,7 @@ export function FeedInfinite() {
           });
         }
       },
-      { rootMargin: "500px 0px" },
+      { rootMargin: "900px 0px" },
     );
 
     observer.observe(node);

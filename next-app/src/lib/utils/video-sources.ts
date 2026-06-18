@@ -367,10 +367,11 @@ export function getReelsImmediatePlayback(
     if (primary && !ordered.includes(primary)) ordered.push(primary);
     if (original) ordered.push(original);
   } else {
-    if (preview) ordered.push(preview);
+    // Normal network: prefer low.mp4 (480p) first; preview is tiny fallback
     if (low) ordered.push(low);
     if (primary && !ordered.includes(primary)) ordered.push(primary);
-    if (original) ordered.push(original);
+    if (original && !ordered.includes(original)) ordered.push(original);
+    if (preview && !ordered.includes(preview)) ordered.push(preview);
   }
 
   if (!ordered.length) {
@@ -436,11 +437,23 @@ export function pickVideoSource(
   const { original, low, poster } = getPostVideoVariants(post);
   const fast = getFastPlaybackCandidates(post);
 
+  // Separate preview (tiny, sub-480p) from higher-quality low.mp4
+  const previews = fast.filter(
+    (u) => u.includes("/preview.mp4") || u.includes("preview.mp4"),
+  );
+  const lows = fast.filter((u) => !previews.includes(u));
+
   let ordered: string[];
   if (context === "reels") {
     ordered = getReelsPlaybackLadder(post);
   } else if (context === "feed") {
-    ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
+    if (tier === "slow") {
+      // Slow network: smallest first (preview → low → original)
+      ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
+    } else {
+      // Normal/fast network: min 480p — prefer low.mp4 over preview
+      ordered = uniqueUrls(...lows, low, original, ...previews);
+    }
   } else if (options?.preferHighQuality && original) {
     ordered = fast.length ? [original, ...fast] : uniqueUrls(original, low);
   } else if (tier === "slow") {
