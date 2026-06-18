@@ -1047,10 +1047,9 @@ export async function createActivityPostFromMedia(
     postData.postVideo = urls.originalUrl;
     postData.postVideoURL = playbackUrl;
     postData.postVideoURL_original = urls.originalUrl;
-    postData.postVideoURL_preview =
-      urls.previewUrl && urls.previewUrl !== urls.originalUrl
-        ? urls.previewUrl
-        : undefined;
+    if (urls.previewUrl && urls.previewUrl !== urls.originalUrl) {
+      postData.postVideoURL_preview = urls.previewUrl;
+    }
     postData.postVideoURL_low = urls.lowUrl;
     postData.postVideothumbnail = urls.thumbUrl ?? urls.lowUrl;
     postData.videoTranscodeStatus = videoEncodeStatusForUpload();
