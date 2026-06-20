@@ -7,6 +7,7 @@ import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useReelsPosts } from "@/lib/hooks/usePosts";
 import { useSeenPosts } from "@/lib/hooks/useSeenPosts";
+import { useInfiniteScrollPosts } from "@/lib/hooks/useInfiniteScrollPosts";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 
@@ -35,20 +36,21 @@ export default function FeedPostViewPage({
   const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts({
     pinIds: [params.postId],
   });
+  const { items, appendCycle, resetCycles } = useInfiniteScrollPosts(
+    posts,
+    hasMore,
+    filterPosts,
+  );
+  const displayPosts = useMemo(() => items.map((i) => i.post), [items]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [resetScrollToken, setResetScrollToken] = useState(0);
 
-  // User tapped a video — unlock sound for reels (gesture already happened)
   useEffect(() => {
     setReelsMuted(false);
   }, [setReelsMuted]);
 
-  const displayPosts = useMemo(
-    () => filterPosts(posts),
-    [posts, filterPosts],
-  );
-
   const handleRefresh = useCallback(async () => {
+    resetCycles();
     await refreshWithUnseen(
       refresh,
       loadMore,
@@ -56,7 +58,7 @@ export default function FeedPostViewPage({
       () => hasMoreSnapshot.current,
     );
     setResetScrollToken((n) => n + 1);
-  }, [refresh, loadMore, refreshWithUnseen, postsSnapshot, hasMoreSnapshot]);
+  }, [refresh, loadMore, refreshWithUnseen, postsSnapshot, hasMoreSnapshot, resetCycles]);
 
   useEffect(() => {
     if (!needsMore(displayPosts.length, hasMore) || loadingMore) return;
@@ -86,9 +88,11 @@ export default function FeedPostViewPage({
         )}
         <ReelFeed
           posts={displayPosts}
+          postKeys={items.map((i) => i.itemKey)}
           hasMore={!isGuest && hasMore}
           loadingMore={loadingMore}
           onLoadMore={isGuest ? undefined : loadMore}
+          onNearCatalogEnd={isGuest ? undefined : appendCycle}
           onPostDeleted={deletePost}
           guestPreview={isGuest}
           initialPostId={params.postId}

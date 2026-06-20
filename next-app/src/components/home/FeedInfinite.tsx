@@ -34,6 +34,7 @@ import {
 } from "@/lib/services/firestore";
 import { isCacheExpired } from "@/lib/cache/constants";
 import { useFeedPosts } from "@/lib/hooks/usePosts";
+import { useInfiniteScrollPosts, type InfiniteScrollItem } from "@/lib/hooks/useInfiniteScrollPosts";
 import { FEED_SUGGESTIONS_DEFER_MS } from "@/lib/performance/app-state";
 import { useAppStore } from "@/store/appStore";
 import type { PublicUser } from "@/lib/services/friends";
@@ -41,7 +42,7 @@ import type { EnrichedPost } from "@/store/appStore";
 import type { EventDoc } from "@/types";
 
 type FeedRow =
-  | { kind: "post"; post: EnrichedPost }
+  | { kind: "post"; post: EnrichedPost; itemKey: string }
   | { kind: "friends" }
   | { kind: "videos" }
   | { kind: "events" };
@@ -54,14 +55,14 @@ const SUGGESTION_CYCLE: Array<"friends" | "videos" | "events"> = [
 ];
 
 function buildFeedRows(
-  posts: EnrichedPost[],
+  items: InfiniteScrollItem<EnrichedPost>[],
   availability: { friends: boolean; videos: boolean; events: boolean },
 ): FeedRow[] {
   const rows: FeedRow[] = [];
   let cycleIndex = 0;
 
-  posts.forEach((post, index) => {
-    rows.push({ kind: "post", post });
+  items.forEach((item, index) => {
+    rows.push({ kind: "post", post: item.post, itemKey: item.itemKey });
 
     if ((index + 1) % INSERT_EVERY !== 0) return;
 
@@ -102,12 +103,19 @@ export function FeedInfinite() {
     hasMoreSnapshot,
   } = useFeedPosts();
   const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts();
+  const { items, appendCycle, resetCycles } = useInfiniteScrollPosts(
+    posts,
+    hasMore,
+    filterPosts,
+  );
+  const displayPosts = useMemo(() => items.map((i) => i.post), [items]);
   const [following, setFollowing] = useState<Set<string>>(new Set());
   const [friendSuggestions, setFriendSuggestions] = useState<PublicUser[]>([]);
   const [videoSuggestions, setVideoSuggestions] = useState<EnrichedPost[]>([]);
   const [eventSuggestions, setEventSuggestions] = useState<EventDoc[]>([]);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
+  const catalogCycleAtLengthRef = useRef(0);
 
   useEffect(() => {
     if (!user) {
@@ -147,6 +155,7 @@ export function FeedInfinite() {
 
   const handleRefresh = useCallback(async () => {
     window.scrollTo({ top: 0, behavior: "auto" });
+    resetCycles();
     await refreshWithUnseen(
       refresh,
       loadMore,
@@ -154,27 +163,39 @@ export function FeedInfinite() {
       () => hasMoreSnapshot.current,
     );
     void loadSuggestions(following);
-  }, [refresh, loadMore, refreshWithUnseen, loadSuggestions, following, postsSnapshot, hasMoreSnapshot]);
+  }, [refresh, loadMore, refreshWithUnseen, loadSuggestions, following, postsSnapshot, hasMoreSnapshot, resetCycles]);
 
   useEffect(() => {
     const node = sentinelRef.current;
-    if (!node || !hasMore) return;
+    if (!node) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && hasMore && !loadingMoreRef.current) {
+        if (!entry.isIntersecting) return;
+        if (hasMore && !loadingMoreRef.current) {
           loadingMoreRef.current = true;
           loadMore().finally(() => {
             loadingMoreRef.current = false;
           });
+        } else if (
+          !hasMore &&
+          displayPosts.length > 0 &&
+          catalogCycleAtLengthRef.current < items.length
+        ) {
+          catalogCycleAtLengthRef.current = items.length;
+          appendCycle();
         }
       },
-      { rootMargin: "900px 0px" },
+      { rootMargin: "1200px 0px" },
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, loadMore, posts.length]);
+  }, [hasMore, loadMore, displayPosts.length, items.length, appendCycle]);
+
+  useEffect(() => {
+    catalogCycleAtLengthRef.current = 0;
+  }, [hasMore]);
 
   function handleFollowChange(uid: string) {
     setFollowing((prev) => {
@@ -185,23 +206,20 @@ export function FeedInfinite() {
     setFriendSuggestions((prev) => prev.filter((u) => u.uid !== uid));
   }
 
-  const displayPosts = useMemo(
-    () => filterPosts(posts),
-    [posts, filterPosts],
-  );
+  const displayPostsFiltered = displayPosts;
 
   // Fetch more when unseen pool is running low
   useEffect(() => {
-    if (!needsMore(displayPosts.length, hasMore) || loadingMoreRef.current) return;
+    if (!needsMore(displayPostsFiltered.length, hasMore) || loadingMoreRef.current) return;
     loadingMoreRef.current = true;
     loadMore().finally(() => {
       loadingMoreRef.current = false;
     });
-  }, [displayPosts.length, hasMore, needsMore, loadMore]);
+  }, [displayPostsFiltered.length, hasMore, needsMore, loadMore]);
 
   const feedPostIds = useMemo(
-    () => new Set(displayPosts.map((p) => p.id)),
-    [displayPosts],
+    () => new Set(displayPostsFiltered.map((p) => p.id)),
+    [displayPostsFiltered],
   );
 
   const filteredVideoSuggestions = useMemo(
@@ -223,8 +241,8 @@ export function FeedInfinite() {
   );
 
   const feedRows = useMemo(
-    () => buildFeedRows(displayPosts, availability),
-    [displayPosts, availability],
+    () => buildFeedRows(items, availability),
+    [items, availability],
   );
 
   if (loading) {
@@ -243,7 +261,7 @@ export function FeedInfinite() {
     );
   }
 
-  if (!displayPosts.length && !hasMore) {
+  if (!displayPostsFiltered.length && !hasMore) {
     return (
       <section className="py-16 text-center">
         <p className="text-sm text-muted">{t("noPostsInFeed")}</p>
@@ -251,7 +269,7 @@ export function FeedInfinite() {
     );
   }
 
-  if (!displayPosts.length) {
+  if (!displayPostsFiltered.length) {
     return (
       <section className="flex justify-center py-16">
         <div className="h-7 w-7 animate-spin rounded-full border-2 border-gold border-t-transparent" />
@@ -266,7 +284,7 @@ export function FeedInfinite() {
         if (row.kind === "post") {
           return (
             <FeedPostCard
-              key={row.post.id}
+              key={row.itemKey}
               post={row.post}
               followingIds={following}
               onFollowChange={handleFollowChange}
@@ -314,10 +332,6 @@ export function FeedInfinite() {
         <div className="flex justify-center py-10">
           <div className="h-7 w-7 animate-spin rounded-full border-2 border-gold border-t-transparent" />
         </div>
-      )}
-
-      {!hasMore && displayPosts.length > 0 && (
-        <p className="py-10 text-center text-xs text-muted">{t("feedEnd")}</p>
       )}
       </section>
     </PullToRefresh>

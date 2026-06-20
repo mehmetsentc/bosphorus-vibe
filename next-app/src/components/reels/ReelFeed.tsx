@@ -12,7 +12,7 @@ import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { prewarmReelsPosts } from "@/lib/utils/video-sources";
-import { REELS_VIDEO_WINDOW_RADIUS } from "@/lib/performance/app-state";
+import { REELS_VIDEO_WINDOW_RADIUS, INFINITE_SCROLL_NEAR_END } from "@/lib/performance/app-state";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { UserPostDoc } from "@/types";
 
@@ -26,9 +26,13 @@ type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
 
 type ReelFeedProps = {
   posts: EnrichedPost[];
+  /** Stable React keys when the same post.id appears in multiple cycles */
+  postKeys?: string[];
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** All server pages loaded — append another catalog cycle */
+  onNearCatalogEnd?: () => void;
   onActiveChange?: (index: number) => void;
   onPostDeleted?: (postId: string) => void;
   guestPreview?: boolean;
@@ -117,9 +121,11 @@ const ReelItem = memo(function ReelItem({
 
 export function ReelFeed({
   posts: initialPosts,
+  postKeys,
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  onNearCatalogEnd,
   onActiveChange,
   onPostDeleted,
   guestPreview = false,
@@ -162,6 +168,7 @@ export function ReelFeed({
   });
   const initialScrollDone = useRef(false);
   const prevActiveIndexRef = useRef(activeIndex);
+  const catalogCycleAtLengthRef = useRef(0);
   const onPostSeenRef = useRef(onPostSeen);
   const visiblePostsRef = useRef(visiblePosts);
   onPostSeenRef.current = onPostSeen;
@@ -209,12 +216,20 @@ export function ReelFeed({
     (index: number) => {
       setActiveIndex(index);
       onActiveChange?.(index);
-      // Trigger early — don't gate on loadingMore; the hook's own ref prevents doubles
-    if (hasMore && onLoadMore && index >= visiblePosts.length - 3) {
+      const nearEnd = index >= visiblePosts.length - INFINITE_SCROLL_NEAR_END;
+      if (hasMore && onLoadMore && nearEnd) {
         void onLoadMore();
+      } else if (
+        !hasMore &&
+        onNearCatalogEnd &&
+        nearEnd &&
+        catalogCycleAtLengthRef.current < visiblePosts.length
+      ) {
+        catalogCycleAtLengthRef.current = visiblePosts.length;
+        onNearCatalogEnd();
       }
     },
-    [hasMore, onLoadMore, onActiveChange, visiblePosts.length],
+    [hasMore, onLoadMore, onNearCatalogEnd, onActiveChange, visiblePosts.length],
   );
 
   // Mark reel as seen when user swipes to the next one
@@ -283,7 +298,7 @@ export function ReelFeed({
     <div ref={setContainerRef} className="reels-shell-scroll">
       {visiblePosts.map((post, i) => (
         <ReelItem
-          key={post.id}
+          key={postKeys?.[i] ?? post.id}
           post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
           isActive={i === activeIndex}
           isNext={i === activeIndex + 1}

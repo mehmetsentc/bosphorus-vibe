@@ -25,6 +25,9 @@ export const PROFILE_POSTS_LIMIT = 40;
 export const FEED_PAGE_SIZE = 15;
 export const REELS_PAGE_SIZE = 20;
 
+/** Trigger load-more / catalog cycle this many items before the end */
+export const INFINITE_SCROLL_NEAR_END = 3;
+
 /** Buffering longer than this → switch to lower-quality URL if available */
 export const VIDEO_STALL_DOWNGRADE_MS = 800;
 

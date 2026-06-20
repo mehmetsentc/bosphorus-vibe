@@ -7,6 +7,7 @@ import { ReelsPageSkeleton } from "@/components/ui/SkeletonLoader";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useReelsPosts } from "@/lib/hooks/usePosts";
 import { useSeenPosts } from "@/lib/hooks/useSeenPosts";
+import { useInfiniteScrollPosts } from "@/lib/hooks/useInfiniteScrollPosts";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { consumeReelsRefreshPending } from "@/lib/utils/invalidate-feed-cache";
 
@@ -25,25 +26,17 @@ export default function ReelsPage() {
     hasMoreSnapshot,
   } = useReelsPosts();
   const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts();
+  const { items, appendCycle, resetCycles } = useInfiniteScrollPosts(
+    posts,
+    hasMore,
+    filterPosts,
+  );
+  const displayPosts = useMemo(() => items.map((i) => i.post), [items]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [resetScrollToken, setResetScrollToken] = useState(0);
 
-  // Unseen posts first (session-locked = already shown this session stay visible).
-  // When hasMore=false and the unseen pool is exhausted, append seen posts at the
-  // end so the user can keep scrolling (TikTok/IG recycle behaviour).
-  const displayPosts = useMemo(() => {
-    const unseen = filterPosts(posts);
-    // Still have more server pages to load — don't recycle yet
-    if (hasMore) return unseen;
-    // All pages loaded: if unseen pool covers all posts, we're done
-    if (unseen.length >= posts.length) return unseen;
-    // Append seen posts that aren't already in the unseen list
-    const unseenIds = new Set(unseen.map((p) => p.id));
-    const seenTail = posts.filter((p) => !unseenIds.has(p.id));
-    return [...unseen, ...seenTail];
-  }, [posts, filterPosts, hasMore]);
-
   const handleRefresh = useCallback(async () => {
+    resetCycles();
     await refreshWithUnseen(
       refresh,
       loadMore,
@@ -51,7 +44,7 @@ export default function ReelsPage() {
       () => hasMoreSnapshot.current,
     );
     setResetScrollToken((n) => n + 1);
-  }, [refresh, loadMore, refreshWithUnseen, postsSnapshot, hasMoreSnapshot]);
+  }, [refresh, loadMore, refreshWithUnseen, postsSnapshot, hasMoreSnapshot, resetCycles]);
 
   useEffect(() => {
     if (consumeReelsRefreshPending()) {
@@ -59,8 +52,6 @@ export default function ReelsPage() {
     }
   }, [handleRefresh]);
 
-  // Load more while server has pages AND unseen pool is small.
-  // (cycling appends seen posts, so we only load from server while hasMore=true)
   const unseenCount = useMemo(
     () => filterPosts(posts).length,
     [posts, filterPosts],
@@ -93,9 +84,11 @@ export default function ReelsPage() {
         )}
         <ReelFeed
           posts={displayPosts}
+          postKeys={items.map((i) => i.itemKey)}
           hasMore={!isGuest && hasMore}
           loadingMore={loadingMore}
           onLoadMore={isGuest ? undefined : loadMore}
+          onNearCatalogEnd={isGuest ? undefined : appendCycle}
           onPostDeleted={deletePost}
           guestPreview={isGuest}
           onPostSeen={markSeen}
