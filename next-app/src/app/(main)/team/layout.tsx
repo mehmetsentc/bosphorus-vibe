@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import { buildPageMetadata } from "@/lib/seo/metadata";
+import { BRAND_NAME, HOTEL_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "Animation Team",
-  description: "Meet the Bosphorus Vibe animation and entertainment team.",
+  title: `${BRAND_NAME} Animasyon Ekibi`,
+  description:
+    `${HOTEL_NAME} animasyon ve eğlence ekibi — günlük aktiviteler, şovlar ve misafir deneyimi.`,
   path: "/team",
-  keywords: ["animation team", "hotel entertainment team", "Bosphorus Vibe"],
+  keywords: [
+    "animasyon ekibi",
+    "hotel animation team",
+    "Bosphorus Sorgun entertainment",
+  ],
 });
 
 export default function TeamLayout({

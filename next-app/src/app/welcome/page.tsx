@@ -1,5 +1,8 @@
 import { Suspense } from "react";
 import { LandingPage } from "@/components/onboarding/LandingPage";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { HOTEL_NAME } from "@/lib/brand";
+import { buildHotelJsonLd } from "@/lib/seo/json-ld";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 
 /** Static shell — auth UI is client-only; avoids per-request serverless invocations. */
@@ -7,14 +10,15 @@ export const dynamic = "force-static";
 export const revalidate = 3600;
 
 export const metadata = buildPageMetadata({
-  title: "Bosphorus Vibe | Hotel Entertainment Platform",
-  description: "Discover events, shows, and unforgettable experiences",
+  title: `${HOTEL_NAME} — Etkinlikler & Eğlence`,
+  description:
+    "Bosphorus Sorgun Hotel misafirleri için günlük aktiviteler, spor programı, akşam şovları ve reels. Side, Antalya otel eğlence platformu.",
   path: "/welcome",
   keywords: [
-    "hotel entertainment",
-    "resort events",
-    "Bosphorus Vibe",
-    "vacation activities",
+    "Bosphorus Sorgun etkinlikleri",
+    "Side otel aktiviteleri",
+    "hotel entertainment platform",
+    "resort events Antalya",
   ],
 });
 
@@ -35,8 +39,11 @@ function WelcomeFallback() {
 
 export default function WelcomePage() {
   return (
-    <Suspense fallback={<WelcomeFallback />}>
-      <LandingPage />
-    </Suspense>
+    <>
+      <JsonLd data={buildHotelJsonLd()} />
+      <Suspense fallback={<WelcomeFallback />}>
+        <LandingPage />
+      </Suspense>
+    </>
   );
 }

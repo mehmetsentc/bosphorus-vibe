@@ -1,38 +1,37 @@
 import type { Metadata } from "next";
 import { EventsLayoutClient } from "@/components/events/EventsLayoutClient";
-import { buildPageMetadata } from "@/lib/seo/metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { siteUrl } from "@/lib/seo/metadata";
+import { HOTEL_NAME } from "@/lib/brand";
+import { listEventsForSeo } from "@/lib/seo/events-server";
+import { buildEventsItemListJsonLd } from "@/lib/seo/json-ld";
+import { buildPageMetadata } from "@/lib/seo/metadata";
+
+export const revalidate = 3600;
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "Daily Hotel Events & Sports Activities",
+  title: `${HOTEL_NAME} — Günlük Etkinlik Takvimi`,
   description:
-    "Browse daily sports schedules, show time events and hotel activities. Filter by date and category.",
+    "Bosphorus Sorgun Hotel günlük spor programı, show time etkinlikleri ve aktivite takvimi. Tarih ve kategoriye göre filtreleyin — Side, Antalya.",
   path: "/events",
   keywords: [
-    "hotel events",
-    "daily activities",
-    "sports schedule",
-    "show time",
-    "resort entertainment",
+    "otel etkinlik takvimi",
+    "günlük spor programı",
+    "show time Side",
+    "hotel events schedule",
+    "Bosphorus Sorgun activities",
   ],
 });
 
-export default function EventsLayout({
+export default async function EventsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const events = await listEventsForSeo(50);
+
   return (
     <>
-      <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "ItemList",
-          name: "Hotel Events",
-          url: siteUrl("/events"),
-        }}
-      />
+      <JsonLd data={buildEventsItemListJsonLd(events)} />
       <EventsLayoutClient>{children}</EventsLayoutClient>
     </>
   );

@@ -14,9 +14,18 @@ export default function robots(): MetadataRoute.Robots {
         "/admin",
         "/upload",
         "/favorites",
+        "/login",
+        "/auth/",
+        "/messages",
+        "/messages/",
+        "/notifications",
+        "/user/",
+        "/post/",
+        "/feed/",
         "/api/",
       ],
     },
     sitemap: `${base}/sitemap.xml`,
+    host: base,
   };
 }

@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
 import { buildPageMetadata } from "@/lib/seo/metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { BRAND_NAME } from "@/lib/brand";
-import { siteUrl } from "@/lib/seo/metadata";
+import { HOTEL_NAME } from "@/lib/brand";
+import { buildWebSiteJsonLd } from "@/lib/seo/json-ld";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "Hotel Entertainment & Vacation Activities",
+  title: `${HOTEL_NAME} — Günlük Etkinlikler & Reels`,
   description:
-    "Discover daily hotel events, sports activities, evening shows and reels at Bosphorus Sorgun — your vacation entertainment hub.",
+    "Bosphorus Sorgun Hotel'de günlük spor aktiviteleri, akşam şovları, reels ve otel eğlencesi. Side, Antalya tatil etkinlikleri tek platformda.",
   path: "/home",
   keywords: [
-    "hotel entertainment",
-    "vacation activities",
-    "resort events",
-    "Bosphorus Sorgun",
-    "daily activities",
+    "otel feed",
+    "günlük otel programı",
+    "Side hotel activities",
+    "Bosphorus Sorgun reels",
   ],
 });
 
@@ -25,16 +24,7 @@ export default function HomeLayout({
 }) {
   return (
     <>
-      <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: BRAND_NAME,
-          url: siteUrl("/home"),
-          description:
-            "Hotel entertainment, events and vacation activities at Bosphorus Sorgun.",
-        }}
-      />
+      <JsonLd data={buildWebSiteJsonLd()} />
       {children}
     </>
   );

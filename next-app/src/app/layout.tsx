@@ -1,9 +1,15 @@
-import type { Metadata, Viewport } from "next";
+import type { Viewport } from "next";
 import { Figtree, Outfit } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClientProvidersLoader } from "@/components/providers/ClientProvidersLoader";
-import { buildPageMetadata } from "@/lib/seo/metadata";
+import { JsonLd } from "@/components/seo/JsonLd";
+import {
+  buildHotelJsonLd,
+  buildOrganizationJsonLd,
+  buildWebSiteJsonLd,
+} from "@/lib/seo/json-ld";
+import { buildRootMetadata } from "@/lib/seo/metadata";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -18,33 +24,7 @@ const figtree = Figtree({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://bosphorusvibe.com",
-  ),
-  ...buildPageMetadata({
-    title: "Bosphorus Vibe",
-    description:
-      "Entertainment & event platform — events, reels, daily activities and hotel entertainment.",
-    path: "/",
-    keywords: [
-      "hotel entertainment",
-      "vacation activities",
-      "Bosphorus Sorgun",
-      "resort events",
-    ],
-  }),
-  manifest: "/manifest.json",
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
-      { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
-    ],
-    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
-    shortcut: "/favicon.ico",
-  },
-};
+export const metadata = buildRootMetadata();
 
 export const viewport: Viewport = {
   themeColor: [
@@ -61,9 +41,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="tr" suppressHydrationWarning>
       <head>
-        {/* Preconnect to Firebase — reduces LCP for images, auth, and Firestore */}
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://storage.googleapis.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://firestore.googleapis.com" crossOrigin="anonymous" />
@@ -71,6 +50,13 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
         <link rel="dns-prefetch" href="https://storage.googleapis.com" />
         <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
+        <JsonLd
+          data={[
+            buildOrganizationJsonLd(),
+            buildHotelJsonLd(),
+            buildWebSiteJsonLd(),
+          ]}
+        />
       </head>
       <body className={`${outfit.variable} ${figtree.variable} font-body`}>
         <ClientProvidersLoader>{children}</ClientProvidersLoader>

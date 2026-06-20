@@ -1,12 +1,14 @@
 {
-  "name": "Bosphorus Vibe",
+  "name": "Bosphorus Vibe — Bosphorus Sorgun Hotel",
   "short_name": "BosphorusVibe",
-  "description": "Bosphorus Sorgun Hotel — events, reels and entertainment",
-  "start_url": "/home",
+  "description": "Bosphorus Sorgun Hotel resmi etkinlik platformu — günlük aktiviteler, reels ve otel eğlencesi. Side, Antalya.",
+  "start_url": "/welcome",
   "display": "standalone",
   "background_color": "#f7f6f2",
   "theme_color": "#D4AF37",
   "orientation": "portrait",
+  "lang": "tr",
+  "categories": ["entertainment", "lifestyle", "travel"],
   "icons": [
     {
       "src": "/icon-192.png",

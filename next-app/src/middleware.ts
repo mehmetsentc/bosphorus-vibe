@@ -25,7 +25,19 @@ const GUEST_ALLOWED_PREFIXES = [
   "/post",
 ];
 
-const PRIVATE_ROBOTS = ["/profile", "/admin", "/upload", "/favorites"];
+const PRIVATE_ROBOTS = [
+  "/profile",
+  "/admin",
+  "/upload",
+  "/favorites",
+  "/login",
+  "/auth",
+  "/messages",
+  "/notifications",
+  "/user",
+  "/post",
+  "/feed",
+];
 
 function matchesPrefix(pathname: string, prefixes: string[]): boolean {
   return prefixes.some(
@@ -42,6 +54,13 @@ function isPublicPath(pathname: string): boolean {
 function withHeaders(response: NextResponse): NextResponse {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);
+  }
+  return response;
+}
+
+function withPrivateRobots(response: NextResponse, pathname: string): NextResponse {
+  if (matchesPrefix(pathname, PRIVATE_ROBOTS)) {
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
   }
   return response;
 }
@@ -84,7 +103,8 @@ export function middleware(request: NextRequest) {
   }
 
   if (isPublicPath(pathname)) {
-    return withHeaders(NextResponse.next());
+    const response = NextResponse.next();
+    return withHeaders(withPrivateRobots(response, pathname));
   }
 
   if (matchesPrefix(pathname, AUTH_ONLY_PREFIXES)) {
@@ -95,10 +115,7 @@ export function middleware(request: NextRequest) {
       return withHeaders(NextResponse.redirect(url));
     }
     const response = NextResponse.next();
-    if (matchesPrefix(pathname, PRIVATE_ROBOTS)) {
-      response.headers.set("X-Robots-Tag", "noindex, nofollow");
-    }
-    return withHeaders(response);
+    return withHeaders(withPrivateRobots(response, pathname));
   }
 
   if (!hasAccess) {
@@ -117,7 +134,8 @@ export function middleware(request: NextRequest) {
     return withHeaders(NextResponse.redirect(url));
   }
 
-  return withHeaders(NextResponse.next());
+  const response = NextResponse.next();
+  return withHeaders(withPrivateRobots(response, pathname));
 }
 
 export const config = {
