@@ -114,6 +114,24 @@ export function VideoPlayer({
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
 
+  const reelsSrcRef = useRef("");
+  const playAttemptRef = useRef(0);
+
+  const attemptPlay = useCallback(
+    (video: HTMLVideoElement) => {
+      const muted = isReels ? true : reelsMuted;
+      setIsMuted(muted);
+      applyMuted(video, muted);
+      video.play().catch(() => {
+        applyMuted(video, true);
+        setIsMuted(true);
+        video.play().catch(() => {});
+      });
+      requestPlay(post.id);
+    },
+    [isReels, reelsMuted, requestPlay, post.id],
+  );
+
   // Unmount / leave preload window → release decoder (iOS limit)
   useEffect(() => {
     const video = videoRef.current;
@@ -126,7 +144,7 @@ export function VideoPlayer({
     releasePlay(post.id);
   }, [shouldLoad, isReels, releasePlay, post.id]);
 
-  const [isMuted, setIsMuted] = useState(reelsMuted);
+  const [isMuted, setIsMuted] = useState(() => (isReels ? true : reelsMuted));
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(() => !poster);
@@ -155,12 +173,17 @@ export function VideoPlayer({
     }
   }, [playingId, post.id]);
 
-  // Keep in sync when user toggles sound on another reel
+  // Keep feed/detail in sync with sound preference (reels stay muted until user unmutes)
   useEffect(() => {
+    if (isReels || !isActive) return;
     setIsMuted(reelsMuted);
     const video = videoRef.current;
-    if (video && isActive) applyMuted(video, reelsMuted);
-  }, [reelsMuted, isActive]);
+    if (video) applyMuted(video, reelsMuted);
+  }, [reelsMuted, isActive, isReels]);
+
+  useEffect(() => {
+    reelsSrcRef.current = "";
+  }, [post.id]);
 
   // Play/pause when active state changes
   useEffect(() => {
@@ -168,22 +191,8 @@ export function VideoPlayer({
     if (!video) return;
     if (isActive && autoPlay) {
       if (isReels && !videoSrc) return;
-      setIsMuted(reelsMuted);
-      applyMuted(video, reelsMuted);
-      if (video.readyState === 0) video.load();
-      video.play().catch(() => {
-        if (!reelsMuted) {
-          setIsMuted(true);
-          applyMuted(video, true);
-        }
-        video.play().catch(() => {
-          const onCanPlay = () => video.play().catch(() => {});
-          video.addEventListener("canplay", onCanPlay, { once: true });
-          video.addEventListener("loadeddata", onCanPlay, { once: true });
-          video.addEventListener("canplaythrough", onCanPlay, { once: true });
-        });
-      });
-      requestPlay(post.id);
+      if (video.readyState === 0 && videoSrc) video.load();
+      attemptPlay(video);
     } else {
       video.pause();
       applyMuted(video, true);
@@ -194,20 +203,57 @@ export function VideoPlayer({
       }
       releasePlay(post.id);
     }
-    return () => { releasePlay(post.id); };
+    return () => {
+      releasePlay(post.id);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, autoPlay, post.id, reelsMuted, requestPlay, releasePlay, isReels, videoSrc]);
+  }, [isActive, autoPlay, post.id, releasePlay, isReels, videoSrc, attemptPlay]);
 
   useEffect(() => () => clearLoadingTimer(), [clearLoadingTimer]);
 
-  // Reels: apply new src only before first play (error fallback)
+  // Reels: reload + play when src changes (quality downgrade / first load)
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !isReels || !isActive || !autoPlay || !videoSrc) return;
-    if (hasPlayedRef.current) return;
-    if (video.readyState === 0) video.load();
-    video.play().catch(() => {});
-  }, [isReels, isActive, autoPlay, videoSrc]);
+    if (!video || !isReels || !videoSrc) return;
+    if (reelsSrcRef.current === videoSrc) return;
+    reelsSrcRef.current = videoSrc;
+
+    playAttemptRef.current += 1;
+    const attemptId = playAttemptRef.current;
+
+    setLoading(true);
+    video.pause();
+    applyMuted(video, true);
+    video.load();
+
+    if (!isActive || !autoPlay) return;
+
+    const tryPlay = () => {
+      if (attemptId !== playAttemptRef.current) return;
+      attemptPlay(video);
+    };
+
+    if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      tryPlay();
+    } else {
+      video.addEventListener("canplay", tryPlay, { once: true });
+      video.addEventListener("loadeddata", tryPlay, { once: true });
+    }
+  }, [videoSrc, isReels, isActive, autoPlay, attemptPlay]);
+
+  // Fallback: if still loading after 4s, try next quality / replay muted
+  useEffect(() => {
+    if (!isReels || !isActive || !videoSrc) return;
+    const timer = setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || hasPlayedRef.current) return;
+      if (video.paused) {
+        handleAdaptiveError();
+        attemptPlay(video);
+      }
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isReels, isActive, videoSrc, post.id, handleAdaptiveError, attemptPlay]);
 
   // Buffer adjacent slides before they become active
   useEffect(() => {
@@ -289,27 +335,27 @@ export function VideoPlayer({
           if (isActive) {
             setShowPoster(false);
             if (autoPlay && videoRef.current?.paused) {
-              videoRef.current.play().catch(() => {});
+              attemptPlay(videoRef.current);
             }
           }
         }}
         onLoadedMetadata={(e) => {
           setDuration(e.currentTarget.duration || 0);
           if (isActive && autoPlay && videoRef.current?.paused) {
-            videoRef.current.play().catch(() => {});
+            attemptPlay(videoRef.current);
           }
         }}
         onCanPlay={() => {
           setLoading(false);
           if (isActive) setShowPoster(false);
           if (isActive && autoPlay && videoRef.current?.paused) {
-            videoRef.current.play().catch(() => {});
+            attemptPlay(videoRef.current);
           }
           onReady?.();
         }}
         onCanPlayThrough={() => {
           if (isActive && autoPlay && videoRef.current?.paused) {
-            videoRef.current.play().catch(() => {});
+            attemptPlay(videoRef.current);
           }
         }}
         onError={handleVideoError}

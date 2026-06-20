@@ -277,9 +277,11 @@ export function ReelFeed({
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Prewarm next reel only — avoid decoder/bandwidth contention
+  // Prewarm active + next reel — first open must warm index 0
   useLayoutEffect(() => {
+    const current = visiblePosts[activeIndex];
     const next = visiblePosts[activeIndex + 1];
+    if (current) prewarmReelsPosts([current], networkTier);
     if (next) prewarmReelsPosts([next], networkTier);
   }, [activeIndex, visiblePosts, networkTier]);
 

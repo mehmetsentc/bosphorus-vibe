@@ -431,9 +431,9 @@ export function getReelsImmediatePlayback(
       if (low) ordered.push(low);
       if (preview) ordered.push(preview);
     } else {
-      // Default (fast/WiFi): start low for instant playback, high as fallback
-      if (low) ordered.push(low);
+      // Default: preview first for instant first-frame (IG/TikTok style)
       if (preview) ordered.push(preview);
+      if (low) ordered.push(low);
       if (high) ordered.push(high);
     }
   } else {

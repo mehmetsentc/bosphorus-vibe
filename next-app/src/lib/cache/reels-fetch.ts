@@ -44,8 +44,9 @@ export async function fetchReelsFirstPage(
       posts: result.posts,
       hasMore: result.hasMore,
     });
-    if (typeof window !== "undefined") {
-      prewarmReelsPosts(enriched.slice(0, 2), "slow");
+    if (typeof window !== "undefined" && enriched.length > 0) {
+      prewarmReelsPosts([enriched[0]!], "slow");
+      if (enriched[1]) prewarmReelsPosts([enriched[1]], "slow");
     }
     return result;
   })();
