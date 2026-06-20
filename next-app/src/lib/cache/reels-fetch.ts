@@ -45,7 +45,7 @@ export async function fetchReelsFirstPage(
       hasMore: result.hasMore,
     });
     if (typeof window !== "undefined") {
-      prewarmReelsPosts(enriched.slice(0, 3), "slow");
+      prewarmReelsPosts(enriched.slice(0, 2), "slow");
     }
     return result;
   })();

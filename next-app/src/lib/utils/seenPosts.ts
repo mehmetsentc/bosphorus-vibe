@@ -5,7 +5,7 @@
 
 const MAX_SEEN = 2000;
 /** Fetch next page when fewer than this many displayable posts remain. */
-const MIN_UNSEEN_BEFORE_LOAD = 10;
+const MIN_UNSEEN_BEFORE_LOAD = 5;
 
 function storageKey(userId?: string): string {
   return `bv_seen_posts_${userId || "guest"}`;

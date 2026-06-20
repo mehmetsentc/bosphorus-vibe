@@ -426,14 +426,15 @@ export function getReelsImmediatePlayback(
       if (preview) ordered.push(preview);
       if (low) ordered.push(low);
       if (high) ordered.push(high);
-    } else if (tier === "fast" || preferHigh) {
+    } else if (preferHigh) {
       if (high) ordered.push(high);
       if (low) ordered.push(low);
       if (preview) ordered.push(preview);
     } else {
+      // Default (fast/WiFi): start low for instant playback, high as fallback
       if (low) ordered.push(low);
-      if (high) ordered.push(high);
       if (preview) ordered.push(preview);
+      if (high) ordered.push(high);
     }
   } else {
     if (preview) ordered.push(preview);
@@ -457,12 +458,12 @@ export function getReelsImmediatePlayback(
   return { src, fallbacks, poster };
 }
 
-/** Best URL for prewarming the next reel (quality-first when encoded). */
+/** Lightweight prewarm — preview/low URL + leading bytes only (no extra decoders). */
 export function getReelsPrewarmUrl(
   post: UserPostDoc,
   tier: NetworkTier,
 ): string {
-  return getReelsImmediatePlayback(post, tier, { preferHighQuality: true }).src;
+  return getReelsImmediatePlayback(post, tier).src;
 }
 
 /** @deprecated Use getReelsImmediatePlayback — kept for ladder ordering */
@@ -556,7 +557,7 @@ const prewarmedUrls = new Set<string>();
 const prefetchedLeadBytes = new Set<string>();
 const prewarmElements: HTMLVideoElement[] = [];
 /** Hidden prewarm videos also consume iOS decoders — keep tiny. */
-const MAX_PREWARM_ELEMENTS = 3;
+const MAX_PREWARM_ELEMENTS = 2;
 
 /** Warm first ~512KB (moov + initial mdat) for faster first frame on +faststart MP4. */
 export function prefetchVideoLeadingBytes(url: string): void {
@@ -656,19 +657,28 @@ export function prewarmPostVideo(
   if (poster) prefetchImageUrl(poster);
 }
 
-/** Prewarm reels — quality-first URL + leading bytes for instant swipe. */
-export function prewarmReelsPost(post: UserPostDoc, tier: NetworkTier): void {
+/** Prewarm reels — leading bytes always; hidden <video> only when `withElement`. */
+export function prewarmReelsPost(
+  post: UserPostDoc,
+  tier: NetworkTier,
+  withElement = false,
+): void {
   const src = getReelsPrewarmUrl(post, tier);
   const poster = getPostVideoPoster(post);
   if (src) {
     prefetchVideoLeadingBytes(src);
-    prewarmVideoUrl(src);
+    if (withElement) prewarmVideoUrl(src);
   }
   if (poster) prefetchImageUrl(poster);
 }
 
-export function prewarmReelsPosts(posts: UserPostDoc[], tier: NetworkTier): void {
-  for (const post of posts) prewarmReelsPost(post, tier);
+export function prewarmReelsPosts(
+  posts: UserPostDoc[],
+  tier: NetworkTier,
+): void {
+  posts.forEach((post, index) => {
+    prewarmReelsPost(post, tier, index === 0);
+  });
 }
 
 /**

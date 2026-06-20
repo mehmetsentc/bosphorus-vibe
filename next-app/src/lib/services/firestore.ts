@@ -36,6 +36,10 @@ import {
 import { sortEventsForSuggestions } from "@/lib/utils/event-dates";
 import { buildPostTagFields, parseTaggedPeople } from "@/lib/utils/post-tags";
 import {
+  isSnapshotCursor,
+  type PostPageCursor,
+} from "@/lib/utils/post-page-cursor";
+import {
   COLLECTIONS,
   TEAM_ROLES,
   type EventDoc,
@@ -147,31 +151,26 @@ export type PostsPage = {
   hasMore: boolean;
 };
 
-/** Paginated feed — photo and video posts, cursor-based infinite scroll.
- *  cursor can be a Firestore DocumentSnapshot (live session) or a Date
- *  timestamp (restored from localStorage cache between sessions).
- */
+/** Paginated feed — photo and video posts, cursor-based infinite scroll. */
 export async function getFeedPostsPage(
   pageSize = 10,
-  cursor?: QueryDocumentSnapshot<DocumentData> | Date | null,
+  cursor?: PostPageCursor | null,
 ): Promise<PostsPage> {
   const batchSize = 20;
-  let lastDoc: QueryDocumentSnapshot<DocumentData> | null =
-    cursor instanceof Date ? null : (cursor ?? null);
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
   const collected: UserPostDoc[] = [];
   let hasMore = true;
-  // For Date cursors we use the timestamp value directly with startAfter
-  const dateAnchor = cursor instanceof Date ? cursor : null;
 
   while (collected.length < pageSize && hasMore) {
     const constraints: QueryConstraint[] = [
       orderBy("timePosted", "desc"),
+      orderBy(documentId(), "desc"),
       limit(batchSize),
     ];
-    if (lastDoc) {
-      constraints.push(startAfter(lastDoc));
-    } else if (dateAnchor) {
-      constraints.push(startAfter(dateAnchor));
+    if (cursor && isSnapshotCursor(cursor)) {
+      constraints.push(startAfter(cursor));
+    } else if (cursor && !isSnapshotCursor(cursor)) {
+      constraints.push(startAfter(cursor.timePosted, cursor.docId));
     }
 
     const snap = await getDocs(
@@ -191,6 +190,7 @@ export async function getFeedPostsPage(
     }
 
     hasMore = snap.docs.length === batchSize;
+    cursor = null;
   }
 
   return {
@@ -349,30 +349,26 @@ export type VideoPostsPage = {
   hasMore: boolean;
 };
 
-/** Paginated video posts — loops through batches until enough video posts collected.
- *  cursor can be a Firestore DocumentSnapshot (live session) or a Date timestamp
- *  (restored from localStorage cache between sessions).
- */
+/** Paginated video posts — loops through batches until enough video posts collected. */
 export async function getVideoPostsPage(
   pageSize = 12,
-  cursor?: QueryDocumentSnapshot<DocumentData> | Date | null,
+  cursor?: PostPageCursor | null,
 ): Promise<VideoPostsPage> {
   const batchSize = 20;
-  let lastDoc: QueryDocumentSnapshot<DocumentData> | null =
-    cursor instanceof Date ? null : (cursor ?? null);
-  const dateAnchor = cursor instanceof Date ? cursor : null;
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
   const collected: { post: UserPostDoc; doc: QueryDocumentSnapshot<DocumentData> }[] = [];
   let hasMore = true;
 
   while (collected.length < pageSize && hasMore) {
     const constraints: QueryConstraint[] = [
       orderBy("timePosted", "desc"),
+      orderBy(documentId(), "desc"),
       limit(batchSize),
     ];
-    if (lastDoc) {
-      constraints.push(startAfter(lastDoc));
-    } else if (dateAnchor) {
-      constraints.push(startAfter(dateAnchor));
+    if (cursor && isSnapshotCursor(cursor)) {
+      constraints.push(startAfter(cursor));
+    } else if (cursor && !isSnapshotCursor(cursor)) {
+      constraints.push(startAfter(cursor.timePosted, cursor.docId));
     }
 
     const snap = await getDocs(
@@ -394,6 +390,7 @@ export async function getVideoPostsPage(
     }
 
     hasMore = snap.docs.length === batchSize;
+    cursor = null;
   }
 
   return {

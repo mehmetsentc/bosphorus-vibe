@@ -250,13 +250,37 @@ export function ReelFeed({
     };
   }, []);
 
-  // Prewarm before paint — current + next 2 reels
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
+
+  const handleActiveRef = useRef<(index: number) => void>(() => {});
+  handleActiveRef.current = handleActive;
+
+  const makeActiveHandler = useCallback(
+    (index: number) => () => handleActiveRef.current(index),
+    [],
+  );
+
+  // Scroll-based load-more (intersection alone can miss fast swipes)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const h = el.clientHeight;
+      if (h <= 0) return;
+      const idx = Math.round(el.scrollTop / h);
+      if (idx !== activeIndexRef.current) handleActiveRef.current(idx);
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Prewarm next reel only — avoid decoder/bandwidth contention
   useLayoutEffect(() => {
-    const slice = visiblePosts.slice(
-      Math.max(0, activeIndex - 1),
-      activeIndex + 3,
-    );
-    prewarmReelsPosts(slice, networkTier);
+    const next = visiblePosts[activeIndex + 1];
+    if (next) prewarmReelsPosts([next], networkTier);
   }, [activeIndex, visiblePosts, networkTier]);
 
   // Jump to tapped post before paint when opening from feed
@@ -275,7 +299,7 @@ export function ReelFeed({
     if (!initialPostId) return;
     const idx = visiblePosts.findIndex((p) => p.id === initialPostId);
     if (idx < 0) return;
-    const toWarm = visiblePosts.slice(idx, idx + 3);
+    const toWarm = visiblePosts.slice(idx + 1, idx + 2);
     prewarmReelsPosts(toWarm, networkTier);
   }, [initialPostId, visiblePosts, networkTier]);
 
@@ -304,7 +328,7 @@ export function ReelFeed({
           isNext={i === activeIndex + 1}
           isNear={false}
           mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
-          onBecameActive={() => handleActive(i)}
+          onBecameActive={makeActiveHandler(i)}
           onPostDeleted={() => handlePostDeleted(post.id)}
           onCommentClick={() => openComment(post.id)}
         />

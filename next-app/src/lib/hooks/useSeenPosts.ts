@@ -59,6 +59,7 @@ export function useSeenPosts(options?: DisplayPostsOptions) {
   const markSeen = useCallback(
     (postId: string) => {
       markPostSeen(postId, userId);
+      setRevision((n) => n + 1);
     },
     [userId],
   );

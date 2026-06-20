@@ -8,7 +8,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
-import { useReelsVideoSrc } from "@/lib/hooks/useReelsVideoSrc";
+import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
 import { useHideLikeCounts } from "@/lib/hooks/useSettingsEffects";
 import {
   getPostCaption,
@@ -84,7 +84,7 @@ function FeedPostCardInner({
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
   const [followBusy, setFollowBusy] = useState(false);
   const hideLikeCounts = useHideLikeCounts();
-  const { ref, isActive } = useIntersectionActive<HTMLElement>({
+  const { ref, isActive, isNear } = useIntersectionActive<HTMLElement>({
     threshold: 0.55,
     rootMargin: "120px 0px",
   });
@@ -92,13 +92,18 @@ function FeedPostCardInner({
   const video = getPostVideoUrl(post);
   const image = video ? "" : pickImageSource(post, "feed");
   const caption = getPostCaption(post);
+
+  useEffect(() => {
+    if (priority || isNear) setMountVideo(true);
+  }, [priority, isNear]);
+
   const {
     src: videoSrc,
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-    resolving: videoResolving,
-  } = useReelsVideoSrc(post, Boolean(video && mountVideo), isActive);
+  } = useAdaptiveVideoSrc(post, "feed", isActive && mountVideo);
+  const videoResolving = mountVideo && isActive && !videoSrc;
   const thumbCandidates = useMemo(
     () => getPostGridThumbnailCandidates(post),
     [post],

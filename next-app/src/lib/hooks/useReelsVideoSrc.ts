@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsOptional } from "@/components/settings/SettingsProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
+import { VIDEO_STALL_DOWNGRADE_REELS_MS } from "@/lib/performance/app-state";
 import {
   getReelsImmediatePlayback,
   hasPostVideo,
@@ -10,12 +11,12 @@ import {
 import type { UserPostDoc } from "@/types";
 
 /**
- * Reels: instant playback from Firestore URLs — no blocking HEAD probe.
+ * Reels: instant playback from Firestore URLs with stall downgrade on buffer.
  */
 export function useReelsVideoSrc(
   post: UserPostDoc,
   shouldLoad: boolean,
-  _isActive: boolean,
+  isActive: boolean,
 ) {
   const tier = useEffectiveNetworkTier();
   const settings = useSettingsOptional();
@@ -34,22 +35,60 @@ export function useReelsVideoSrc(
   }, [playback]);
 
   const [srcIndex, setSrcIndex] = useState(0);
+  const srcIndexRef = useRef(0);
+  const urlsRef = useRef(urls);
+  urlsRef.current = urls;
 
   useEffect(() => {
+    srcIndexRef.current = 0;
     setSrcIndex(0);
-  }, [post.id, playback.src]);
+  }, [post.id, playback.src, tier, preferHighQuality]);
+
+  useEffect(() => {
+    srcIndexRef.current = srcIndex;
+  }, [srcIndex]);
 
   const playbackSrc = shouldLoad ? (urls[srcIndex] ?? urls[0] ?? "") : "";
   const resolving = shouldLoad && !playbackSrc && hasPostVideo(post);
 
-  const onWaiting = useCallback(() => {}, []);
-  const onPlaying = useCallback(() => {}, []);
+  const downgrade = useCallback((): boolean => {
+    const next = srcIndexRef.current + 1;
+    if (next < urlsRef.current.length) {
+      srcIndexRef.current = next;
+      setSrcIndex(next);
+      return true;
+    }
+    return false;
+  }, []);
+
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearStallTimer = useCallback(() => {
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
+  }, []);
+
+  const onWaiting = useCallback(() => {
+    if (!isActive || srcIndexRef.current >= urlsRef.current.length - 1) return;
+    if (stallTimerRef.current) return;
+    stallTimerRef.current = setTimeout(() => {
+      stallTimerRef.current = null;
+      downgrade();
+    }, VIDEO_STALL_DOWNGRADE_REELS_MS);
+  }, [isActive, downgrade]);
+
+  const onPlaying = useCallback(() => {
+    clearStallTimer();
+  }, [clearStallTimer]);
 
   const onError = useCallback((): boolean => {
-    if (srcIndex >= urls.length - 1) return false;
-    setSrcIndex((i) => i + 1);
-    return true;
-  }, [srcIndex, urls.length]);
+    clearStallTimer();
+    return downgrade();
+  }, [clearStallTimer, downgrade]);
+
+  useEffect(() => clearStallTimer, [clearStallTimer]);
 
   return {
     src: playbackSrc,
