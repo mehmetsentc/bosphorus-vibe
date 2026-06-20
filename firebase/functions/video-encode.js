@@ -5,21 +5,34 @@
 const VIDEO_ENCODE_PROFILE = {
   container: "mp4",
   videoCodec: "h264",
-  profile: "baseline",
-  level: "3.0",
+  profile: "main",
+  level: "4.0",
   serverPreview: {
-    maxWidth: 854,
-    maxHeight: 480,
-    crf: "28",
+    maxWidth: 960,
+    maxHeight: 540,
+    crf: "25",
     preset: "veryfast",
-    audioBitrate: "64k",
+    audioBitrate: "96k",
+    profile: "main",
+    level: "3.1",
   },
   serverLow: {
     maxWidth: 1280,
     maxHeight: 720,
-    crf: "26",
+    crf: "23",
     preset: "fast",
-    audioBitrate: "96k",
+    audioBitrate: "128k",
+    profile: "main",
+    level: "3.1",
+  },
+  serverHigh: {
+    maxWidth: 1920,
+    maxHeight: 1080,
+    crf: "22",
+    preset: "fast",
+    audioBitrate: "128k",
+    profile: "main",
+    level: "4.1",
   },
 };
 
@@ -29,6 +42,7 @@ function standardEncodePaths(userId, postId) {
     base,
     preview: `${base}/preview.mp4`,
     low: `${base}/low.mp4`,
+    high: `${base}/high.mp4`,
     thumb: `${base}/thumb.jpg`,
   };
 }
@@ -48,13 +62,15 @@ function scaleFilter(maxW, maxH) {
  * @param {import('fluent-ffmpeg').FfmpegCommand} command
  */
 function applyH264Profile(command, tier) {
+  const profile = tier.profile || VIDEO_ENCODE_PROFILE.profile;
+  const level = tier.level || VIDEO_ENCODE_PROFILE.level;
   return command
     .videoFilter(scaleFilter(tier.maxWidth, tier.maxHeight))
     .videoCodec("libx264")
     .addOption("-crf", tier.crf)
     .addOption("-preset", tier.preset)
-    .addOption("-profile:v", VIDEO_ENCODE_PROFILE.profile)
-    .addOption("-level", VIDEO_ENCODE_PROFILE.level)
+    .addOption("-profile:v", profile)
+    .addOption("-level", level)
     .audioCodec("aac")
     .audioBitrate(tier.audioBitrate)
     .addOption("-movflags", "+faststart")

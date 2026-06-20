@@ -113,6 +113,7 @@ export function getPostVideoVariants(post: UserPostDoc): {
   original: string;
   preview: string;
   low: string;
+  high: string;
   poster?: string;
 } {
   const original =
@@ -129,9 +130,13 @@ export function getPostVideoVariants(post: UserPostDoc): {
     post.postVideoURL ||
     post.postVideo ||
     "";
+  const high =
+    (post.postVideoURL_high && post.postVideoURL_high !== original
+      ? post.postVideoURL_high
+      : "") || inferTranscodedHighUrl(post) || "";
   const poster = getPostVideoPoster(post);
 
-  return { original, preview, low, poster };
+  return { original, preview, low, high, poster };
 }
 
 /** Guess sibling asset beside original.mov/mp4 in Firebase Storage URLs. */
@@ -243,6 +248,33 @@ export function inferTranscodedPreviewUrl(post: UserPostDoc): string | undefined
   }
 }
 
+/** Server-encoded high.mp4: users/{uid}/videos/{postId}/high.mp4 */
+export function inferTranscodedHighUrl(post: UserPostDoc): string | undefined {
+  if (!post.id) return undefined;
+  const original =
+    post.postVideoURL_original ||
+    post.postVideo ||
+    post.postVideoURL ||
+    "";
+  if (!original) return undefined;
+
+  try {
+    const bucket = original.match(/\/v0\/b\/([^/]+)\//)?.[1];
+    if (!bucket) return undefined;
+
+    const userId =
+      post.postUserId ||
+      decodeStoragePathFromUrl(original)?.match(/^users\/([^/]+)\//)?.[1] ||
+      "";
+    if (!userId) return undefined;
+
+    const highPath = `users/${userId}/videos/${post.id}/high.mp4`;
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(highPath)}?alt=media`;
+  } catch {
+    return undefined;
+  }
+}
+
 function decodeStoragePathFromUrl(url: string): string | null {
   try {
     const pathname = new URL(url).pathname;
@@ -256,7 +288,7 @@ function decodeStoragePathFromUrl(url: string): string | null {
 
 /** Smaller transcodes / previews — preferred for feed & reels playback. */
 export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
-  const { original, preview, low } = getPostVideoVariants(post);
+  const { original, preview, low, high } = getPostVideoVariants(post);
   const candidates: string[] = [];
 
   const distinctPreview =
@@ -290,6 +322,16 @@ export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
     candidates.push(transcodedLow);
   }
 
+  const distinctHigh = high && high !== original && high !== distinctLow ? high : "";
+  if (distinctHigh) {
+    candidates.push(distinctHigh);
+  }
+
+  const transcodedHigh = inferTranscodedHighUrl(post);
+  if (transcodedHigh && !candidates.includes(transcodedHigh)) {
+    candidates.push(transcodedHigh);
+  }
+
   return uniqueUrls(...candidates).filter((url) => url !== original);
 }
 
@@ -297,7 +339,7 @@ export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
  * Reels fallback ladder — smallest → largest (used only on playback errors).
  */
 export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
-  const { original, low, preview } = getPostVideoVariants(post);
+  const { original, low, preview, high } = getPostVideoVariants(post);
   const fast = getFastPlaybackCandidates(post);
 
   const previews = fast.filter(
@@ -308,8 +350,25 @@ export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
       u.includes("/low.mp4") ||
       (low && u === low && u !== original),
   );
+  const highs = fast.filter(
+    (u) =>
+      u.includes("/high.mp4") ||
+      (high && u === high && u !== original),
+  );
 
-  return uniqueUrls(...previews, ...lows, low, original);
+  return uniqueUrls(...previews, ...lows, ...highs, low, high, original);
+}
+
+/** Server FFmpeg finished — encoded tiers have +faststart (safe to play directly). */
+export function isServerTranscodeReady(post: UserPostDoc): boolean {
+  if (post.videoTranscodeStatus !== "done" || !post.id) return false;
+  const marker = `/videos/${post.id}/`;
+  const urls = [
+    post.postVideoURL_low,
+    post.postVideoURL_high,
+    post.postVideoURL_preview,
+  ].filter(Boolean);
+  return urls.some((u) => u!.includes(marker));
 }
 
 /** Firestore-backed URLs only — tokenized, no inference (instant playback). */
@@ -317,6 +376,7 @@ export function getTrustedVideoUrls(post: UserPostDoc): {
   original: string;
   preview: string;
   low: string;
+  high: string;
   primary: string;
 } {
   const original =
@@ -328,11 +388,16 @@ export function getTrustedVideoUrls(post: UserPostDoc): {
     post.postVideoURL_low && post.postVideoURL_low !== original
       ? post.postVideoURL_low
       : "";
+  const high =
+    post.postVideoURL_high && post.postVideoURL_high !== original
+      ? post.postVideoURL_high
+      : "";
   const primary = post.postVideoURL || "";
   return {
     original: original || primary,
     preview,
     low,
+    high,
     primary,
   };
 }
@@ -342,39 +407,41 @@ type ReelsPlaybackOptions = {
 };
 
 /**
- * Instant reels playback URL from Firestore — no HEAD probe gate.
- * Preview-first for fast start; inferred URLs only as error fallbacks.
+ * Instant reels playback — encoded posts play 720p/1080p directly (+faststart).
+ * Pre-encode posts use client preview until Cloud Function finishes.
  */
 export function getReelsImmediatePlayback(
   post: UserPostDoc,
   tier: NetworkTier,
   options?: ReelsPlaybackOptions,
 ): { src: string; fallbacks: string[]; poster?: string } {
-  const { original, preview, low, primary } = getTrustedVideoUrls(post);
+  const { original, preview, low, high, primary } = getTrustedVideoUrls(post);
   const poster = getPostVideoPoster(post);
   const preferHigh = options?.preferHighQuality === true;
-
+  const encoded = isServerTranscodeReady(post);
   const ordered: string[] = [];
 
-  if (tier === "slow") {
-    // Slow network: preview → low → original
-    if (preview) ordered.push(preview);
-    if (low) ordered.push(low);
-    if (primary && !ordered.includes(primary)) ordered.push(primary);
-    if (original) ordered.push(original);
-  } else if (tier === "fast" || preferHigh) {
-    // Fast network / user chose high quality: original (720p) first
-    if (original) ordered.push(original);
-    if (primary && !ordered.includes(primary)) ordered.push(primary);
-    if (low) ordered.push(low);
-    if (preview && !ordered.includes(preview)) ordered.push(preview);
+  if (encoded) {
+    if (tier === "slow") {
+      if (preview) ordered.push(preview);
+      if (low) ordered.push(low);
+      if (high) ordered.push(high);
+    } else if (tier === "fast" || preferHigh) {
+      if (high) ordered.push(high);
+      if (low) ordered.push(low);
+      if (preview) ordered.push(preview);
+    } else {
+      if (low) ordered.push(low);
+      if (high) ordered.push(high);
+      if (preview) ordered.push(preview);
+    }
   } else {
-    // Normal network: low.mp4 (480p) first; preview tiny fallback
-    if (low) ordered.push(low);
+    if (preview) ordered.push(preview);
     if (primary && !ordered.includes(primary)) ordered.push(primary);
-    if (original && !ordered.includes(original)) ordered.push(original);
-    if (preview && !ordered.includes(preview)) ordered.push(preview);
+    if (low && low !== original) ordered.push(low);
   }
+
+  if (original && !ordered.includes(original)) ordered.push(original);
 
   if (!ordered.length) {
     ordered.push(...getReelsPlaybackLadder(post));
@@ -388,6 +455,14 @@ export function getReelsImmediatePlayback(
   const src = pickPlayableSrc(playable) || playable[0] || "";
   const fallbacks = playable.filter((url) => url !== src);
   return { src, fallbacks, poster };
+}
+
+/** Best URL for prewarming the next reel (quality-first when encoded). */
+export function getReelsPrewarmUrl(
+  post: UserPostDoc,
+  tier: NetworkTier,
+): string {
+  return getReelsImmediatePlayback(post, tier, { preferHighQuality: true }).src;
 }
 
 /** @deprecated Use getReelsImmediatePlayback — kept for ladder ordering */
@@ -460,7 +535,8 @@ export function pickVideoSource(
       ordered = uniqueUrls(...lows, low, original, ...previews);
     }
   } else if (options?.preferHighQuality && original) {
-    ordered = fast.length ? [original, ...fast] : uniqueUrls(original, low);
+    const { high: trustedHigh, low: trustedLow } = getTrustedVideoUrls(post);
+    ordered = uniqueUrls(trustedHigh, trustedLow, ...fast, original);
   } else if (tier === "slow") {
     ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
   } else if (fast.length) {
@@ -477,9 +553,24 @@ export function pickVideoSource(
 }
 
 const prewarmedUrls = new Set<string>();
+const prefetchedLeadBytes = new Set<string>();
 const prewarmElements: HTMLVideoElement[] = [];
 /** Hidden prewarm videos also consume iOS decoders — keep tiny. */
 const MAX_PREWARM_ELEMENTS = 3;
+
+/** Warm first ~512KB (moov + initial mdat) for faster first frame on +faststart MP4. */
+export function prefetchVideoLeadingBytes(url: string): void {
+  if (!url || typeof window === "undefined" || prefetchedLeadBytes.has(url)) return;
+  prefetchedLeadBytes.add(url);
+  void fetch(url, {
+    method: "GET",
+    mode: "cors",
+    cache: "force-cache",
+    headers: { Range: "bytes=0-524287" },
+  }).catch(() => {
+    prefetchedLeadBytes.delete(url);
+  });
+}
 
 function disposePrewarmVideo(video: HTMLVideoElement): void {
   video.pause();
@@ -565,10 +656,14 @@ export function prewarmPostVideo(
   if (poster) prefetchImageUrl(poster);
 }
 
-/** Prewarm reels playback URL + poster for the next slides. */
+/** Prewarm reels — quality-first URL + leading bytes for instant swipe. */
 export function prewarmReelsPost(post: UserPostDoc, tier: NetworkTier): void {
-  const { src, poster } = getReelsImmediatePlayback(post, tier);
-  if (src) prewarmVideoUrl(src);
+  const src = getReelsPrewarmUrl(post, tier);
+  const poster = getPostVideoPoster(post);
+  if (src) {
+    prefetchVideoLeadingBytes(src);
+    prewarmVideoUrl(src);
+  }
   if (poster) prefetchImageUrl(poster);
 }
 

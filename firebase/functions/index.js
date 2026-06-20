@@ -44,6 +44,9 @@ function getOriginalVideoUrl(data) {
 }
 
 function hasServerTranscodedLow(data, postId) {
+  const high = data.postVideoURL_high || "";
+  if (high && high.includes(`/videos/${postId}/`)) return true;
+
   const preview = data.postVideoURL_preview || "";
   const low = data.postVideoURL_low || "";
   const original = getOriginalVideoUrl(data);
@@ -196,6 +199,7 @@ async function transcodeVideoForPost(postId, data, docRef) {
   const tmpInput = path.join(os.tmpdir(), `${postId}_orig`);
   const tmpPreview = path.join(os.tmpdir(), `${postId}_preview.mp4`);
   const tmpLow = path.join(os.tmpdir(), `${postId}_low.mp4`);
+  const tmpHigh = path.join(os.tmpdir(), `${postId}_high.mp4`);
 
   await docRef.update({
     videoTranscodeStatus: "processing",
@@ -218,12 +222,15 @@ async function transcodeVideoForPost(postId, data, docRef) {
         VIDEO_ENCODE_PROFILE.serverPreview,
       ),
       runFfmpegEncode(tmpInput, tmpLow, VIDEO_ENCODE_PROFILE.serverLow),
+      runFfmpegEncode(tmpInput, tmpHigh, VIDEO_ENCODE_PROFILE.serverHigh),
     ]);
 
     const paths = standardEncodePaths(userId, postId);
     const previewToken =
       Math.random().toString(36).substring(2) + Date.now().toString(36);
     const lowToken =
+      Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const highToken =
       Math.random().toString(36).substring(2) + Date.now().toString(36);
 
     const uploadMeta = (token) => ({
@@ -241,6 +248,10 @@ async function transcodeVideoForPost(postId, data, docRef) {
         destination: paths.low,
         metadata: uploadMeta(lowToken),
       }),
+      bucket.upload(tmpHigh, {
+        destination: paths.high,
+        metadata: uploadMeta(highToken),
+      }),
     ]);
 
     const previewUrl = buildFirebaseDownloadUrl(
@@ -249,11 +260,13 @@ async function transcodeVideoForPost(postId, data, docRef) {
       previewToken,
     );
     const lowUrl = buildFirebaseDownloadUrl(bucket.name, paths.low, lowToken);
+    const highUrl = buildFirebaseDownloadUrl(bucket.name, paths.high, highToken);
 
     await docRef.update({
       postVideoURL_preview: previewUrl,
       postVideoURL_low: lowUrl,
-      postVideoURL: previewUrl,
+      postVideoURL_high: highUrl,
+      postVideoURL: lowUrl,
       videoTranscodeStatus: "done",
       videoTranscodeError: admin.firestore.FieldValue.delete(),
       videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -275,7 +288,7 @@ async function transcodeVideoForPost(postId, data, docRef) {
     });
     return { ok: false, reason: "failed", error: message };
   } finally {
-    for (const f of [tmpInput, tmpPreview, tmpLow]) {
+    for (const f of [tmpInput, tmpPreview, tmpLow, tmpHigh]) {
       if (fs.existsSync(f)) fs.unlinkSync(f);
     }
   }

@@ -47,6 +47,8 @@ export interface UserPostDoc {
   postVideoURL_low?: string;
   /** Standardized fast-playback tier (client or server preview.mp4) */
   postVideoURL_preview?: string;
+  /** Server-encoded 1080p tier (users/{uid}/videos/{postId}/high.mp4) */
+  postVideoURL_high?: string;
   postVideothumbnail?: string;
   /** Cloud Function transcode queue state for low.mp4 generation */
   videoTranscodeStatus?: "pending" | "processing" | "done" | "failed" | "skipped";

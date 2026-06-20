@@ -1,8 +1,8 @@
 /**
- * Unified video encode profile — all uploads target the same H.264 MP4 ladder.
+ * Unified video encode profile — H.264 MP4 ladder (Instagram-style tiers).
  *
  * Client: instant preview.mp4 (MediaRecorder) beside original on upload.
- * Server: FFmpeg preview.mp4 + low.mp4 under users/{uid}/videos/{postId}/.
+ * Server: preview (540p) + feed (720p) + high (1080p) under users/{uid}/videos/{postId}/.
  */
 
 export type VideoEncodeStatus =
@@ -16,34 +16,49 @@ export type VideoEncodeStatus =
 export const STORAGE_MEDIA_CACHE_CONTROL =
   "public, max-age=31536000, immutable";
 
-/** Standard output container — H.264 baseline MP4 with faststart. */
+/** Standard output container — H.264 MP4 with faststart (+faststart on every tier). */
 export const VIDEO_ENCODE_PROFILE = {
   container: "mp4",
   videoCodec: "h264",
-  profile: "baseline",
-  level: "3.0",
-  /** Client MediaRecorder — smallest, fastest publish */
+  /** Default when tier omits profile/level */
+  profile: "main",
+  level: "4.0",
+  /** Client MediaRecorder — fast publish while server encodes */
   clientPreview: {
-    videoBitsPerSecond: 900_000,
+    videoBitsPerSecond: 1_200_000,
     audioBitsPerSecond: 64_000,
     playbackRate: 2,
     maxDurationSec: 180,
   },
-  /** Server FFmpeg — instant playback tier (fast start, still readable) */
+  /** Server — fast start tier (540p, moov at front) */
   serverPreview: {
-    maxWidth: 854,
-    maxHeight: 480,
-    crf: "28",
+    maxWidth: 960,
+    maxHeight: 540,
+    crf: "25",
     preset: "veryfast",
-    audioBitrate: "64k",
+    audioBitrate: "96k",
+    profile: "main",
+    level: "3.1",
   },
-  /** Server FFmpeg — feed/reels quality tier */
+  /** Server — primary reels/feed quality (720p) */
   serverLow: {
     maxWidth: 1280,
     maxHeight: 720,
-    crf: "26",
+    crf: "23",
     preset: "fast",
-    audioBitrate: "96k",
+    audioBitrate: "128k",
+    profile: "main",
+    level: "3.1",
+  },
+  /** Server — high quality (1080p, Wi‑Fi / user preference) */
+  serverHigh: {
+    maxWidth: 1920,
+    maxHeight: 1080,
+    crf: "22",
+    preset: "fast",
+    audioBitrate: "128k",
+    profile: "main",
+    level: "4.1",
   },
 } as const;
 
@@ -53,6 +68,7 @@ export function standardEncodePaths(userId: string, postId: string) {
     base,
     preview: `${base}/preview.mp4`,
     low: `${base}/low.mp4`,
+    high: `${base}/high.mp4`,
     thumb: `${base}/thumb.jpg`,
   };
 }
@@ -97,6 +113,7 @@ export function isEncodedPlaybackUrl(url: string, postId?: string): boolean {
   if (!url) return false;
   if (url.includes("/preview.mp4")) return true;
   if (url.includes("/low.mp4")) return true;
+  if (url.includes("/high.mp4")) return true;
   if (postId && url.includes(`/videos/${postId}/`)) return true;
   return false;
 }
