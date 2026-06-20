@@ -6,9 +6,9 @@ import {
   SEO_DEFAULT_DESCRIPTION,
   SEO_DEFAULT_KEYWORDS,
 } from "@/lib/brand";
+import { canonicalSiteUrl, getCanonicalSiteUrl } from "@/lib/seo/site-url";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.bosphorusvibe.com";
+const SITE_URL = getCanonicalSiteUrl();
 
 /** Static fallback; root `opengraph-image.tsx` serves 1200×630 at /opengraph-image */
 export const DEFAULT_OG_IMAGE = "/opengraph-image";
@@ -27,9 +27,7 @@ type PageMetaInput = {
 };
 
 export function siteUrl(path = ""): string {
-  const base = SITE_URL.replace(/\/$/, "");
-  if (!path || path === "/") return base;
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  return canonicalSiteUrl(path);
 }
 
 export function truncateDescription(text: string, max = 160): string {
@@ -111,7 +109,7 @@ export function buildPageMetadata(input: PageMetaInput): Metadata {
 
 export function buildRootMetadata(): Metadata {
   return {
-    metadataBase: new URL(SITE_URL.replace(/\/$/, "")),
+    metadataBase: new URL(getCanonicalSiteUrl()),
     title: {
       default: `${BRAND_NAME} | ${HOTEL_NAME} — Etkinlikler & Eğlence`,
       template: `%s | ${BRAND_NAME}`,
