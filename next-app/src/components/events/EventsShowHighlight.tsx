@@ -23,8 +23,10 @@ export function EventsShowHighlight({ event }: EventsShowHighlightProps) {
   return (
     <Link
       href={`/events/${event.id}?from=/events`}
-      className="relative block min-h-[240px] overflow-hidden rounded-2xl border border-gold/30 bg-surface-card transition hover:border-gold/50 active:scale-[0.99] sm:min-h-[280px]"
+      className="relative block overflow-hidden rounded-3xl border border-gold/20 bg-surface-card transition active:scale-[0.99]"
+      style={{ minHeight: 340 }}
     >
+      {/* Full image */}
       {event.eventImage ? (
         <div className="absolute inset-0">
           <OptimizedImage
@@ -32,45 +34,61 @@ export function EventsShowHighlight({ event }: EventsShowHighlightProps) {
             alt={event.eventName}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 672px, 896px"
-            className="object-cover"
+            className="object-cover object-center"
             priority
           />
         </div>
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-gold/25 to-vibe/15" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />
 
+      {/* Gradient — lighter at top, heavier at bottom */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+
+      {/* Countdown — top right, clearly visible */}
       {occurrence && (
-        <div className="absolute right-3 top-3 z-10 sm:right-4 sm:top-4">
+        <div className="absolute right-4 top-4 z-10">
           <EventPosterCountdown target={occurrence} />
         </div>
       )}
 
-      <div className="relative p-4 pt-28 sm:p-5 sm:pt-32">
-        <span className="inline-block rounded-full gold-gradient px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black">
+      {/* Badge — top left */}
+      <div className="absolute left-4 top-4 z-10">
+        <span className="inline-flex items-center gap-1.5 rounded-full gold-gradient px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black shadow-lg">
           {t("showOfTheDay")}
         </span>
-        <h2 className="mt-2 font-display text-xl font-bold leading-tight sm:text-2xl">
+      </div>
+
+      {/* Content — bottom */}
+      <div className="absolute bottom-0 left-0 right-0 p-5">
+        <h2 className="font-display text-2xl font-black leading-tight tracking-tight text-white drop-shadow-lg sm:text-3xl">
           {event.eventName}
         </h2>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75">
-          <span className="inline-flex items-center gap-1.5">
-            <IconClock size={14} className="text-gold" />
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/90">
+            <IconClock size={15} className="text-gold" />
             {formatEventListDate(event.eventDate, locale)} · {event.eventTimeLabel}
           </span>
           {event.eventLocation && (
-            <span className="inline-flex items-center gap-1.5">
-              <IconLocation size={14} className="text-gold" />
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/90">
+              <IconLocation size={15} className="text-gold" />
               {event.eventLocation}
             </span>
           )}
         </div>
+
         {event.eventDescription && (
-          <p className="mt-2 line-clamp-2 text-sm text-white/55">
+          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-white/65">
             {event.eventDescription}
           </p>
         )}
+
+        {/* CTA hint */}
+        <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gold/80">
+          <span>Detayları Gör</span>
+          <span>→</span>
+        </div>
       </div>
     </Link>
   );
