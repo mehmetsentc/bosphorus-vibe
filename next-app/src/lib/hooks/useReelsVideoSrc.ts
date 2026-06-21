@@ -4,14 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsOptional } from "@/components/settings/SettingsProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { VIDEO_STALL_DOWNGRADE_REELS_MS } from "@/lib/performance/app-state";
+import { filterExistingVideoUrls, getVideoUrlProbeResult } from "@/lib/utils/video-url-probe";
 import {
   getReelsImmediatePlayback,
+  hasDownloadToken,
   hasPostVideo,
+  orderUrlsTokenizedFirst,
 } from "@/lib/utils/video-sources";
 import type { UserPostDoc } from "@/types";
 
 /**
- * Reels: instant playback from Firestore URLs with stall downgrade on buffer.
+ * Reels: probe Firebase URLs before playback so 404/403 guesses never block on spinner.
  */
 export function useReelsVideoSrc(
   post: UserPostDoc,
@@ -29,27 +32,63 @@ export function useReelsVideoSrc(
     return getReelsImmediatePlayback(post, tier, { preferHighQuality });
   }, [post, tier, preferHighQuality]);
 
-  const urls = useMemo(() => {
+  const candidateUrls = useMemo(() => {
     const all = [playback.src, ...playback.fallbacks].filter(Boolean);
-    return [...new Set(all)];
+    return orderUrlsTokenizedFirst([...new Set(all)]);
   }, [playback]);
+
+  const [playableUrls, setPlayableUrls] = useState<string[]>([]);
+  const [probing, setProbing] = useState(false);
+  const probeGenRef = useRef(0);
+
+  useEffect(() => {
+    if (!shouldLoad || !candidateUrls.length) {
+      setPlayableUrls([]);
+      setProbing(false);
+      return;
+    }
+
+    const gen = ++probeGenRef.current;
+    const tokenized = candidateUrls.filter(hasDownloadToken);
+    const optimistic = tokenized.length ? tokenized : candidateUrls;
+
+    const cachedOk = optimistic.filter((u) => getVideoUrlProbeResult(u) === true);
+    if (cachedOk.length) {
+      setPlayableUrls(cachedOk);
+      setProbing(false);
+      return;
+    }
+
+    setPlayableUrls(optimistic);
+    setProbing(true);
+
+    void filterExistingVideoUrls(candidateUrls).then((existing) => {
+      if (probeGenRef.current !== gen) return;
+      setPlayableUrls(existing.length ? existing : optimistic);
+      setProbing(false);
+    });
+
+    return () => {
+      probeGenRef.current += 1;
+    };
+  }, [shouldLoad, candidateUrls, post.id]);
 
   const [srcIndex, setSrcIndex] = useState(0);
   const srcIndexRef = useRef(0);
-  const urlsRef = useRef(urls);
-  urlsRef.current = urls;
+  const urlsRef = useRef(playableUrls);
+  urlsRef.current = playableUrls;
 
   useEffect(() => {
     srcIndexRef.current = 0;
     setSrcIndex(0);
-  }, [post.id, playback.src, tier, preferHighQuality]);
+  }, [post.id, playableUrls.join("|")]);
 
   useEffect(() => {
     srcIndexRef.current = srcIndex;
   }, [srcIndex]);
 
-  const playbackSrc = shouldLoad ? (urls[srcIndex] ?? urls[0] ?? "") : "";
-  const resolving = shouldLoad && !playbackSrc && hasPostVideo(post);
+  const playbackSrc = shouldLoad ? (playableUrls[srcIndex] ?? playableUrls[0] ?? "") : "";
+  const resolving = shouldLoad && probing && !playbackSrc && hasPostVideo(post);
 
   const downgrade = useCallback((): boolean => {
     const next = srcIndexRef.current + 1;

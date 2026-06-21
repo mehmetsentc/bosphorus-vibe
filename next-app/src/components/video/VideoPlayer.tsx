@@ -201,6 +201,23 @@ export function VideoPlayer({
 
   useEffect(() => () => clearLoadingTimer(), [clearLoadingTimer]);
 
+  // Force fallback when active video never reaches first frame
+  useEffect(() => {
+    if (!isActive || !videoSrc) return;
+    const timeout = window.setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || hasPlayedRef.current) return;
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        const downgraded = handleAdaptiveError();
+        if (downgraded) {
+          setShowPoster(true);
+          setLoading(true);
+        }
+      }
+    }, 3000);
+    return () => window.clearTimeout(timeout);
+  }, [isActive, videoSrc, handleAdaptiveError]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !shouldLoad || isActive || !videoSrc) return;
@@ -347,7 +364,7 @@ export function VideoPlayer({
         )}
       </button>
 
-      {loading && isActive && videoSrc && (
+      {loading && isActive && videoSrc && !showPoster && (
         <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center bg-black/30">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-vibe border-t-transparent" />
         </div>

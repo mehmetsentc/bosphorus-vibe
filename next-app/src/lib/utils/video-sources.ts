@@ -99,6 +99,23 @@ function getRawPosterCandidates(post: UserPostDoc): string[] {
   );
 }
 
+/** Firebase download URLs include ?token= — required for private buckets. */
+export function hasDownloadToken(url: string): boolean {
+  if (!url) return false;
+  try {
+    return new URL(url).searchParams.has("token");
+  } catch {
+    return /[?&]token=/.test(url);
+  }
+}
+
+/** Tokenized Firestore URLs first; guessed paths last. */
+export function orderUrlsTokenizedFirst(urls: string[]): string[] {
+  const withToken = urls.filter(hasDownloadToken);
+  const without = urls.filter((u) => !hasDownloadToken(u));
+  return uniqueUrls(...withToken, ...without);
+}
+
 /** True when URL path looks like a video file. */
 export function isVideoMediaUrl(url: string): boolean {
   if (!url) return false;
@@ -374,14 +391,18 @@ export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
 
 /** Server FFmpeg finished — encoded tiers have +faststart (safe to play directly). */
 export function isServerTranscodeReady(post: UserPostDoc): boolean {
-  if (post.videoTranscodeStatus !== "done" || !post.id) return false;
+  if (!post.id) return false;
   const marker = `/videos/${post.id}/`;
   const urls = [
     post.postVideoURL_low,
     post.postVideoURL_high,
     post.postVideoURL_preview,
   ].filter(Boolean);
-  return urls.some((u) => u!.includes(marker));
+  const hasEncodedTiers = urls.some((u) => u!.includes(marker));
+  if (!hasEncodedTiers) return false;
+  if (post.videoTranscodeStatus === "done") return true;
+  // Legacy docs: tiers written before status field was mapped
+  return post.videoTranscodeStatus !== "failed" && post.videoTranscodeStatus !== "processing";
 }
 
 /** Firestore-backed URLs only — tokenized, no inference (instant playback). */
@@ -420,8 +441,7 @@ type ReelsPlaybackOptions = {
 };
 
 /**
- * Instant reels playback — encoded posts play 720p/1080p directly (+faststart).
- * Pre-encode posts use client preview until Cloud Function finishes.
+ * Instant reels playback — tokenized Firestore URLs first; preview before heavy tiers.
  */
 export function getReelsImmediatePlayback(
   post: UserPostDoc,
@@ -432,41 +452,34 @@ export function getReelsImmediatePlayback(
   const poster = getPostVideoPoster(post);
   const preferHigh = options?.preferHighQuality === true;
   const encoded = isServerTranscodeReady(post);
-  const ordered: string[] = [];
+  const trusted: string[] = [];
 
   if (encoded) {
     if (tier === "slow") {
-      if (preview) ordered.push(preview);
-      if (low) ordered.push(low);
-      if (high) ordered.push(high);
+      if (preview) trusted.push(preview);
+      if (low) trusted.push(low);
+      if (high) trusted.push(high);
     } else if (preferHigh) {
-      if (high) ordered.push(high);
-      if (low) ordered.push(low);
-      if (preview) ordered.push(preview);
+      if (high) trusted.push(high);
+      if (low) trusted.push(low);
+      if (preview) trusted.push(preview);
     } else {
-      // Balanced WiFi/cellular: 540p start, upgrade to 1080p via fallbacks
-      if (low) ordered.push(low);
-      if (high) ordered.push(high);
-      if (preview) ordered.push(preview);
+      // Preview is smallest — fastest first frame on mobile
+      if (preview) trusted.push(preview);
+      if (low) trusted.push(low);
+      if (high) trusted.push(high);
     }
   } else {
-    const primary = post.postVideoURL || post.postVideo || original;
-    if (preview) ordered.push(preview);
-    if (low && low !== primary) ordered.push(low);
-    if (primary && !ordered.includes(primary)) ordered.push(primary);
+    const playUrl = primary || original || post.postVideo || "";
+    if (playUrl) trusted.push(playUrl);
+    if (preview && preview !== playUrl) trusted.push(preview);
+    if (low && low !== playUrl && low !== preview) trusted.push(low);
   }
 
-  if (original && !ordered.includes(original)) ordered.push(original);
+  if (original && !trusted.includes(original)) trusted.push(original);
 
-  if (!ordered.length) {
-    ordered.push(...getReelsPlaybackLadder(post));
-  } else {
-    for (const url of getReelsPlaybackLadder(post)) {
-      if (!ordered.includes(url)) ordered.push(url);
-    }
-  }
-
-  const playable = uniqueUrls(...ordered).filter(Boolean);
+  const ladderExtra = getReelsPlaybackLadder(post).filter((u) => !trusted.includes(u));
+  const playable = orderUrlsTokenizedFirst(uniqueUrls(...trusted, ...ladderExtra));
   const src = pickPlayableSrc(playable) || playable[0] || "";
   const fallbacks = playable.filter((url) => url !== src);
   return { src, fallbacks, poster };
