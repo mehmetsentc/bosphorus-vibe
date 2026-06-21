@@ -143,13 +143,6 @@ export default function EventsPage() {
               </div>
             )}
 
-            {/* ── Date Strip ── */}
-            <EventsDateStrip
-              dates={dateStrip}
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-            />
-
             {/* ── Tab Switcher ── */}
             <div className="mt-6 flex gap-2">
               <button
@@ -175,6 +168,17 @@ export default function EventsPage() {
                 🎭 Tüm Etkinlikler
               </button>
             </div>
+
+            {/* ── Date Strip — only visible in "all" tab ── */}
+            {activeTab === "all" && (
+              <div className="mt-4">
+                <EventsDateStrip
+                  dates={dateStrip}
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                />
+              </div>
+            )}
 
             {/* ── Tab Content ── */}
             {activeTab === "timeline" ? (
