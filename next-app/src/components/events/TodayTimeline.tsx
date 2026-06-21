@@ -2,11 +2,10 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { IconClock, IconLocation } from "@/components/icons/Icons";
+import { IconLocation } from "@/components/icons/Icons";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import {
   parseEventTimeMinutes,
-  getEventOccurrenceOnDay,
   isSameCalendarDay,
   startOfDay,
 } from "@/lib/utils/event-dates";
@@ -51,7 +50,6 @@ function buildTodayTimeline(
     }
   }
 
-  // Sort by time
   entries.sort((a, b) => a.timeMinutes - b.timeMinutes);
   return entries;
 }
@@ -75,7 +73,6 @@ export function TodayTimeline({ dailyEvents, showTimeEvents, now = new Date() }:
     [dailyEvents, showTimeEvents, today],
   );
 
-  // Find index of the next event
   const nextIndex = useMemo(() => {
     return entries.findIndex((e) => e.timeMinutes > nowMinutes);
   }, [entries, nowMinutes]);
@@ -83,29 +80,45 @@ export function TodayTimeline({ dailyEvents, showTimeEvents, now = new Date() }:
   if (!entries.length) return null;
 
   return (
-    <div className="relative">
-      {/* Vertical line */}
-      <div className="absolute left-[52px] top-0 bottom-0 w-px bg-border" />
+    <>
+      <style>{`
+        @keyframes timelineDraw {
+          from { transform: scaleY(0); }
+          to   { transform: scaleY(1); }
+        }
+        .timeline-line-animated {
+          transform-origin: top center;
+          animation: timelineDraw 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+      `}</style>
 
-      <div className="space-y-1">
-        {entries.map((entry, i) => {
-          const isPast = entry.timeMinutes < nowMinutes;
-          const isNext = i === nextIndex;
-          const isOngoing =
-            nextIndex > 0 && i === nextIndex - 1 && entry.timeMinutes <= nowMinutes;
+      <div className="relative">
+        {/* Animated vertical line */}
+        <div
+          className="timeline-line-animated absolute bottom-0 top-0 w-px bg-gradient-to-b from-gold/60 via-border to-border/20"
+          style={{ left: 60 }}
+        />
 
-          return (
-            <TimelineRow
-              key={`${entry.event.id}-${i}`}
-              entry={entry}
-              isPast={isPast}
-              isNext={isNext}
-              isOngoing={isOngoing}
-            />
-          );
-        })}
+        <div className="space-y-2">
+          {entries.map((entry, i) => {
+            const isPast = entry.timeMinutes < nowMinutes;
+            const isNext = i === nextIndex;
+            const isOngoing =
+              nextIndex > 0 && i === nextIndex - 1 && entry.timeMinutes <= nowMinutes;
+
+            return (
+              <TimelineRow
+                key={`${entry.event.id}-${i}`}
+                entry={entry}
+                isPast={isPast}
+                isNext={isNext}
+                isOngoing={isOngoing}
+              />
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -123,14 +136,14 @@ function TimelineRow({
   return (
     <Link
       href={`/events/${entry.event.id}?from=/events`}
-      className={`relative flex items-start gap-0 transition active:scale-[0.99] ${
+      className={`relative flex items-start transition active:scale-[0.99] ${
         isPast && !isOngoing ? "opacity-40" : ""
       }`}
     >
       {/* Time column */}
-      <div className="w-[52px] shrink-0 pt-3 text-right pr-4">
+      <div className="w-[60px] shrink-0 pt-4 pr-4 text-right">
         <span
-          className={`text-[11px] font-bold tabular-nums leading-none ${
+          className={`text-[12px] font-bold tabular-nums leading-none ${
             isNext ? "text-gold" : isPast ? "text-muted" : "text-foreground/70"
           }`}
         >
@@ -139,41 +152,41 @@ function TimelineRow({
       </div>
 
       {/* Dot on the line */}
-      <div className="relative shrink-0 flex flex-col items-center" style={{ width: 1 }}>
+      <div className="relative shrink-0" style={{ width: 1 }}>
         <div
-          className={`absolute top-[14px] -translate-x-1/2 rounded-full border-2 transition-all ${
+          className={`absolute -translate-x-1/2 rounded-full border-2 transition-all ${
             isNext
-              ? "h-3.5 w-3.5 border-gold bg-gold shadow-gold"
+              ? "top-[13px] h-4 w-4 border-gold bg-gold shadow-[0_0_8px_2px_rgba(234,179,8,0.4)]"
               : isOngoing
-                ? "h-3 w-3 border-vibe bg-vibe"
+                ? "top-[14px] h-3.5 w-3.5 border-vibe bg-vibe"
                 : isPast
-                  ? "h-2 w-2 border-border bg-surface-card"
-                  : "h-2.5 w-2.5 border-border bg-surface-overlay"
+                  ? "top-[15px] h-2.5 w-2.5 border-border bg-surface-card"
+                  : "top-[15px] h-3 w-3 border-border/80 bg-surface-overlay"
           }`}
         />
       </div>
 
       {/* Card */}
       <div
-        className={`ml-4 mb-2 flex-1 rounded-2xl border p-3 transition ${
+        className={`ml-5 mb-2.5 flex-1 rounded-2xl border p-3.5 transition ${
           isNext
-            ? "border-gold/40 bg-gold/5 shadow-sm shadow-gold/10"
+            ? "border-gold/50 bg-gold/5 shadow-md shadow-gold/10"
             : isOngoing
               ? "border-vibe/30 bg-vibe/5"
               : isPast
-                ? "border-border/50 bg-surface-card/60"
-                : "border-border bg-surface-card hover:border-gold/20"
+                ? "border-border/40 bg-surface-card/60"
+                : "border-border bg-surface-card hover:border-gold/25"
         }`}
       >
-        <div className="flex items-start gap-3">
-          {/* Thumbnail */}
+        <div className="flex items-center gap-3.5">
+          {/* Thumbnail — bigger */}
           {entry.event.eventImage && (
-            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+            <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl">
               <OptimizedImage
                 src={entry.event.eventImage}
                 alt={entry.event.eventName}
                 fill
-                sizes="56px"
+                sizes="72px"
                 className="object-cover"
               />
             </div>
@@ -182,7 +195,7 @@ function TimelineRow({
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <h3
-                className={`text-sm font-bold leading-snug ${
+                className={`text-[15px] font-bold leading-snug ${
                   isPast && !isOngoing ? "text-muted" : "text-foreground"
                 }`}
               >
@@ -191,32 +204,39 @@ function TimelineRow({
 
               {/* Status badge */}
               {isNext && (
-                <span className="shrink-0 rounded-full gold-gradient px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-black">
+                <span className="shrink-0 rounded-full gold-gradient px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-black">
                   Sıradaki
                 </span>
               )}
               {isOngoing && (
-                <span className="shrink-0 rounded-full bg-vibe px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
+                <span className="shrink-0 rounded-full bg-vibe px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">
                   Devam ediyor
                 </span>
               )}
-              {entry.category === "sports" && !isNext && !isOngoing && (
-                <span className="shrink-0 rounded-full bg-surface-overlay px-2 py-0.5 text-[9px] font-semibold uppercase text-muted">
-                  Spor
-                </span>
-              )}
-              {entry.category === "show" && !isNext && !isOngoing && (
-                <span className="shrink-0 rounded-full bg-surface-overlay px-2 py-0.5 text-[9px] font-semibold uppercase text-muted">
-                  Show
+              {!isNext && !isOngoing && (
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase ${
+                    entry.category === "sports"
+                      ? "bg-vibe/10 text-vibe"
+                      : "bg-gold/10 text-gold"
+                  }`}
+                >
+                  {entry.category === "sports" ? "Spor" : "Show"}
                 </span>
               )}
             </div>
 
             {entry.event.eventLocation && (
-              <div className="mt-1 flex items-center gap-1 text-[11px] text-muted">
-                <IconLocation size={11} className="text-gold/70" />
+              <div className="mt-1.5 flex items-center gap-1 text-[12px] text-muted">
+                <IconLocation size={12} className="shrink-0 text-gold/70" />
                 <span className="truncate">{entry.event.eventLocation}</span>
               </div>
+            )}
+
+            {entry.event.eventDescription && (
+              <p className="mt-1 line-clamp-1 text-[11px] text-muted/60">
+                {entry.event.eventDescription}
+              </p>
             )}
           </div>
         </div>
