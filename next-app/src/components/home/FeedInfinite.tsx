@@ -36,6 +36,12 @@ import { isCacheExpired } from "@/lib/cache/constants";
 import { useFeedPosts } from "@/lib/hooks/usePosts";
 import { useInfiniteScrollPosts, type InfiniteScrollItem } from "@/lib/hooks/useInfiniteScrollPosts";
 import { FEED_SUGGESTIONS_DEFER_MS } from "@/lib/performance/app-state";
+import {
+  getPostFeedImageCandidates,
+  getPostFeedThumbnailCandidates,
+  prefetchImageUrl,
+} from "@/lib/utils/video-sources";
+import { getPostVideoUrl } from "@/lib/services/firestore";
 import { useAppStore } from "@/store/appStore";
 import type { PublicUser } from "@/lib/services/friends";
 import type { EnrichedPost } from "@/store/appStore";
@@ -107,6 +113,7 @@ export function FeedInfinite() {
     posts,
     hasMore,
     filterPosts,
+    { showAllLoaded: true },
   );
   const displayPosts = useMemo(() => items.map((i) => i.post), [items]);
   const [following, setFollowing] = useState<Set<string>>(new Set());
@@ -244,6 +251,19 @@ export function FeedInfinite() {
     () => buildFeedRows(items, availability),
     [items, availability],
   );
+
+  // Prefetch posters for upcoming feed cards before they scroll into view
+  useEffect(() => {
+    const upcoming = displayPostsFiltered.slice(0, 12);
+    for (const post of upcoming) {
+      const urls = getPostVideoUrl(post)
+        ? getPostFeedThumbnailCandidates(post)
+        : getPostFeedImageCandidates(post);
+      for (const url of urls.slice(0, 2)) {
+        prefetchImageUrl(url);
+      }
+    }
+  }, [displayPostsFiltered]);
 
   if (loading) {
     return (

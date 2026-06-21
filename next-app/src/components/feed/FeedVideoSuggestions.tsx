@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { getPostVideoUrl } from "@/lib/services/firestore";
 import { getVideoReelsPath } from "@/lib/utils/video-sources";
-import { AdaptiveVideo } from "@/components/video/AdaptiveVideo";
+import { FeedVideoPoster } from "@/components/post/FeedVideoPoster";
 import { useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
 
@@ -36,9 +36,9 @@ export function FeedVideoSuggestions({ posts }: FeedVideoSuggestionsProps) {
                 href={getVideoReelsPath(post.id)}
                 className="group shrink-0"
               >
-                <div className="relative h-[200px] w-[120px] overflow-hidden rounded-xl bg-black ring-1 ring-border transition group-active:scale-[0.98] sm:h-[220px] sm:w-[130px]">
-                  <AdaptiveVideo post={post} loop />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                <div className="relative h-[200px] w-[120px] overflow-hidden rounded-xl bg-surface-overlay ring-1 ring-border transition group-active:scale-[0.98] sm:h-[220px] sm:w-[130px]">
+                  <FeedVideoPoster post={post} />
+                  <div className="absolute inset-x-0 bottom-0 z-[3] bg-gradient-to-t from-black/80 to-transparent p-2">
                     <p className="truncate text-[11px] font-semibold text-white">
                       @{post.userName ?? "user"}
                     </p>

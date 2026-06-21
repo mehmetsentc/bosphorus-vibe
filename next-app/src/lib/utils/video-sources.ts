@@ -99,14 +99,27 @@ function getRawPosterCandidates(post: UserPostDoc): string[] {
   );
 }
 
+/** True when URL path looks like a video file. */
+export function isVideoMediaUrl(url: string): boolean {
+  if (!url) return false;
+  const ext = videoUrlExtension(url);
+  if (!ext) return false;
+  return VIDEO_URL_EXTENSIONS.has(ext);
+}
+
+/** Ordered poster/thumbnail candidates for feed (allows Firebase URLs without extension). */
+export function getPostFeedThumbnailCandidates(post: UserPostDoc): string[] {
+  return getRawPosterCandidates(post).filter((url) => !isVideoMediaUrl(url));
+}
+
 /** Ordered poster candidates for profile grid / thumbnails. */
 export function getPostGridThumbnailCandidates(post: UserPostDoc): string[] {
-  return getRawPosterCandidates(post).filter(isImageMediaUrl);
+  return getPostFeedThumbnailCandidates(post).filter(isImageMediaUrl);
 }
 
 /** Best poster/cover image for a video post (grid, feed, reels). */
 export function getPostVideoPoster(post: UserPostDoc): string | undefined {
-  return getPostGridThumbnailCandidates(post)[0];
+  return getPostFeedThumbnailCandidates(post)[0] ?? getRawPosterCandidates(post).find((u) => !isVideoMediaUrl(u));
 }
 
 export function getPostVideoVariants(post: UserPostDoc): {
@@ -689,19 +702,27 @@ export function pickImageSource(
   post: UserPostDoc,
   context: "feed" | "grid" | "detail" = "feed",
 ): string {
-  const low =
-    post.postPhotoURL_low ||
-    post.postPhotoURL ||
-    post.postPhoto ||
-    "";
-  const original =
-    post.postPhotoURL_original ||
-    post.postPhoto ||
-    post.postPhotoURL ||
-    "";
+  const candidates = uniqueUrls(
+    post.postPhotoURL_low,
+    post.postPhotoURL,
+    post.postPhoto,
+    post.postPhotoURL_original,
+  );
 
-  if (context === "detail") return original || low;
-  return low || original;
+  if (context === "detail") {
+    return candidates.find((u) => u.includes("_original") || u === post.postPhotoURL_original) || candidates[0] || "";
+  }
+  return candidates[0] || "";
+}
+
+/** Fallback chain for feed photo posts. */
+export function getPostFeedImageCandidates(post: UserPostDoc): string[] {
+  return uniqueUrls(
+    post.postPhotoURL_low,
+    post.postPhotoURL,
+    post.postPhoto,
+    post.postPhotoURL_original,
+  );
 }
 
 export function hasPostVideo(post: UserPostDoc): boolean {

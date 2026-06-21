@@ -19,7 +19,14 @@ import {
   followUser,
   unfollowUser,
 } from "@/lib/services/friends";
-import { getPostVideoPoster, getPostGridThumbnailCandidates, pickImageSource, getVideoReelsPath, prewarmReelsPost, prefetchImageUrl } from "@/lib/utils/video-sources";
+import {
+  getPostFeedImageCandidates,
+  getPostFeedThumbnailCandidates,
+  getVideoReelsPath,
+  pickImageSource,
+  prewarmReelsPost,
+  prefetchImageUrl,
+} from "@/lib/utils/video-sources";
 import { formatTimeAgo } from "@/lib/utils/time";
 import {
   IconPlay,
@@ -27,8 +34,9 @@ import {
   IconVolumeOn,
 } from "@/components/icons/Icons";
 import { PostActionsBar } from "@/components/post/PostActionsBar";
+import { FeedMediaImage } from "@/components/post/FeedMediaImage";
+import { FeedVideoPoster } from "@/components/post/FeedVideoPoster";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
-import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
@@ -41,8 +49,6 @@ const PostCommentModal = dynamic(
 );
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
-
-const FEED_MEDIA_SIZES = "(max-width: 768px) 100vw, 470px";
 
 type FeedPostCardProps = {
   post: EnrichedPost;
@@ -78,59 +84,58 @@ function FeedPostCardInner({
   const playingId = useVideoPlayStore((s) => s.playingId);
   const [muteFlash, setMuteFlash] = useState<boolean | null>(null);
   const [showPoster, setShowPoster] = useState(true);
-  const [thumbIndex, setThumbIndex] = useState(0);
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(post.numComments);
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
   const [followBusy, setFollowBusy] = useState(false);
   const hideLikeCounts = useHideLikeCounts();
   const { ref, isActive, isNear } = useIntersectionActive<HTMLElement>({
-    threshold: 0.55,
-    rootMargin: "120px 0px",
+    threshold: 0.45,
+    rootMargin: "500px 0px",
   });
 
   const video = getPostVideoUrl(post);
+  const imageCandidates = useMemo(
+    () => getPostFeedImageCandidates(post),
+    [post],
+  );
   const image = video ? "" : pickImageSource(post, "feed");
   const caption = getPostCaption(post);
 
   useEffect(() => {
-    if (priority || isNear) setMountVideo(true);
-  }, [priority, isNear]);
+    if (priority || isNear || isActive) setMountVideo(true);
+  }, [priority, isNear, isActive]);
 
   const {
     src: videoSrc,
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed", isActive && mountVideo);
-  const videoResolving = mountVideo && isActive && !videoSrc;
+  } = useAdaptiveVideoSrc(post, "feed", Boolean(mountVideo && (isActive || isNear)));
   const thumbCandidates = useMemo(
-    () => getPostGridThumbnailCandidates(post),
+    () => getPostFeedThumbnailCandidates(post),
     [post],
   );
-  const thumbSrc =
-    thumbCandidates[thumbIndex] ||
-    getPostVideoPoster(post) ||
-    post.postVideothumbnail ||
-    undefined;
-  const videoPreload = isActive ? "auto" : "none";
+  const videoPreload = isActive ? "auto" : isNear ? "metadata" : "none";
 
   useEffect(() => {
     setShowPoster(true);
-    setThumbIndex(0);
   }, [videoSrc, post.id]);
 
   // Prefetch poster early so feed never flashes black
   useEffect(() => {
     if (!video) return;
-    for (const url of thumbCandidates.slice(0, 5)) {
+    for (const url of thumbCandidates.slice(0, 6)) {
       prefetchImageUrl(url);
     }
   }, [video, thumbCandidates, post.id]);
 
   useEffect(() => {
-    if (isActive || priority) setMountVideo(true);
-  }, [isActive, priority]);
+    if (!video) return;
+    for (const url of imageCandidates.slice(0, 3)) {
+      prefetchImageUrl(url);
+    }
+  }, [video, imageCandidates, post.id]);
 
   useEffect(() => {
     setIsMuted(feedMuted);
@@ -302,37 +307,24 @@ function FeedPostCardInner({
       {/* Media */}
       {video ? (
         <div className="relative w-full bg-black">
-          <div className="relative aspect-square w-full overflow-hidden bg-black">
-            {/* Thumbnail — stays on top until video actually plays */}
-            {(showPoster || videoResolving) && thumbSrc && (
-              <div
-                className={`absolute inset-0 z-[4] transition-opacity duration-200 ${
-                  showPoster || videoResolving ? "opacity-100" : "pointer-events-none opacity-0"
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={thumbSrc}
-                  alt=""
-                  decoding="async"
-                  loading={priority || isActive ? "eager" : "lazy"}
-                  fetchPriority={priority ? "high" : isActive ? "auto" : "low"}
-                  className="h-full w-full object-cover"
-                  onError={() => {
-                    if (thumbIndex + 1 < thumbCandidates.length) {
-                      setThumbIndex((i) => i + 1);
-                    }
-                  }}
-                />
-              </div>
-            )}
+          <div className="relative aspect-square w-full overflow-hidden bg-surface-overlay">
+            {/* Poster always visible until video plays */}
+            <div
+              className={`absolute inset-0 z-[4] transition-opacity duration-200 ${
+                showPoster ? "opacity-100" : "pointer-events-none opacity-0"
+              }`}
+            >
+              <FeedVideoPoster
+                post={post}
+                priority={priority || isActive}
+              />
+            </div>
 
             {mountVideo && videoSrc && (
             <video
               ref={videoRef}
-              key={videoSrc}
+              key={post.id}
               src={videoSrc}
-              poster={thumbSrc}
               loop
               playsInline
               muted={isMuted}
@@ -402,18 +394,13 @@ function FeedPostCardInner({
           </div>
         </div>
       ) : (
-        <Link href={`/post/${post.id}`} className="relative block w-full bg-black">
+        <Link href={`/post/${post.id}`} className="relative block w-full bg-surface-overlay">
           <div className="relative aspect-square w-full overflow-hidden">
-            {image && (
-              <OptimizedImage
-                src={image}
-                alt={caption}
-                fill
-                sizes={FEED_MEDIA_SIZES}
-                priority={priority}
-                className="object-cover"
-              />
-            )}
+            <FeedMediaImage
+              candidates={imageCandidates.length ? imageCandidates : image ? [image] : []}
+              alt={caption}
+              priority={priority}
+            />
           </div>
         </Link>
       )}
