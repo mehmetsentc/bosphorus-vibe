@@ -10,9 +10,11 @@ import {
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import type { EventDoc } from "@/types";
 
+const TR_DAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+
 type EventsPopularCardProps = {
   event: EventDoc;
-  category: "show" | "sports";
+  category: "show" | "sports" | "weekly";
   eventDate?: Date | null;
   canUpload?: boolean;
   onUpload?: () => void;
@@ -35,14 +37,20 @@ export function EventsPopularCard({
         : event.eventTimeLabel
           ? `${event.eventTimeLabel} · ${t("dailyRepeat")}`
           : t("dailyRepeat")
-      : `${formatEventListDate(event.eventDate, locale)} · ${event.eventTimeLabel}`;
+      : category === "weekly"
+        ? event.eventDays && event.eventDays.length > 0
+          ? `${event.eventDays.map((d) => TR_DAYS[d]).join(" & ")} · ${event.eventTimeLabel}`
+          : event.eventTimeLabel
+        : `${formatEventListDate(event.eventDate, locale)} · ${event.eventTimeLabel}`;
 
   const categoryLabel =
-    category === "sports" ? "Spor" : "Show";
+    category === "sports" ? "Spor" : category === "weekly" ? "Haftalık" : "Show";
   const categoryColor =
     category === "sports"
       ? "bg-vibe/10 text-vibe border-vibe/20"
-      : "bg-gold/10 text-gold border-gold/20";
+      : category === "weekly"
+        ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+        : "bg-gold/10 text-gold border-gold/20";
 
   return (
     <Link

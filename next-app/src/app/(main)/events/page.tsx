@@ -28,7 +28,7 @@ import type { EventDoc } from "@/types";
 
 type ListedEvent = {
   event: EventDoc;
-  category: EventsCategory;
+  category: EventsCategory | "weekly";
 };
 
 type ActiveTab = "timeline" | "all";
@@ -44,6 +44,7 @@ function pickShowHighlight(showTimeEvents: EventDoc[]): EventDoc | null {
 function buildProgramList(
   dailyEvents: EventDoc[],
   showTimeEvents: EventDoc[],
+  weeklyEvents: EventDoc[],
   category: EventsCategory | null,
   selectedDate: Date | null,
 ): ListedEvent[] {
@@ -70,6 +71,16 @@ function buildProgramList(
     for (const event of shows) {
       items.push({ event, category: "show" });
     }
+
+    // Weekly events — shown when a specific date filter matches the event's day-of-week
+    // or always shown when no date filter (all)
+    const selectedDow = selectedDate ? selectedDate.getDay() : null;
+    for (const event of weeklyEvents) {
+      const days = event.eventDays ?? [];
+      if (selectedDow === null || days.includes(selectedDow)) {
+        items.push({ event, category: "weekly" });
+      }
+    }
   }
 
   return items;
@@ -78,7 +89,7 @@ function buildProgramList(
 export default function EventsPage() {
   const { profile } = useAuth();
   const t = useT();
-  const { dailyEvents, showTimeEvents, loading, refreshing, refresh } = useEvents();
+  const { dailyEvents, showTimeEvents, weeklyEvents, loading, refreshing, refresh } = useEvents();
   const [activeTab, setActiveTab] = useState<ActiveTab>("timeline");
   const [category, setCategory] = useState<EventsCategory | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -93,8 +104,8 @@ export default function EventsPage() {
   );
 
   const listedEvents = useMemo(
-    () => buildProgramList(dailyEvents, showTimeEvents, category, selectedDate),
-    [dailyEvents, showTimeEvents, category, selectedDate],
+    () => buildProgramList(dailyEvents, showTimeEvents, weeklyEvents, category, selectedDate),
+    [dailyEvents, showTimeEvents, weeklyEvents, category, selectedDate],
   );
 
   const listHeading = useMemo(() => {
@@ -169,10 +180,11 @@ export default function EventsPage() {
             {activeTab === "timeline" ? (
               /* Timeline Tab */
               <section className="mt-6">
-                {showTimeline && (dailyEvents.length > 0 || showTimeEvents.length > 0) ? (
+                {showTimeline && (dailyEvents.length > 0 || showTimeEvents.length > 0 || weeklyEvents.length > 0) ? (
                   <TodayTimeline
                     dailyEvents={dailyEvents}
                     showTimeEvents={showTimeEvents}
+                    weeklyEvents={weeklyEvents}
                   />
                 ) : (
                   <p className="py-12 text-center text-sm text-muted">

@@ -33,6 +33,7 @@ export type ProfileCache = {
 export type EventsCache = {
   daily: EventDoc[];
   showTime: EventDoc[];
+  weekly: EventDoc[];
 };
 
 export type PostsCache = {

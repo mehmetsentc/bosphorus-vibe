@@ -21,9 +21,11 @@ type TimelineEntry = {
 function buildTodayTimeline(
   dailyEvents: EventDoc[],
   showTimeEvents: EventDoc[],
+  weeklyEvents: EventDoc[],
   today: Date,
 ): TimelineEntry[] {
   const isSun = today.getDay() === 0;
+  const todayDow = today.getDay(); // 0=Sun … 6=Sat
   const entries: TimelineEntry[] = [];
 
   // Sports (daily) — skip Sundays
@@ -50,6 +52,19 @@ function buildTodayTimeline(
     }
   }
 
+  // Weekly events — only on matching day of week
+  for (const event of weeklyEvents) {
+    const days = event.eventDays ?? [];
+    if (days.includes(todayDow)) {
+      entries.push({
+        event,
+        category: "show",
+        timeMinutes: parseEventTimeMinutes(event.eventTimeLabel),
+        timeLabel: event.eventTimeLabel,
+      });
+    }
+  }
+
   entries.sort((a, b) => a.timeMinutes - b.timeMinutes);
   return entries;
 }
@@ -61,16 +76,17 @@ function getNowMinutes(now: Date): number {
 type Props = {
   dailyEvents: EventDoc[];
   showTimeEvents: EventDoc[];
+  weeklyEvents: EventDoc[];
   now?: Date;
 };
 
-export function TodayTimeline({ dailyEvents, showTimeEvents, now = new Date() }: Props) {
+export function TodayTimeline({ dailyEvents, showTimeEvents, weeklyEvents, now = new Date() }: Props) {
   const today = startOfDay(now);
   const nowMinutes = getNowMinutes(now);
 
   const entries = useMemo(
-    () => buildTodayTimeline(dailyEvents, showTimeEvents, today),
-    [dailyEvents, showTimeEvents, today],
+    () => buildTodayTimeline(dailyEvents, showTimeEvents, weeklyEvents, today),
+    [dailyEvents, showTimeEvents, weeklyEvents, today],
   );
 
   const nextIndex = useMemo(() => {

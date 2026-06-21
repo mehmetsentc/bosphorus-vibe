@@ -33,9 +33,9 @@ export function useEvents() {
       else if (isInitial) setFetching(true);
 
       try {
-        const { daily, showTime } = await getEventsBySections();
+        const { daily, showTime, weekly } = await getEventsBySections();
         if (requestId !== fetchRef.current) return;
-        setEvents({ daily, showTime });
+        setEvents({ daily, showTime, weekly });
       } finally {
         if (requestId === fetchRef.current) {
           setFetching(false);
@@ -59,6 +59,7 @@ export function useEvents() {
   return {
     dailyEvents: events?.daily ?? ([] as EventDoc[]),
     showTimeEvents: events?.showTime ?? ([] as EventDoc[]),
+    weeklyEvents: events?.weekly ?? ([] as EventDoc[]),
     loading: hydrated && !hasValidCache && fetching,
     refreshing,
     hasCache: hasValidCache,

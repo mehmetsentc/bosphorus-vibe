@@ -33,7 +33,7 @@ import {
   isToday,
   isSunday,
 } from "@/lib/utils/firestore-helpers";
-import { sortEventsForSuggestions } from "@/lib/utils/event-dates";
+import { sortEventsForSuggestions, parseEventTimeMinutes } from "@/lib/utils/event-dates";
 import { buildPostTagFields, parseTaggedPeople } from "@/lib/utils/post-tags";
 import {
   COLLECTIONS,
@@ -55,6 +55,12 @@ function mapEvent(id: string, data: Record<string, unknown>): EventDoc {
         ? Number(rawSortId)
         : Number.NaN;
 
+  const rawDays = data.eventDays;
+  const eventDays =
+    Array.isArray(rawDays) && rawDays.every((d) => typeof d === "number")
+      ? (rawDays as number[])
+      : undefined;
+
   return {
     id,
     eventSortId: Number.isFinite(eventSortId) ? eventSortId : Number.MAX_SAFE_INTEGER,
@@ -67,6 +73,7 @@ function mapEvent(id: string, data: Record<string, unknown>): EventDoc {
     eventDescription: (data.aboutEvent as string) ?? "",
     isHighlight: false,
     view: (data.view as number) ?? 0,
+    ...(eventDays ? { eventDays } : {}),
   };
 }
 
@@ -264,10 +271,11 @@ function isUpcomingShow(event: EventDoc): boolean {
   return event.eventDate.getTime() >= startOfToday.getTime();
 }
 
-/** daily + SHOW TIME — daily by id, show time by date */
+/** daily + SHOW TIME + WEEKLY — daily by id, show time by date, weekly by time */
 export async function getEventsBySections(): Promise<{
   daily: EventDoc[];
   showTime: EventDoc[];
+  weekly: EventDoc[];
 }> {
   const all = await getAllEvents();
 
@@ -280,7 +288,11 @@ export async function getEventsBySections(): Promise<{
     .filter(isUpcomingShow)
     .sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
 
-  return { daily, showTime };
+  const weekly = all
+    .filter((e) => e.eventCategory.trim().toLowerCase() === "weekly")
+    .sort((a, b) => parseEventTimeMinutes(a.eventTimeLabel) - parseEventTimeMinutes(b.eventTimeLabel));
+
+  return { daily, showTime, weekly };
 }
 
 export async function getUpcomingEventSuggestions(
