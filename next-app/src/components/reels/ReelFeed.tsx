@@ -277,7 +277,14 @@ export function ReelFeed({
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Prewarm active + next reel — first open must warm index 0
+  // Kick load-more on mount when near end of short lists
+  useEffect(() => {
+    if (visiblePosts.length > 0 && visiblePosts.length < INFINITE_SCROLL_NEAR_END + 2) {
+      handleActiveRef.current(Math.min(activeIndexRef.current, visiblePosts.length - 1));
+    }
+  }, [visiblePosts.length]);
+
+  // Prewarm active + next reel
   useLayoutEffect(() => {
     const current = visiblePosts[activeIndex];
     const next = visiblePosts[activeIndex + 1];
@@ -329,7 +336,7 @@ export function ReelFeed({
           isActive={i === activeIndex}
           isNext={i === activeIndex + 1}
           isNear={false}
-          mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
+          mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS || i === 0}
           onBecameActive={makeActiveHandler(i)}
           onPostDeleted={() => handlePostDeleted(post.id)}
           onCommentClick={() => openComment(post.id)}

@@ -11,6 +11,7 @@ import { useStoreHydration } from "@/lib/hooks/useStoreHydration";
 import { dedupePostsById } from "@/lib/utils/dedupe-posts";
 import {
   postPageCursorFromPost,
+  resolvePostPageCursor,
   type PostPageCursor,
 } from "@/lib/utils/post-page-cursor";
 import {
@@ -141,7 +142,9 @@ export function useFeedPosts() {
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const cursor = cursorRef.current ?? fallbackCursorRef.current;
+      const cursor = await resolvePostPageCursor(
+        cursorRef.current ?? fallbackCursorRef.current,
+      );
       const page = await getFeedPostsPage(FEED_PAGE_SIZE, cursor);
       cursorRef.current = page.lastDoc;
       const enriched = await enrichPostsWithUsers(page.posts);
@@ -340,7 +343,9 @@ export function useReelsPosts() {
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const cursor = cursorRef.current ?? fallbackCursorRef.current;
+      const cursor = await resolvePostPageCursor(
+        cursorRef.current ?? fallbackCursorRef.current,
+      );
       const page = await getVideoPostsPage(REELS_PAGE_SIZE, cursor);
       const enriched = await enrichPostsWithUsers(page.posts);
       const existingIds = new Set(postsRef.current.map((p) => p.id));

@@ -40,6 +40,7 @@ export default function FeedPostViewPage({
     posts,
     hasMore,
     filterPosts,
+    { showAllLoaded: true },
   );
   const displayPosts = useMemo(() => items.map((i) => i.post), [items]);
   const scrollRef = useRef<HTMLDivElement>(null);

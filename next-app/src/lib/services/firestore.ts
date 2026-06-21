@@ -36,10 +36,6 @@ import {
 import { sortEventsForSuggestions } from "@/lib/utils/event-dates";
 import { buildPostTagFields, parseTaggedPeople } from "@/lib/utils/post-tags";
 import {
-  isSnapshotCursor,
-  type PostPageCursor,
-} from "@/lib/utils/post-page-cursor";
-import {
   COLLECTIONS,
   TEAM_ROLES,
   type EventDoc,
@@ -154,23 +150,21 @@ export type PostsPage = {
 /** Paginated feed — photo and video posts, cursor-based infinite scroll. */
 export async function getFeedPostsPage(
   pageSize = 10,
-  cursor?: PostPageCursor | null,
+  cursor?: QueryDocumentSnapshot<DocumentData> | null,
 ): Promise<PostsPage> {
   const batchSize = 20;
   let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
   const collected: UserPostDoc[] = [];
   let hasMore = true;
+  let pageCursor: QueryDocumentSnapshot<DocumentData> | null = cursor ?? null;
 
   while (collected.length < pageSize && hasMore) {
     const constraints: QueryConstraint[] = [
       orderBy("timePosted", "desc"),
-      orderBy(documentId(), "desc"),
       limit(batchSize),
     ];
-    if (cursor && isSnapshotCursor(cursor)) {
-      constraints.push(startAfter(cursor));
-    } else if (cursor && !isSnapshotCursor(cursor)) {
-      constraints.push(startAfter(cursor.timePosted, cursor.docId));
+    if (pageCursor) {
+      constraints.push(startAfter(pageCursor));
     }
 
     const snap = await getDocs(
@@ -190,7 +184,7 @@ export async function getFeedPostsPage(
     }
 
     hasMore = snap.docs.length === batchSize;
-    cursor = null;
+    pageCursor = null;
   }
 
   return {
@@ -352,23 +346,21 @@ export type VideoPostsPage = {
 /** Paginated video posts — loops through batches until enough video posts collected. */
 export async function getVideoPostsPage(
   pageSize = 12,
-  cursor?: PostPageCursor | null,
+  cursor?: QueryDocumentSnapshot<DocumentData> | null,
 ): Promise<VideoPostsPage> {
   const batchSize = 20;
   let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
   const collected: { post: UserPostDoc; doc: QueryDocumentSnapshot<DocumentData> }[] = [];
   let hasMore = true;
+  let pageCursor: QueryDocumentSnapshot<DocumentData> | null = cursor ?? null;
 
   while (collected.length < pageSize && hasMore) {
     const constraints: QueryConstraint[] = [
       orderBy("timePosted", "desc"),
-      orderBy(documentId(), "desc"),
       limit(batchSize),
     ];
-    if (cursor && isSnapshotCursor(cursor)) {
-      constraints.push(startAfter(cursor));
-    } else if (cursor && !isSnapshotCursor(cursor)) {
-      constraints.push(startAfter(cursor.timePosted, cursor.docId));
+    if (pageCursor) {
+      constraints.push(startAfter(pageCursor));
     }
 
     const snap = await getDocs(
@@ -390,7 +382,7 @@ export async function getVideoPostsPage(
     }
 
     hasMore = snap.docs.length === batchSize;
-    cursor = null;
+    pageCursor = null;
   }
 
   return {

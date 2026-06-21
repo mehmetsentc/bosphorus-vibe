@@ -431,15 +431,16 @@ export function getReelsImmediatePlayback(
       if (low) ordered.push(low);
       if (preview) ordered.push(preview);
     } else {
-      // Default: preview first for instant first-frame (IG/TikTok style)
-      if (preview) ordered.push(preview);
+      // Balanced WiFi/cellular: 540p start, upgrade to 1080p via fallbacks
       if (low) ordered.push(low);
       if (high) ordered.push(high);
+      if (preview) ordered.push(preview);
     }
   } else {
+    const primary = post.postVideoURL || post.postVideo || original;
     if (preview) ordered.push(preview);
+    if (low && low !== primary) ordered.push(low);
     if (primary && !ordered.includes(primary)) ordered.push(primary);
-    if (low && low !== original) ordered.push(low);
   }
 
   if (original && !ordered.includes(original)) ordered.push(original);

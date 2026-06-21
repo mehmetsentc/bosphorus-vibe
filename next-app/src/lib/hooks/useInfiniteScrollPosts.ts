@@ -24,20 +24,23 @@ function buildBaseDisplay<T extends { id: string }>(
 
 /**
  * Infinite scroll list — keeps fetching while hasMore, then cycles the loaded catalog.
+ * @param showAllLoaded — reels: show every loaded post (don't hide seen while paginating)
  */
 export function useInfiniteScrollPosts<T extends { id: string }>(
   posts: T[],
   hasMore: boolean,
   filterPosts: (posts: T[]) => T[],
+  options?: { showAllLoaded?: boolean },
 ) {
+  const showAllLoaded = options?.showAllLoaded ?? false;
   const [cycleCount, setCycleCount] = useState(0);
 
   const catalog = useMemo(() => dedupePostsById(posts), [posts]);
 
-  const baseDisplay = useMemo(
-    () => buildBaseDisplay(posts, hasMore, filterPosts),
-    [posts, hasMore, filterPosts],
-  );
+  const baseDisplay = useMemo(() => {
+    if (showAllLoaded) return catalog;
+    return buildBaseDisplay(posts, hasMore, filterPosts);
+  }, [posts, hasMore, filterPosts, showAllLoaded, catalog]);
 
   const items = useMemo((): InfiniteScrollItem<T>[] => {
     const result: InfiniteScrollItem<T>[] = baseDisplay.map((post) => ({
