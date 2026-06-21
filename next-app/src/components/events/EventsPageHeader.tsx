@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/Logo";
-import { WorldCupPopupButton } from "@/components/events/WorldCupPopupButton";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useT } from "@/components/providers/I18nProvider";
 
@@ -32,9 +31,6 @@ export function EventsPageHeader({
           {t("eventsGreeting", { name: name.split(" ")[0] })}
         </h1>
         <p className="mt-1 text-sm text-muted">{t("eventsSubtitle")}</p>
-        <div className="mt-3">
-          <WorldCupPopupButton />
-        </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {onRefresh && (

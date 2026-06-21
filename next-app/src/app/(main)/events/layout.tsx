@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { EventsLayoutClient } from "@/components/events/EventsLayoutClient";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { HOTEL_NAME } from "@/lib/brand";
 import { listEventsForSeo } from "@/lib/seo/events-server";
@@ -32,7 +31,7 @@ export default async function EventsLayout({
   return (
     <>
       <JsonLd data={buildEventsItemListJsonLd(events)} />
-      <EventsLayoutClient>{children}</EventsLayoutClient>
+      {children}
     </>
   );
 }

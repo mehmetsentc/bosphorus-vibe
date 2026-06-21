@@ -196,7 +196,6 @@ const tr: Messages = {
   followOnInstagram: "Instagram'da Takip Et",
   eventsGreeting: "Merhaba, {name}!",
   eventsSubtitle: "Yakındaki etkinlikleri keşfedelim.",
-  worldCupDailySummary: "Günün Dünya Kupası",
   allEvents: "Tüm Etkinlikler",
   popularEvents: "Popüler Etkinlikler",
   eveningShows: "Akşam Showları",
