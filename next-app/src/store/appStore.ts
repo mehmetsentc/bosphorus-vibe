@@ -242,6 +242,7 @@ export const useAppStore = create<AppStoreState>()(
           state.events = {
             daily: reviveEvents(state.events.daily),
             showTime: reviveEvents(state.events.showTime),
+            weekly: reviveEvents(state.events.weekly ?? []),
           };
         }
         if (state.posts) {
