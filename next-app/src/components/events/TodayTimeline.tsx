@@ -95,8 +95,13 @@ export function TodayTimeline({ dailyEvents, showTimeEvents, now = new Date() }:
       <div className="relative">
         {/* Animated vertical line */}
         <div
-          className="timeline-line-animated absolute bottom-0 top-0 w-px bg-gradient-to-b from-gold/60 via-border to-border/20"
-          style={{ left: 60 }}
+          className="timeline-line-animated absolute bottom-0 top-0 z-0"
+          style={{
+            left: 60,
+            width: 2,
+            background:
+              "linear-gradient(to bottom, rgba(234,179,8,0.7) 0%, rgba(255,255,255,0.18) 40%, rgba(255,255,255,0.06) 100%)",
+          }}
         />
 
         <div className="space-y-2">
@@ -152,16 +157,16 @@ function TimelineRow({
       </div>
 
       {/* Dot on the line */}
-      <div className="relative shrink-0" style={{ width: 1 }}>
+      <div className="relative z-10 shrink-0" style={{ width: 2 }}>
         <div
-          className={`absolute -translate-x-1/2 rounded-full border-2 transition-all ${
+          className={`absolute left-1/2 -translate-x-1/2 rounded-full border-2 transition-all ${
             isNext
-              ? "top-[13px] h-4 w-4 border-gold bg-gold shadow-[0_0_8px_2px_rgba(234,179,8,0.4)]"
+              ? "top-[13px] h-4 w-4 border-gold bg-gold shadow-[0_0_10px_3px_rgba(234,179,8,0.5)]"
               : isOngoing
                 ? "top-[14px] h-3.5 w-3.5 border-vibe bg-vibe"
                 : isPast
-                  ? "top-[15px] h-2.5 w-2.5 border-border bg-surface-card"
-                  : "top-[15px] h-3 w-3 border-border/80 bg-surface-overlay"
+                  ? "top-[15px] h-2.5 w-2.5 border-white/20 bg-surface-card"
+                  : "top-[15px] h-3 w-3 border-white/30 bg-surface-overlay"
           }`}
         />
       </div>
