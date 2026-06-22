@@ -106,24 +106,27 @@ export async function fetchAdminEventsClient(): Promise<AdminEventRow[]> {
     }));
 }
 
-function categoryToFirestore(category: "show" | "sports"): string {
-  return category === "show" ? "show time" : "Sports";
+function categoryToFirestore(category: "show" | "sports" | "weekly"): string {
+  if (category === "show") return "SHOW TIME";
+  if (category === "weekly") return "weekly";
+  return "daily"; // sports
 }
 
 export type AdminEventInput = {
   eventName: string;
   eventTimeLabel: string;
   eventDate: string;
-  eventCategory: "show" | "sports";
+  eventCategory: "show" | "sports" | "weekly";
   eventLocation: string;
   eventImage: string;
   eventDescription: string;
   isHighlight: boolean;
   eventSortId: number;
+  eventDays?: number[]; // weekly events only
 };
 
 export async function createAdminEventClient(data: AdminEventInput): Promise<string> {
-  const ref = await addDoc(collection(getFirebaseDb(), COLLECTIONS.eventListPortyApp), {
+  const doc: Record<string, unknown> = {
     Event_Name: data.eventName.trim(),
     Event_Time: data.eventTimeLabel,
     Event_Date: new Date(data.eventDate),
@@ -134,7 +137,9 @@ export async function createAdminEventClient(data: AdminEventInput): Promise<str
     isHighlight: data.isHighlight,
     id: data.eventSortId,
     view: 0,
-  });
+  };
+  if (data.eventDays) doc.eventDays = data.eventDays;
+  const ref = await addDoc(collection(getFirebaseDb(), COLLECTIONS.eventListPortyApp), doc);
   return ref.id;
 }
 

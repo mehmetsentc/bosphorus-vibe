@@ -42,13 +42,14 @@ export async function GET(request: Request) {
         eventName: d.Event_Name ?? "",
         eventTimeLabel: d.Event_Time_Label ?? d.eventTimeLabel ?? "",
         eventDate: d.Event_Date?.toDate?.()?.toISOString() ?? null,
-        eventCategory: d.Event_Category ?? d.eventCategory ?? "",
+        eventCategory: d.Category ?? d.Event_Category ?? d.eventCategory ?? "",
         eventLocation: d.Event_Location ?? "",
         eventImage: d.Event_Image ?? d.eventImage ?? "",
         eventDescription: d.Event_Description ?? "",
         isHighlight: d.isHighlight ?? false,
         eventSortId: d.id ?? d.eventSortId ?? 0,
         view: d.view ?? 0,
+        eventDays: d.eventDays ?? null,
       };
     });
 
