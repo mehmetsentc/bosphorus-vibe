@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useI18n, useT } from "@/components/providers/I18nProvider";
+import { clientApiUrl } from "@/lib/client-api-url";
 import {
   createImagePost,
   createVideoPost,
@@ -52,12 +53,36 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** AI editörü arka planda tetikler — hata olsa bile upload'ı etkilemez */
+async function triggerAiCaption(payload: {
+  postId: string;
+  mediaUrl: string;
+  mediaType: "image" | "video";
+  userRole: string;
+  userName: string;
+  userCaption: string;
+  location?: string;
+  language: "tr" | "en";
+}): Promise<void> {
+  try {
+    await fetch(clientApiUrl("/api/ai/caption"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    // Sessizce fail et — kullanıcı deneyimini etkilemesin
+    console.warn("[AI Caption] background trigger failed:", err);
+  }
+}
+
 function CreateUploadFlowInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialType = searchParams.get("type") as UploadKind | null;
   const initialStoryCategory = parseStoryCategory(searchParams.get("category"));
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { canUpload } = useAccess();
   const t = useT();
   const { locale } = useI18n();
@@ -322,8 +347,9 @@ function CreateUploadFlowInner() {
         return;
       }
 
+      let postId: string;
       if (kind === "reel" || media.isVideo) {
-        await createVideoPost(
+        postId = await createVideoPost(
           media.originalUrl,
           media.lowUrl,
           thumbnailUrl ?? "",
@@ -334,7 +360,7 @@ function CreateUploadFlowInner() {
           media.previewUrl,
         );
       } else {
-        await createImagePost(
+        postId = await createImagePost(
           media.originalUrl,
           media.lowUrl,
           fullCaption,
@@ -343,6 +369,18 @@ function CreateUploadFlowInner() {
           location ?? undefined,
         );
       }
+
+      // AI editör — arka planda çalışır, kullanıcıyı bekletmez
+      void triggerAiCaption({
+        postId,
+        mediaUrl: media.isVideo ? (thumbnailUrl ?? media.lowUrl) : media.lowUrl,
+        mediaType: media.isVideo ? "video" : "image",
+        userRole: profile?.role ?? "",
+        userName: user.displayName ?? user.email ?? "Misafir",
+        userCaption: fullCaption,
+        location: location ?? undefined,
+        language: locale === "en" ? "en" : "tr",
+      });
 
       invalidateFeedCaches();
       if (kind === "reel") markReelsRefreshPending();

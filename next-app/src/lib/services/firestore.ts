@@ -891,6 +891,19 @@ export async function createImagePost(
   return docRef.id;
 }
 
+/** AI editör tarafından üretilen caption'ı post'a yazar */
+export async function updatePostAiCaption(
+  postId: string,
+  fullText: string,
+  caption: string,
+): Promise<void> {
+  await updateDoc(doc(getFirebaseDb(), COLLECTIONS.userPosts, postId), {
+    postDescription: fullText,
+    postTitle: caption.slice(0, 80),
+    aiGenerated: true,
+  });
+}
+
 function contentTypeForUpload(storagePath: string, blob: Blob): string {
   if (blob.type && blob.type !== "application/octet-stream") {
     return blob.type;
