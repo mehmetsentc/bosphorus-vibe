@@ -40,6 +40,8 @@ export interface UserPostDoc {
   postPhotoURL_low?: string;
   postTitle?: string;
   postDescription?: string;
+  /** AI tarafından üretilen çok dilli açıklamalar: { tr: "...", en: "...", ru: "..." } */
+  postDescriptions?: Record<string, string>;
   postUserId?: string;
   postVideo?: string;
   postVideoURL?: string;

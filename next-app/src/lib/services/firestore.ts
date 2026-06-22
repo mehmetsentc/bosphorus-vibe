@@ -100,6 +100,7 @@ function mapPost(id: string, data: Record<string, unknown>): UserPostDoc {
     postPhotoURL: sanitizeMediaUrl(data.postPhotoURL),
     postTitle: (data.postTitle as string) ?? undefined,
     postDescription: (data.postDescription as string) ?? undefined,
+    postDescriptions: (data.postDescriptions as Record<string, string>) ?? undefined,
     postUserId: refToId(data.postUser),
     postVideo: sanitizeMediaUrl(data.postVideo),
     postVideoURL: sanitizeMediaUrl(data.postVideoURL),
@@ -137,7 +138,11 @@ export function getPostVideoUrl(post: UserPostDoc): string {
 
 export { hasPostVideo } from "@/lib/utils/video-sources";
 
-export function getPostCaption(post: UserPostDoc): string {
+/** Kullanıcının locale'ine uygun açıklamayı döner; çeviri yoksa varsayılan kullanılır */
+export function getPostCaption(post: UserPostDoc, locale?: string): string {
+  if (locale && post.postDescriptions?.[locale]) {
+    return post.postDescriptions[locale];
+  }
   return (
     post.postDescription ||
     post.postTitle ||

@@ -22,8 +22,23 @@ export interface AiCaptionInput {
 export interface AiCaptionOutput {
   caption: string;
   hashtags: string[];
-  fullText: string;          // caption + hashtags birleşimi (Firestore'a yazılır)
+  fullText: string;                        // TR/EN caption + hashtags (postDescription)
+  translations: Record<string, string>;    // { tr, en, ru, de, pl, sq, uk, ro } — postDescriptions
 }
+
+/** Uygulama tarafından desteklenen tüm diller */
+export const SUPPORTED_LOCALES = ["tr", "en", "ru", "de", "pl", "sq", "uk", "ro"] as const;
+
+const LOCALE_NAMES: Record<string, string> = {
+  tr: "Turkish",
+  en: "English",
+  ru: "Russian",
+  de: "German",
+  pl: "Polish",
+  sq: "Albanian",
+  uk: "Ukrainian",
+  ro: "Romanian",
+};
 
 // ─── System Prompt ───────────────────────────────────────────────────────────
 
@@ -215,7 +230,74 @@ function parseOutput(raw: string): AiCaptionOutput {
 
   const fullText = `${caption}\n\n${allHashtags.join(" ")}`;
 
-  return { caption, hashtags: allHashtags, fullText };
+  return { caption, hashtags: allHashtags, fullText, translations: {} };
+}
+
+// ─── Translation ──────────────────────────────────────────────────────────────
+
+/** Tüm desteklenen dillere tek call'da çeviri yapar, JSON döner */
+async function generateTranslations(
+  baseCaption: string,
+  baseLang: string,
+): Promise<Record<string, string>> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return {};
+
+  const targetLocales = SUPPORTED_LOCALES.filter((l) => l !== baseLang);
+  const targetList = targetLocales
+    .map((l) => `"${l}": "${LOCALE_NAMES[l]}"`)
+    .join(", ");
+
+  const prompt = `You are a professional translator for a hotel social media app.
+
+Translate the following editorial text into these languages: ${targetList}.
+
+Rules:
+- Keep the editorial/magazine style and energy
+- Keep hashtags ONLY in English and Turkish (do not translate hashtags)
+- Return ONLY a valid JSON object with locale codes as keys
+- No extra text, no markdown, just raw JSON
+
+Text to translate:
+"""
+${baseCaption}
+"""
+
+Return format:
+{
+  ${targetLocales.map((l) => `"${l}": "translation here"`).join(",\n  ")}
+}`;
+
+  try {
+    const res = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [
+          { role: "system", content: "You are a professional multilingual translator. Always return valid JSON only." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 1200,
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!res.ok) return {};
+
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const raw = data.choices?.[0]?.message?.content?.trim() ?? "{}";
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed;
+  } catch {
+    return {};
+  }
 }
 
 // ─── Main Export ─────────────────────────────────────────────────────────────
@@ -227,5 +309,21 @@ export async function generateAiCaption(
   const userPrompt = buildUserPrompt(input);
 
   const raw = await callDeepSeek(systemPrompt, userPrompt, input.mediaUrl);
-  return parseOutput(raw);
+  const parsed = parseOutput(raw);
+
+  // Çevirileri paralel üret
+  const otherTranslations = await generateTranslations(parsed.caption, input.language);
+
+  // Tüm dilleri birleştir
+  const translations: Record<string, string> = {
+    [input.language]: parsed.fullText,
+    ...Object.fromEntries(
+      Object.entries(otherTranslations).map(([locale, text]) => [
+        locale,
+        `${text}\n\n${parsed.hashtags.join(" ")}`,
+      ]),
+    ),
+  };
+
+  return { ...parsed, translations };
 }

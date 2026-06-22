@@ -57,18 +57,24 @@ export async function POST(request: NextRequest) {
       return apiError(403, "FORBIDDEN", "Bu posta erişim izniniz yok.");
     }
 
-    // AI caption üret
+    // AI caption + tüm dil çevirileri üret
     const result = await generateAiCaption(input);
 
-    // Firestore'u güncelle
+    // Firestore'u güncelle — postDescriptions map tüm dilleri içerir
     await postRef.update({
-      postDescription: result.fullText,
+      postDescription: result.fullText,               // default (uploader dili)
       postTitle: result.caption.slice(0, 80),
+      postDescriptions: result.translations,          // { tr: "...", en: "...", ru: "..." }
       aiGenerated: true,
       aiGeneratedAt: new Date(),
     });
 
-    return apiOk({ caption: result.caption, hashtags: result.hashtags, fullText: result.fullText });
+    return apiOk({
+      caption: result.caption,
+      hashtags: result.hashtags,
+      fullText: result.fullText,
+      translations: result.translations,
+    });
   } catch (err) {
     console.error("[AI Caption]", err);
     return apiError(500, "AI_FAILED", GENERIC_ERROR);
