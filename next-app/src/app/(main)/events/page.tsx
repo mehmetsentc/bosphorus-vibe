@@ -147,7 +147,10 @@ export default function EventsPage() {
             <div className="mt-6 flex gap-2">
               <button
                 type="button"
-                onClick={() => setActiveTab("timeline")}
+                onClick={() => {
+                  setActiveTab("timeline");
+                  setSelectedDate(null); // ← reset date when switching to today view
+                }}
                 className={`flex-1 rounded-2xl py-3 text-sm font-bold transition ${
                   activeTab === "timeline"
                     ? "gold-gradient text-black shadow-md shadow-gold/20"
