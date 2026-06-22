@@ -8,13 +8,14 @@ import {
   fetchAdminEventsClient,
   updateAdminEventClient,
   type AdminEventRow,
+  type FirebaseCategory,
 } from "@/lib/admin/client-ops";
 
 const EMPTY_FORM = {
   eventName: "",
   eventTimeLabel: "",
   eventDate: new Date().toISOString().slice(0, 10),
-  eventCategory: "show" as "show" | "sports" | "weekly",
+  eventCategory: "SHOW TIME" as FirebaseCategory,
   eventLocation: "",
   eventImage: "",
   eventDescription: "",
@@ -66,12 +67,9 @@ export function AdminEvents() {
       eventName: ev.eventName,
       eventTimeLabel: ev.eventTimeLabel,
       eventDate: ev.eventDate ? ev.eventDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
-      eventCategory: (() => {
-        const raw = ev.eventCategory.toLowerCase();
-        if (raw.includes("daily")) return "sports";
-        if (raw.includes("weekly")) return "weekly";
-        return "show";
-      })() as "show" | "sports" | "weekly",
+      eventCategory: (["SHOW TIME", "daily", "weekly"].includes(ev.eventCategory)
+        ? ev.eventCategory
+        : "SHOW TIME") as FirebaseCategory,
       eventLocation: ev.eventLocation,
       eventImage: ev.eventImage,
       eventDescription: ev.eventDescription,
@@ -174,13 +172,13 @@ export function AdminEvents() {
             <select
               value={form.eventCategory}
               onChange={(e) =>
-                setForm((f) => ({ ...f, eventCategory: e.target.value as "show" | "sports" | "weekly" }))
+                setForm((f) => ({ ...f, eventCategory: e.target.value as FirebaseCategory }))
               }
               className="input-field"
             >
-              <option value="show">🎭 Gösteri Saati</option>
-              <option value="sports">⚽ Spor</option>
-              <option value="weekly">🔄 Haftalık</option>
+              <option value="SHOW TIME">🎭 SHOW TIME</option>
+              <option value="daily">⚽ daily</option>
+              <option value="weekly">🔄 weekly</option>
             </select>
           </Field>
           <Field label="Konum">

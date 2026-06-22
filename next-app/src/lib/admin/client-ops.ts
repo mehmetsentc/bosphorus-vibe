@@ -106,17 +106,14 @@ export async function fetchAdminEventsClient(): Promise<AdminEventRow[]> {
     }));
 }
 
-function categoryToFirestore(category: "show" | "sports" | "weekly"): string {
-  if (category === "show") return "SHOW TIME";
-  if (category === "weekly") return "weekly";
-  return "daily"; // sports
-}
+/** Firebase'deki Category alanı için geçerli değerler */
+export type FirebaseCategory = "SHOW TIME" | "daily" | "weekly";
 
 export type AdminEventInput = {
   eventName: string;
   eventTimeLabel: string;
   eventDate: string;
-  eventCategory: "show" | "sports" | "weekly";
+  eventCategory: FirebaseCategory;
   eventLocation: string;
   eventImage: string;
   eventDescription: string;
@@ -126,11 +123,11 @@ export type AdminEventInput = {
 };
 
 export async function createAdminEventClient(data: AdminEventInput): Promise<string> {
-  const doc: Record<string, unknown> = {
+  const docData: Record<string, unknown> = {
     Event_Name: data.eventName.trim(),
     Event_Time: data.eventTimeLabel,
     Event_Date: new Date(data.eventDate),
-    Category: categoryToFirestore(data.eventCategory),
+    Category: data.eventCategory,
     Event_Location: data.eventLocation,
     Event_image: data.eventImage,
     aboutEvent: data.eventDescription,
@@ -138,8 +135,8 @@ export async function createAdminEventClient(data: AdminEventInput): Promise<str
     id: data.eventSortId,
     view: 0,
   };
-  if (data.eventDays) doc.eventDays = data.eventDays;
-  const ref = await addDoc(collection(getFirebaseDb(), COLLECTIONS.eventListPortyApp), doc);
+  if (data.eventDays) docData.eventDays = data.eventDays;
+  const ref = await addDoc(collection(getFirebaseDb(), COLLECTIONS.eventListPortyApp), docData);
   return ref.id;
 }
 
@@ -153,10 +150,11 @@ export async function updateAdminEventClient(
   if (data.eventLocation !== undefined) patch.Event_Location = data.eventLocation;
   if (data.eventTimeLabel !== undefined) patch.Event_Time = data.eventTimeLabel;
   if (data.eventDate) patch.Event_Date = new Date(data.eventDate);
-  if (data.eventCategory) patch.Category = categoryToFirestore(data.eventCategory);
+  if (data.eventCategory) patch.Category = data.eventCategory;
   if (data.eventImage !== undefined) patch.Event_image = data.eventImage;
   if (data.isHighlight !== undefined) patch.isHighlight = data.isHighlight;
   if (data.eventSortId !== undefined) patch.id = data.eventSortId;
+  if (data.eventDays !== undefined) patch.eventDays = data.eventDays;
   await updateDoc(doc(getFirebaseDb(), COLLECTIONS.eventListPortyApp, id), patch);
 }
 
