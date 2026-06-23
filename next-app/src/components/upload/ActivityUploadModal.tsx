@@ -34,6 +34,7 @@ async function triggerAiCaption(payload: {
   userRole: string;
   userName: string;
   userCaption: string;
+  activityName?: string;
   participantCount?: number;
   language: "tr" | "en";
 }): Promise<void> {
@@ -253,6 +254,7 @@ export function ActivityUploadModal({
         userRole: profile?.role ?? "",
         userName: user.displayName ?? user.email ?? "Misafir",
         userCaption: activityName.trim(),
+        activityName: activityName.trim(),  // passed separately for venue detection
         participantCount: count > 0 ? count : undefined,
         language: locale === "en" ? "en" : "tr",
       });

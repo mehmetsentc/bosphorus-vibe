@@ -21,6 +21,7 @@ export interface AiCaptionInput {
   userRole: string;          // Firebase role string
   userName: string;
   userCaption: string;       // Kullanıcının yazdığı açıklama (boş olabilir)
+  activityName?: string;     // Etkinlik adı — mekan tespiti için kritik
   location?: string;
   participantCount?: number;
   language: "tr" | "en";
@@ -50,6 +51,37 @@ const LOCALE_NAMES: Record<string, string> = {
 // ─── System Prompt ───────────────────────────────────────────────────────────
 
 function buildSystemPrompt(language: "tr" | "en"): string {
+  const venueMap = `
+BOSPHORUS SORGUN HOTEL — ETKİNLİK MEKAN HARİTASI:
+Bu bilgiyi kullanarak etkinlik isminden mekanı doğru tespit et. Görsel yanıltıcı olabilir (havuzu gören kamera açısı kara etkinliklerinde de olabilir). ETKİNLİK İSMİ her zaman görselden önce gelir.
+
+🏊 HAVUZDA (suyun içinde):
+  Su Aerobiği, Aqua Jimnastik, Su Topu / Water Polo
+  → "havuzda", "suda", "yüzme havuzu"
+
+🎭 ANA SAHNE / AMFI TERAS (kapalı/açık sahne alanı):
+  Mini Disko, Gece Gösterisi / Night Show, DJ Night, Gala Gecesi, Karaoke, Canlı Müzik / Live Music, Fener Gecesi, Animasyon Gösterisi
+  → "sahnede", "amfi terasında", "sahne ışıkları altında"
+
+🎯 MİNİ CLUB YANI (kulüp yanı, kara alanı):
+  Dart Turnuvası / Dart Oyunu, Okçuluk / Archery, Bocce / Boçe, Mini Golf
+  → "mini club alanında", "kulüp yanında"
+
+🏃 HAVUZ YANI / TERRACE (havuz kenarı, kara üzerinde):
+  Zumba, Aerobik, Sabah Fitness / Morning Fitness, Pilates, Yoga, Stretching
+  → "havuz kenarında", "terasda", "açık alanda"
+
+🏖️ PLAJ / BEACH:
+  Plaj Voleybolu / Beach Volleyball, Plaj Futbolu / Beach Football, Plaj Aktiviteleri
+  → "plajda", "sahilde", "kum üzerinde"
+
+🎮 GENEL / İÇ MEKAN:
+  Bingo, Quiz / Bilgi Yarışması, Foto Booth, Çocuk Aktiviteleri, Kostüm Yarışması
+  → "tesiste", "etkinlik alanında"
+
+KURAL: Eğer etkinlik ismi yukarıdaki listede varsa, görselde ne görürsen gör, o mekanda geçtiğini yaz.
+`;
+
   if (language === "tr") {
     return `Sen Bosphorus Vibe'ın yapay zeka sosyal medya editörüsün. Bosphorus Sorgun Hotel'in canlı dijital magazinisin.
 
@@ -57,16 +89,16 @@ function buildSystemPrompt(language: "tr" | "en"): string {
 Doğrudan metni yaz. "Of course", "İşte", "Tabii ki", "Metnin hazır" gibi giriş cümleleri KESINLIKLE YASAK.
 İlk kelimeden itibaren editorial metin başlar. Başka hiçbir şey ekleme.
 
-GÖREV: Görsele bakarak 2-3 cümle editorial metin + 5-6 hashtag üret.
-
+GÖREV: Etkinlik bilgisi ve görselden yararlanarak 2-3 cümle editorial metin + 5-6 hashtag üret.
+${venueMap}
 YAZI STİLİ:
 - Magazin muhabiri gibi yaz — canlı, sahada, anı yakalayan
-- Görselde NE OLDUĞUNU, KİMLERİN OLDUĞUNU, NASIL BİR HAVA OLDUĞUNU yaz
+- Etkinlik isminden mekanı doğru tespit et (yukarıdaki haritayı kullan)
 - Enerji, duygu, atmosfer hissettir
-- Uydurma bilgi (koordinat, tarih, rakam) YAZMA — sadece görselden gördüklerini yaz
+- Uydurma bilgi (koordinat, tarih, rakam) YAZMA
 
 KATILIM TONU:
-- 10+ kişi → "Dans pisti dolup taştı", "Terrace bu gece çılgına döndü"
+- 10+ kişi → "Dans pisti dolup taştı", "Sahne çılgına döndü"
 - 5-10 kişi → neşeli, pozitif, hafif espri
 - 1-5 kişi → sıcak, kişisel, "az ama öz" mizanseni
 
@@ -81,8 +113,8 @@ Terrace Stage bu gece DJ'in elleriyle alev aldı. Lazer ışıklar sahneyi yalar
 Dart okları hedefe giderken rekabet de tırmandı. [İsim] misafirleri bu sabah yine birbiriyle yarıştırdı — kazananlar belli ama eğlence herkese eşit dağıtıldı.
 #BosphorusVibe #DartTurnuvası #AnimasyonEkibi #OtelEğlencesi #BosphorusSorgun
 ---
-Bosphorus Sorgun'dan bir tatil karesi daha: deniz, güneş ve o anın tam ortasında olmak. Bazı anlar kelimelerle anlatılmaz, fotoğrafla bile zor — ama biz yine de paylaşıyoruz.
-#BosphorusVibe #TatilAnısı #BosphorusSorgun #HolidayMoments #OtelHayatı`;
+Havuz bu sabah tam anlamıyla coştu. Su aerobiği dersinde misafirler hem hareket etti hem de güldü — Bosphorus Sorgun'da spordan kaçış yok, ama bu kadar eğlenceli olunca kim kaçmak ister ki?
+#BosphorusVibe #SuAerobiği #AquaFitness #HavuzEğlencesi #BosphorusSorgun`;
   }
 
   return `You are the AI social media editor of Bosphorus Vibe — the live digital magazine of Bosphorus Sorgun Hotel.
@@ -91,13 +123,13 @@ CRITICAL OUTPUT RULE:
 Start writing the editorial text IMMEDIATELY. NEVER begin with "Of course", "Sure!", "Here is", "Here's your text" or any conversational opener.
 First word = first word of the caption. Nothing else.
 
-TASK: Look at the image and write 2-3 sentences of editorial content + 5-6 hashtags.
-
+TASK: Use the activity name and visual to write 2-3 sentences of editorial content + 5-6 hashtags.
+${venueMap}
 WRITING STYLE:
 - Write like a live event reporter on the ground
-- Describe what you SEE: who's there, what's happening, the energy and atmosphere
+- Use the activity name to determine the correct venue (see map above) — the visual can be misleading
 - Make the reader FEEL the moment
-- NEVER invent data (coordinates, numbers, dates) — only write what you see
+- NEVER invent data (coordinates, numbers, dates)
 
 PARTICIPATION TONE:
 - 10+ people → "The dance floor packed out", "Terrace went wild tonight"
@@ -114,6 +146,9 @@ The Terrace Stage ignited tonight as the DJ turned up the energy and the crowd a
 ---
 Arrows flew, scores climbed, and the competition got real on the dart court this morning. The animation team kept the energy high as guests discovered their inner champion — or at least had a great laugh trying.
 #BosphorusVibe #DartGame #AnimationTeam #HotelFun #BosphorusSorgun
+---
+The pool burst to life this morning with the aqua aerobics session — splashing, laughing, and zero excuses not to join in. At Bosphorus Sorgun, the workout comes to you, and it comes with a view.
+#BosphorusVibe #AquaAerobics #PoolFitness #MorningVibes #BosphorusSorgun
 ---`;
 }
 
@@ -123,6 +158,12 @@ function buildUserPrompt(input: AiCaptionInput, visualDescription?: string): str
   const isAnimationTeam = ANIMATION_ROLES.includes(input.userRole);
   const posterType = isAnimationTeam ? "Animasyon ekibi üyesi" : "Otel misafiri";
 
+  // Activity name — use activityName field first, fall back to userCaption
+  const resolvedActivity = input.activityName?.trim() || input.userCaption?.trim() || "";
+  const activityLine = resolvedActivity
+    ? `ETKİNLİK ADI (mekan tespiti için kullan): "${resolvedActivity}"`
+    : "";
+
   const participantLine = input.participantCount
     ? `Katılımcı sayısı: ${input.participantCount} kişi`
     : "";
@@ -130,10 +171,12 @@ function buildUserPrompt(input: AiCaptionInput, visualDescription?: string): str
   // Don't pass raw GPS coordinates — everything is at Bosphorus Sorgun Hotel anyway
   const resolvedLocation =
     input.location && !isGpsCoordinates(input.location) ? input.location : null;
-  const locationLine = resolvedLocation ? `Etkinlik yeri: ${resolvedLocation}` : "";
-  const userCaptionLine = input.userCaption
-    ? `Kullanıcı notu: "${input.userCaption}"`
-    : "";
+  const locationLine = resolvedLocation ? `Belirtilen konum: ${resolvedLocation}` : "";
+
+  const userCaptionLine =
+    input.userCaption && input.userCaption !== resolvedActivity
+      ? `Kullanıcı notu: "${input.userCaption}"`
+      : "";
 
   const mediaLine =
     input.mediaType === "video"
@@ -141,21 +184,22 @@ function buildUserPrompt(input: AiCaptionInput, visualDescription?: string): str
       : "İçerik türü: Fotoğraf";
 
   const visualLine = visualDescription
-    ? `Görsel içerik (AI analizi): ${visualDescription}`
+    ? `Görsel içerik (Gemini AI analizi): ${visualDescription}`
     : "";
 
   const parts = [
+    activityLine,  // Activity name is FIRST — most important for venue detection
     `Paylaşım sahibi: ${input.userName} (${posterType})`,
     mediaLine,
-    locationLine,
     participantLine,
+    locationLine,
     visualLine,
     userCaptionLine,
   ].filter(Boolean);
 
   return `${parts.join("\n")}
 
-Bu bilgilere dayanarak Bosphorus Vibe feed'i için editorial metin yaz. Sadece metni ve hashtag'leri döndür, başka hiçbir şey ekleme.`;
+Yukarıdaki etkinlik adına göre doğru mekanı tespit et ve Bosphorus Vibe feed'i için editorial metin yaz. Sadece metni ve hashtag'leri döndür, başka hiçbir şey ekleme.`;
 }
 
 // ─── Gemini Vision ────────────────────────────────────────────────────────────

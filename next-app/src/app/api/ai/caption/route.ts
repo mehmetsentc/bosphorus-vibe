@@ -13,6 +13,7 @@ const schema = z.object({
   userRole: z.string().default("user"),
   userName: z.string().default("Misafir"),
   userCaption: z.string().default(""),
+  activityName: z.string().optional(),
   location: z.string().optional(),
   participantCount: z.number().int().min(0).optional(),
   language: z.enum(["tr", "en"]).default("tr"),

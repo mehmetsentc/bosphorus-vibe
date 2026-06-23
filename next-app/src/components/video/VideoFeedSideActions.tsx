@@ -26,7 +26,7 @@ import { ShareToStoryButton } from "@/components/stories/ShareToStoryButton";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
 import { buildPostSharePayload } from "@/lib/utils/share-post";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { useT } from "@/components/providers/I18nProvider";
+import { useI18n, useT } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
@@ -81,6 +81,7 @@ export function VideoFeedSideActions({
   const { user } = useAuth();
   const { canLike, canComment } = useAccess();
   const t = useT();
+  const { locale } = useI18n();
   const { prefs } = useSettings();
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -91,7 +92,7 @@ export function VideoFeedSideActions({
   const [flash, setFlash] = useState<string | null>(null);
 
   const isOwner = Boolean(user && post.postUserId === user.uid);
-  const caption = getPostCaption(post);
+  const caption = getPostCaption(post, locale);
 
   useEffect(() => {
     setLiked(user ? post.likedByIds.includes(user.uid) : false);

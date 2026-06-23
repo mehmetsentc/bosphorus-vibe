@@ -89,19 +89,31 @@ async function generateCaption(post, userData) {
   const isGps = /^-?\d{1,3}\.\d+,\s*-?\d{1,3}\.\d+$/.test(rawLoc.trim());
   const location = (!isGps && rawLoc) ? rawLoc : (post.activityName ?? "Bosphorus Sorgun Hotel");
 
-  const systemPrompt = `Sen Bosphorus Vibe'ın yapay zeka sosyal medya editörüsün.
+  const systemPrompt = `Sen Bosphorus Vibe'ın yapay zeka sosyal medya editörüsün. Bosphorus Sorgun Hotel'in canlı dijital magazinisin.
 
 KRİTİK ÇIKTI KURALI:
 Doğrudan metni yaz. "Of course", "İşte", "Tabii ki", "Metnin hazır" gibi giriş cümleleri KESİNLİKLE YASAK.
 İlk kelimeden itibaren editorial metin başlar. Başka hiçbir şey ekleme.
 
-GÖREV: Görsele bakarak KOMIK, NEŞELİ, tatil havasında 2-3 cümle + 5-6 hashtag yaz.
+GÖREV: Etkinlik adı ve görselden yararlanarak 2-3 cümle editorial metin + 5-6 hashtag yaz.
+
+BOSPHORUS SORGUN HOTEL — ETKİNLİK MEKAN HARİTASI:
+Etkinlik isminden mekanı doğru tespit et. Görsel yanıltıcı olabilir — kamera açısı havuzu gösterse bile aktivite kara etkinliği olabilir.
+
+🏊 HAVUZDA (suyun içinde): Su Aerobiği, Aqua Jimnastik, Su Topu / Water Polo
+🎭 ANA SAHNE / AMFI TERAS: Mini Disko, Gece Gösterisi, DJ Night, Gala Gecesi, Karaoke, Canlı Müzik, Fener Gecesi, Animasyon Gösterisi
+🎯 MİNİ CLUB YANI (kara): Dart Turnuvası, Okçuluk / Archery, Bocce / Boçe, Mini Golf
+🏃 HAVUZ YANI / TERRACE (havuz kenarı, kara): Zumba, Aerobik, Sabah Fitness, Pilates, Yoga, Stretching
+🏖️ PLAJ: Plaj Voleybolu / Beach Volleyball, Plaj Futbolu / Beach Football
+🎮 GENEL / İÇ MEKAN: Bingo, Quiz, Foto Booth, Çocuk Aktiviteleri, Kostüm Yarışması
+
+KURAL: Etkinlik ismi yukarıdaki listede varsa, o mekanda geçtiğini yaz. Görsel her zaman gerçeği yansıtmayabilir.
 
 YAZI STİLİ:
 - Magazin muhabiri gibi yaz — canlı, sahada, anı yakalayan
-- Görselde NE OLDUĞUNU gerçekten anlat. Uydurma bilgi YAZMA.
-- Paylaşan kişiye ve katılım sayısına özel espri/yorum yap
+- Etkinlik adından mekanı tespit et, görseli ikincil kullan
 - Enerji, atmosfer, duygu hissettir
+- Uydurma bilgi (koordinat, tarih, rakam) YAZMA
 
 KATILIM TONU:
 - 20+ kişi → dans pisti dolup taştı, enerji zirveye çıktı
@@ -115,13 +127,14 @@ MİSAFİR → sıcak, tatil anısı tonu
 Terrace Stage bu gece DJ'in elleriyle alev aldı. Lazer ışıklar sahneyi yalarken misafirler ritme kendini kaptırdı — Bosphorus Sorgun'da gece böyle başlar, sabaha kadar sürer. 🎧🔥
 #BosphorusVibe #TerraceStage #DJNight #GeceBuBaşlar #BosphorusSorgun`;
 
-  const userPrompt = `Paylaşan: ${userName} (${posterType})
-Konum: ${location}
+  const activityName = post.activityName ?? post.postTitle ?? location;
+  const userPrompt = `ETKİNLİK ADI (mekan tespiti için kullan): "${activityName}"
+Paylaşan: ${userName} (${posterType})
 İçerik türü: ${mediaType}
 ${participantHint}
 ${post.postDescription ? `Kullanıcı notu: "${post.postDescription}"` : ""}
 
-Bu paylaşım için Bosphorus Vibe feed'ine yakışır, komik ve neşeli editorial metin yaz.
+Etkinlik adına göre doğru mekanı tespit et ve Bosphorus Vibe feed'ine yakışır editorial metin yaz.
 Sadece metni ve hashtag'leri yaz, başka hiçbir şey ekleme.`;
 
   // Try with image

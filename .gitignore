@@ -1,1 +1,4 @@
 **/.DS_Store
+*firebase-adminsdk*.json
+next-app/.env.local
+translate_missing.mjs

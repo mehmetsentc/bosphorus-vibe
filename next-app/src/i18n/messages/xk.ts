@@ -233,7 +233,7 @@ const sq: Messages = {
   cookieNecessaryDesc: "Kërkohen për hyrje, akses të ftuar dhe veçori kryesore të platformës.",
   cookieAnalytics: "Analitikë",
   cookieAnalyticsDesc: "Na ndihmojnë të kuptojmë përdorimin dhe të përmirësojmë performancën.",
-  cookieMarketing: "Marketing",
+  cookieMarketing: "Marketingu",
   cookieMarketingDesc: "Përdoren për matje promovuese dhe oferta relevante.",
   savePreferences: "Ruaj preferencat",
   authRequiredHint: "Hyni me Google për të aksesuar profilin, të preferuarat dhe ngarkimet tuaja.",

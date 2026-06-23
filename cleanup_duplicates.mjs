@@ -1,0 +1,41 @@
+/**
+ * Mini Disko ve Bingo duplikasyonlarını temizler — her birinden 1 tane bırakır.
+ * Kullanım: node cleanup_duplicates.mjs
+ */
+import { readFileSync } from "fs";
+import { initializeApp, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SA_PATH = join(__dirname, "bosphorusvibe-dbd93-firebase-adminsdk-fbsvc-299c1777aa.json");
+
+initializeApp({ credential: cert(JSON.parse(readFileSync(SA_PATH, "utf8"))) });
+const db = getFirestore();
+
+async function dedup(name) {
+  const snap = await db.collection("eventListPortyApp")
+    .where("Event_Name", "==", name)
+    .get();
+
+  console.log(`"${name}" — bulunan: ${snap.docs.length}`);
+
+  if (snap.docs.length <= 1) {
+    console.log(`  ✅ Duplikasyon yok.\n`);
+    return;
+  }
+
+  const toDelete = snap.docs.slice(1);
+  for (const d of toDelete) {
+    await d.ref.delete();
+    console.log(`  🗑  Silindi: ${d.id}`);
+  }
+  console.log(`  ✅ ${toDelete.length} silindi, 1 kaldı.\n`);
+}
+
+(async () => {
+  await dedup("Mini Disko");
+  await dedup("Bingo Game");
+  process.exit(0);
+})().catch(err => { console.error("❌", err.message); process.exit(1); });
