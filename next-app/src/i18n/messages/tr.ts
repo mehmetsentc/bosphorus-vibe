@@ -191,7 +191,7 @@ const tr: Messages = {
   teamSubtitle: "Animasyon Ekibi",
   noTeamAnimation: "Henüz Animasyon Ekibi üyesi yok.",
   brandBio1: "+18 Resort",
-  brandBio2: "+16 Entertainment",
+  brandBio2: "+16 Eğlence",
   brandBio3: "Bosphorus Sorgun Hotel Etkinlik Ekibi",
   followOnInstagram: "Instagram'da Takip Et",
   eventsGreeting: "Merhaba, {name}!",
