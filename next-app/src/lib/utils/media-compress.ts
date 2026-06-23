@@ -238,12 +238,32 @@ export async function videoThumbnailAtTime(
   }
 }
 
-/** Default cover — first usable frame (~0.1s, avoids black iOS frame at t=0). */
+/**
+ * Otomatik thumbnail: 5. saniyeyi dene (videonun en ilgi çekici anı genellikle başlangıçtan sonradır).
+ * Video 5 saniyeden kısaysa ortasını al. Her iki durumda da başarısız olursa 0.1s'yi dene.
+ */
 export async function videoThumbnailFromFile(file: File): Promise<Blob> {
   try {
-    return await videoThumbnailAtTime(file, 0.1);
+    // Önce video süresini öğren
+    const { video, objectUrl } = await loadVideoMetadata(file);
+    const duration = video.duration || 0;
+    URL.revokeObjectURL(objectUrl);
+
+    // Hedef zaman: 5s, video kısaysa ortası, en az 0.5s
+    const targetTime = duration > 10
+      ? 5
+      : duration > 1
+        ? duration / 2
+        : 0.1;
+
+    return await videoThumbnailAtTime(file, targetTime);
   } catch {
-    return createPlaceholderThumbnail();
+    // Son çare: 0.1. saniye
+    try {
+      return await videoThumbnailAtTime(file, 0.1);
+    } catch {
+      return createPlaceholderThumbnail();
+    }
   }
 }
 

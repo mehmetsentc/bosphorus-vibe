@@ -137,7 +137,7 @@ function buildUserPrompt(input: AiCaptionInput, visualDescription?: string): str
 
   const mediaLine =
     input.mediaType === "video"
-      ? "İçerik türü: Video / Reel"
+      ? "İçerik türü: Video / Reel (aşağıdaki görsel, videonun kapak karesi)"
       : "İçerik türü: Fotoğraf";
 
   const visualLine = visualDescription
@@ -360,9 +360,10 @@ export async function generateAiCaption(
 ): Promise<AiCaptionOutput> {
   const systemPrompt = buildSystemPrompt(input.language);
 
-  // If Gemini key is available, get a visual description of the image first
+  // Gemini ile görseli analiz et (fotoğraf veya video thumbnail)
+  // Video için mediaUrl zaten thumbnail (cover frame) — Gemini onu da okuyabilir
   let visualDescription: string | null = null;
-  if (input.mediaUrl && input.mediaType === "image") {
+  if (input.mediaUrl) {
     visualDescription = await describeImageWithGemini(input.mediaUrl);
   }
 

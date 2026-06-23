@@ -17,7 +17,16 @@ const SA_PATH = join(__dirname, "bosphorusvibe-dbd93-firebase-adminsdk-fbsvc-299
 initializeApp({ credential: cert(JSON.parse(readFileSync(SA_PATH, "utf8"))) });
 const db = getFirestore();
 
-// Set DEEPSEEK_API_KEY in your environment: export DEEPSEEK_API_KEY=sk-...
+// .env.local dosyasından key'i oku
+import { existsSync } from "fs";
+const ENV_PATH = join(__dirname, "next-app/.env.local");
+if (existsSync(ENV_PATH)) {
+  const envContent = readFileSync(ENV_PATH, "utf8");
+  for (const line of envContent.split("\n")) {
+    const m = line.match(/^(\w+)=(.+)$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+  }
+}
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY ?? "";
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
@@ -73,7 +82,8 @@ async function generateCaption(post, userData) {
                           participantCount > 0  ? `Az ama seçkin katılım (${participantCount} kişi) 😄` :
                                                   "Katılım sayısı bilinmiyor.";
 
-  const mediaType = post.postVideo ? "video" : "fotoğraf";
+  const isVideo = !!post.postVideo;
+  const mediaType = isVideo ? "Video / Reel (aşağıdaki görsel kapak karesidir)" : "fotoğraf";
   // GPS koordinatlarını atla — mekan her zaman Bosphorus Sorgun Hotel
   const rawLoc = post.location ?? "";
   const isGps = /^-?\d{1,3}\.\d+,\s*-?\d{1,3}\.\d+$/.test(rawLoc.trim());
