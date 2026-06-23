@@ -22,8 +22,32 @@ import {
   markReelsRefreshPending,
 } from "@/lib/utils/invalidate-feed-cache";
 import { useI18n, useT } from "@/components/providers/I18nProvider";
+import { clientApiUrl } from "@/lib/client-api-url";
 import { TagPeoplePicker } from "@/components/tags/TagPeoplePicker";
 import type { EventDoc, PostTag } from "@/types";
+
+/** Arka planda AI caption tetikler — hata olsa da upload'ı etkilemez */
+async function triggerAiCaption(payload: {
+  postId: string;
+  mediaUrl: string;
+  mediaType: "image" | "video";
+  userRole: string;
+  userName: string;
+  userCaption: string;
+  participantCount?: number;
+  language: "tr" | "en";
+}): Promise<void> {
+  try {
+    await fetch(clientApiUrl("/api/ai/caption"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.warn("[AI Caption] activity trigger failed:", err);
+  }
+}
 
 type ActivityUploadModalProps = {
   open: boolean;
@@ -46,7 +70,7 @@ export function ActivityUploadModal({
   onClose,
   onSuccess,
 }: ActivityUploadModalProps) {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { locale } = useI18n();
   const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -218,7 +242,20 @@ export function ActivityUploadModal({
       };
 
       setProgress(95);
-      await createActivityPostFromMedia(urls, meta);
+      const postId = await createActivityPostFromMedia(urls, meta);
+
+      // AI editör — arka planda çalışır, kullanıcıyı bekletmez
+      const mediaUrl = media.isVideo ? (thumbUrl ?? media.thumbnailUrl ?? urls.lowUrl) : urls.lowUrl;
+      void triggerAiCaption({
+        postId,
+        mediaUrl,
+        mediaType: media.isVideo ? "video" : "image",
+        userRole: profile?.role ?? "",
+        userName: user.displayName ?? user.email ?? "Misafir",
+        userCaption: activityName.trim(),
+        participantCount: count > 0 ? count : undefined,
+        language: locale === "en" ? "en" : "tr",
+      });
 
       invalidateFeedCaches();
       markReelsRefreshPending();

@@ -39,7 +39,7 @@ function PostDetailContent({ id }: { id: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useT();
-  const { dateLocale } = useI18n();
+  const { dateLocale, locale } = useI18n();
   const backHref = searchParams.get("from");
   const [post, setPost] = useState<
     (UserPostDoc & { userName?: string; userPhoto?: string }) | null
@@ -95,7 +95,7 @@ function PostDetailContent({ id }: { id: string }) {
   const videoUrl = getPostVideoUrl(post);
   // Detail page → original quality
   const imageUrl = pickImageSource(post, "detail");
-  const caption = getPostCaption(post);
+  const caption = getPostCaption(post, locale);
   const isOwner = Boolean(user && post.postUserId === user.uid);
 
   return (

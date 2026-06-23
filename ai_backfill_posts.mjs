@@ -66,13 +66,18 @@ async function generateCaption(post, userData) {
   const posterType = isAnimTeam ? "animasyon ekibi üyesi" : "otel misafiri";
   const userName = userData?.display_name ?? userData?.userName ?? "Misafir";
 
-  const views = post.numViews ?? 0;
-  const participantHint = views > 20 ? "Yoğun katılım vardı (20+ kişi)." :
-                          views > 8  ? "Orta düzeyde katılım (8-20 kişi)." :
-                                       "Az ama seçkin katılım (1-8 kişi) 😄";
+  // Gerçek katılımcı sayısını kullan, yoksa numViews proxy olarak kullan
+  const participantCount = post.participant_count ?? post.participantCount ?? post.numViews ?? 0;
+  const participantHint = participantCount > 20 ? `Yoğun katılım vardı (${participantCount}+ kişi).` :
+                          participantCount > 8  ? `Orta düzeyde katılım (${participantCount} kişi).` :
+                          participantCount > 0  ? `Az ama seçkin katılım (${participantCount} kişi) 😄` :
+                                                  "Katılım sayısı bilinmiyor.";
 
   const mediaType = post.postVideo ? "video" : "fotoğraf";
-  const location  = post.location ?? post.activityName ?? "Bosphorus Sorgun Hotel";
+  // GPS koordinatlarını atla — mekan her zaman Bosphorus Sorgun Hotel
+  const rawLoc = post.location ?? "";
+  const isGps = /^-?\d{1,3}\.\d+,\s*-?\d{1,3}\.\d+$/.test(rawLoc.trim());
+  const location = (!isGps && rawLoc) ? rawLoc : (post.activityName ?? "Bosphorus Sorgun Hotel");
 
   const systemPrompt = `Sen Bosphorus Vibe'ın yapay zeka sosyal medya editörüsün.
 

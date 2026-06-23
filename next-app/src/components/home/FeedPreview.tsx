@@ -7,11 +7,13 @@ import {
   getPostCaption,
   getPostVideoUrl,
 } from "@/lib/services/firestore";
+import { useI18n } from "@/components/providers/I18nProvider";
 import type { UserPostDoc } from "@/types";
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
 
 export function FeedPreview({ posts }: { posts: EnrichedPost[] }) {
+  const { locale } = useI18n();
   if (!posts.length) return null;
 
   return (
@@ -36,7 +38,7 @@ export function FeedPreview({ posts }: { posts: EnrichedPost[] }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={image}
-                  alt={getPostCaption(post)}
+                  alt={getPostCaption(post, locale)}
                   loading="lazy"
                   className="aspect-[4/3] w-full object-cover"
                 />
@@ -52,7 +54,7 @@ export function FeedPreview({ posts }: { posts: EnrichedPost[] }) {
               )}
               <div className="p-4">
                 <p className="text-xs text-gold">@{post.userName ?? "user"}</p>
-                <p className="mt-1 font-medium">{getPostCaption(post)}</p>
+                <p className="mt-1 font-medium">{getPostCaption(post, locale)}</p>
                 {post.activityName && (
                   <p className="mt-1 text-xs text-white/40">{post.activityName}</p>
                 )}

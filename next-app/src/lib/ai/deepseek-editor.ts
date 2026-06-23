@@ -5,8 +5,15 @@
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEEPSEEK_MODEL = "deepseek-chat"; // DeepSeek V3
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 const ANIMATION_ROLES = ["Animation Team", "Porty Club Animation Team"];
+
+/** Returns true if string looks like raw GPS coordinates, e.g. "36.74940, 31.46794" */
+function isGpsCoordinates(loc: string): boolean {
+  return /^-?\d{1,3}\.\d+,\s*-?\d{1,3}\.\d+$/.test(loc.trim());
+}
 
 export interface AiCaptionInput {
   mediaUrl: string;          // Görsel veya video thumbnail URL
@@ -112,7 +119,7 @@ Arrows flew, scores climbed, and the competition got real on the dart court this
 
 // ─── User Prompt ─────────────────────────────────────────────────────────────
 
-function buildUserPrompt(input: AiCaptionInput): string {
+function buildUserPrompt(input: AiCaptionInput, visualDescription?: string): string {
   const isAnimationTeam = ANIMATION_ROLES.includes(input.userRole);
   const posterType = isAnimationTeam ? "Animasyon ekibi üyesi" : "Otel misafiri";
 
@@ -120,7 +127,10 @@ function buildUserPrompt(input: AiCaptionInput): string {
     ? `Katılımcı sayısı: ${input.participantCount} kişi`
     : "";
 
-  const locationLine = input.location ? `Konum: ${input.location}` : "";
+  // Don't pass raw GPS coordinates — everything is at Bosphorus Sorgun Hotel anyway
+  const resolvedLocation =
+    input.location && !isGpsCoordinates(input.location) ? input.location : null;
+  const locationLine = resolvedLocation ? `Etkinlik yeri: ${resolvedLocation}` : "";
   const userCaptionLine = input.userCaption
     ? `Kullanıcı notu: "${input.userCaption}"`
     : "";
@@ -130,17 +140,82 @@ function buildUserPrompt(input: AiCaptionInput): string {
       ? "İçerik türü: Video / Reel"
       : "İçerik türü: Fotoğraf";
 
+  const visualLine = visualDescription
+    ? `Görsel içerik (AI analizi): ${visualDescription}`
+    : "";
+
   const parts = [
     `Paylaşım sahibi: ${input.userName} (${posterType})`,
     mediaLine,
     locationLine,
     participantLine,
+    visualLine,
     userCaptionLine,
   ].filter(Boolean);
 
   return `${parts.join("\n")}
 
-Bu bilgilere ve görsele bakarak, Bosphorus Vibe feed'i için editorial metin yaz. Sadece metni ve hashtag'leri döndür, başka hiçbir şey ekleme.`;
+Bu bilgilere dayanarak Bosphorus Vibe feed'i için editorial metin yaz. Sadece metni ve hashtag'leri döndür, başka hiçbir şey ekleme.`;
+}
+
+// ─── Gemini Vision ────────────────────────────────────────────────────────────
+
+/**
+ * Uses Gemini 1.5 Flash to describe the image visually.
+ * Returns a short Turkish description of what's in the image, or null on failure.
+ */
+async function describeImageWithGemini(imageUrl: string): Promise<string | null> {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) return null;
+
+  try {
+    // Fetch image and convert to base64 for Gemini inline_data
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) return null;
+    const mimeType = imgRes.headers.get("content-type") ?? "image/jpeg";
+    const arrayBuffer = await imgRes.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+
+    const body = {
+      contents: [
+        {
+          parts: [
+            {
+              inline_data: {
+                mime_type: mimeType.split(";")[0],
+                data: base64,
+              },
+            },
+            {
+              text: `Bu görsel Bosphorus Sorgun Hotel'de çekilen bir etkinlik fotoğrafı.
+Görselde NE OLDUĞUNU Türkçe olarak 2-3 kısa cümleyle açıkla:
+- Kaç kişi var, ne yapıyorlar?
+- Mekan / sahne / zemin nasıl görünüyor?
+- Genel atmosfer ve hava nasıl?
+Sadece gördüklerini yaz, tahminde bulunma.`,
+            },
+          ],
+        },
+      ],
+      generationConfig: { maxOutputTokens: 200, temperature: 0.3 },
+    };
+
+    const res = await fetch(`${GEMINI_API_URL}?key=${geminiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    };
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return text ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── DeepSeek API Call ────────────────────────────────────────────────────────
@@ -148,27 +223,16 @@ Bu bilgilere ve görsele bakarak, Bosphorus Vibe feed'i için editorial metin ya
 async function callDeepSeek(
   systemPrompt: string,
   userPrompt: string,
-  mediaUrl: string,
 ): Promise<string> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured");
 
-  // Try with vision format first (image in content array)
   const messages: object[] = [
     { role: "system", content: systemPrompt },
-    {
-      role: "user",
-      content: [
-        {
-          type: "image_url",
-          image_url: { url: mediaUrl },
-        },
-        { type: "text", text: userPrompt },
-      ],
-    },
+    { role: "user", content: userPrompt },
   ];
 
-  let res = await fetch(DEEPSEEK_API_URL, {
+  const res = await fetch(DEEPSEEK_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -181,27 +245,6 @@ async function callDeepSeek(
       temperature: 0.85,
     }),
   });
-
-  // If vision not supported, fall back to text-only
-  if (!res.ok && res.status === 400) {
-    const messagesTextOnly: object[] = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ];
-    res = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
-        messages: messagesTextOnly,
-        max_tokens: 400,
-        temperature: 0.85,
-      }),
-    });
-  }
 
   if (!res.ok) {
     const err = await res.text();
@@ -316,9 +359,16 @@ export async function generateAiCaption(
   input: AiCaptionInput,
 ): Promise<AiCaptionOutput> {
   const systemPrompt = buildSystemPrompt(input.language);
-  const userPrompt = buildUserPrompt(input);
 
-  const raw = await callDeepSeek(systemPrompt, userPrompt, input.mediaUrl);
+  // If Gemini key is available, get a visual description of the image first
+  let visualDescription: string | null = null;
+  if (input.mediaUrl && input.mediaType === "image") {
+    visualDescription = await describeImageWithGemini(input.mediaUrl);
+  }
+
+  const userPrompt = buildUserPrompt(input, visualDescription ?? undefined);
+
+  const raw = await callDeepSeek(systemPrompt, userPrompt);
   const parsed = parseOutput(raw);
 
   // Çevirileri paralel üret
