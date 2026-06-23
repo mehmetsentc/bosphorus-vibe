@@ -72,7 +72,7 @@ export function AdminUsers() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3 text-sm text-white/50">
+      <div className="admin-muted flex flex-wrap items-center gap-3 text-sm">
         <span>
           <strong className="text-white">{users.length}</strong> üye
         </span>
@@ -98,7 +98,7 @@ export function AdminUsers() {
             className={`rounded-full px-3 py-1.5 text-xs font-medium ${
               roleFilter === f
                 ? "bg-gold/20 text-gold"
-                : "bg-white/5 text-white/50 hover:text-white"
+                : "admin-subtle bg-white/5 hover:text-white"
             }`}
           >
             {f === "all" ? "Tümü" : f === "admin" ? "Adminler" : "Üyeler"}
@@ -122,7 +122,7 @@ export function AdminUsers() {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-white/10">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-white/45">
+            <thead className="admin-subtle border-b border-white/10 bg-white/[0.03] text-xs font-semibold uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3">Kullanıcı</th>
                 <th className="hidden px-4 py-3 md:table-cell">Email</th>
@@ -148,18 +148,18 @@ export function AdminUsers() {
                           {u.display_name || u.userName || "—"}
                         </p>
                         {u.userName && (
-                          <p className="text-xs text-white/40">@{u.userName}</p>
+                          <p className="admin-subtle text-xs">@{u.userName}</p>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="hidden px-4 py-3 text-white/50 md:table-cell">{u.email || "—"}</td>
+                  <td className="admin-muted hidden px-4 py-3 md:table-cell">{u.email || "—"}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
                         u.role === "admin"
                           ? "bg-gold/20 text-gold"
-                          : "bg-white/10 text-white/50"
+                          : "admin-muted bg-white/10"
                       }`}
                     >
                       {u.role === "admin" ? "ADMIN" : "ÜYE"}
@@ -171,7 +171,7 @@ export function AdminUsers() {
                         type="button"
                         disabled={busy === u.uid}
                         onClick={() => void changeRole(u.uid, "user")}
-                        className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/60 hover:bg-white/5 disabled:opacity-50"
+                        className="admin-muted rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-50"
                       >
                         {busy === u.uid ? "…" : "Yetkiyi Al"}
                       </button>
@@ -191,7 +191,7 @@ export function AdminUsers() {
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <p className="py-12 text-center text-sm text-white/40">Üye bulunamadı</p>
+            <p className="admin-subtle py-12 text-center">Üye bulunamadı</p>
           )}
         </div>
       )}

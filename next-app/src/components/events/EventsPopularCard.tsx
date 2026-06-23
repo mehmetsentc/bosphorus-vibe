@@ -68,13 +68,13 @@ export function EventsPopularCard({
             className="object-cover"
           />
         ) : (
-          <div className="flex h-full items-center justify-center bg-gradient-to-br from-gold/20 to-vibe/10 p-2 text-center text-[10px] font-bold uppercase text-muted">
+          <div className="flex h-full items-center justify-center bg-gradient-to-br from-gold/20 to-vibe/10 p-2 text-center text-xs font-bold uppercase text-muted">
             {event.eventName.slice(0, 16)}
           </div>
         )}
         {/* Category overlay */}
         <div className="absolute bottom-1 left-1">
-          <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase ${categoryColor}`}>
+          <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase ${categoryColor}`}>
             {categoryLabel}
           </span>
         </div>
@@ -94,27 +94,27 @@ export function EventsPopularCard({
                 e.stopPropagation();
                 onUpload?.();
               }}
-              className="shrink-0 rounded-lg border border-vibe/40 bg-vibe/10 px-2 py-1 text-[10px] font-bold uppercase text-vibe"
+              className="shrink-0 rounded-lg border border-vibe/40 bg-vibe/10 px-2 py-1 text-[11px] font-bold uppercase text-vibe"
             >
               {t("eventPostMedia")}
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-muted">
-          <IconClock size={13} className="shrink-0 text-gold" />
+        <div className="flex items-center gap-1.5 text-sm text-muted">
+          <IconClock size={14} className="shrink-0 text-gold" />
           <span className="font-medium">{dateLine}</span>
         </div>
 
         {event.eventLocation && (
-          <div className="flex items-center gap-1.5 text-xs text-muted">
-            <IconLocation size={13} className="shrink-0 text-gold" />
+          <div className="flex items-center gap-1.5 text-sm text-muted">
+            <IconLocation size={14} className="shrink-0 text-gold" />
             <span className="truncate">{event.eventLocation}</span>
           </div>
         )}
 
         {event.eventDescription && (
-          <p className="line-clamp-1 text-[11px] text-muted/70">
+          <p className="line-clamp-1 text-xs text-muted-subtle">
             {event.eventDescription}
           </p>
         )}

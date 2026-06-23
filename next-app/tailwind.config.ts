@@ -9,6 +9,7 @@ const config: Config = {
         background: "var(--background)",
         foreground: "var(--foreground)",
         muted: "var(--muted)",
+        "muted-subtle": "var(--muted-subtle)",
         border: "var(--border)",
         gold: {
           DEFAULT: "var(--gold)",

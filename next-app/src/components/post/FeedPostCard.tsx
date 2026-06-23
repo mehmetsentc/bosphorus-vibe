@@ -37,7 +37,7 @@ import { PostActionsBar } from "@/components/post/PostActionsBar";
 import { FeedMediaImage } from "@/components/post/FeedMediaImage";
 import { FeedVideoPoster } from "@/components/post/FeedVideoPoster";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
-import { useT } from "@/components/providers/I18nProvider";
+import { useI18n, useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
 import type { UserPostDoc } from "@/types";
@@ -68,6 +68,7 @@ function FeedPostCardInner({
   onPostSeen,
 }: FeedPostCardProps) {
   const t = useT();
+  const { locale } = useI18n();
   const router = useRouter();
   const networkTier = useEffectiveNetworkTier();
   const { user } = useAuth();
@@ -100,7 +101,7 @@ function FeedPostCardInner({
     [post],
   );
   const image = video ? "" : pickImageSource(post, "feed");
-  const caption = getPostCaption(post);
+  const caption = getPostCaption(post, locale);
 
   useEffect(() => {
     if (priority || isNear || isActive) setMountVideo(true);
@@ -272,7 +273,7 @@ function FeedPostCardInner({
             <p className="truncate text-[13px] font-semibold leading-tight">
               {post.userName ?? "user"}
             </p>
-            <p className="truncate text-[11px] text-muted">
+            <p className="truncate text-xs text-muted">
               {post.activityName
                 ? `${post.activityName} · ${formatTimeAgo(post.timePosted)}`
                 : formatTimeAgo(post.timePosted)}

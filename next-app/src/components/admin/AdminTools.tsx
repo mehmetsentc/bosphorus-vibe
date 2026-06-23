@@ -49,7 +49,7 @@ export function AdminTools() {
       <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <div>
           <h3 className="font-semibold text-white">Video Encode</h3>
-          <p className="mt-1 text-xs text-white/45">
+          <p className="admin-subtle mt-1 text-sm">
             Tüm videoları aynı formata çevirir: preview.mp4 (360p, hızlı başlangıç) + low.mp4
             (480p)
           </p>
@@ -78,7 +78,7 @@ export function AdminTools() {
                 return `✓ ${d.processed} işlendi — ${d.succeeded} başarılı, ${d.failed} başarısız`;
               })
             }
-            className="w-full rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/5 disabled:opacity-50"
+            className="admin-muted w-full rounded-xl border border-white/10 py-2.5 text-sm font-semibold hover:bg-white/5 disabled:opacity-50"
           >
             {busy ? "İşleniyor…" : "Encode Çalıştır (5 video)"}
           </button>
@@ -88,7 +88,7 @@ export function AdminTools() {
       <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <div>
           <h3 className="font-semibold text-white">Video Kapak Fotoğrafı</h3>
-          <p className="mt-1 text-xs text-white/45">
+          <p className="admin-subtle mt-1 text-sm">
             Eski videolardan kare çekerek grid/feed için kapak fotoğrafı üret
           </p>
         </div>
@@ -116,7 +116,7 @@ export function AdminTools() {
                 return `✓ ${d.processed} işlendi — ${d.succeeded} başarılı, ${d.failed} başarısız`;
               })
             }
-            className="w-full rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/5 disabled:opacity-50"
+            className="admin-muted w-full rounded-xl border border-white/10 py-2.5 text-sm font-semibold hover:bg-white/5 disabled:opacity-50"
           >
             {busy ? "İşleniyor…" : "Kapak Üret (5 video)"}
           </button>
@@ -125,7 +125,7 @@ export function AdminTools() {
 
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <h3 className="mb-2 font-semibold text-white">Bilgi</h3>
-        <ul className="space-y-1.5 text-xs text-white/45">
+        <ul className="admin-subtle space-y-1.5 text-sm">
           <li>• Encode: Her videoya preview.mp4 + low.mp4 üretir (H.264, faststart)</li>
           <li>• Kapak: Bozuk/siyah thumbnail&apos;leri videodan JPEG kare üretir</li>
           <li>• Önce &ldquo;Kuyruğa Al&rdquo; → sonra &ldquo;Çalıştır&rdquo; adımlarını uygula</li>

@@ -134,7 +134,7 @@ export function AdminEvents() {
           <button
             type="button"
             onClick={() => setShowForm(false)}
-            className="text-sm text-white/50 hover:text-white"
+            className="admin-muted text-sm hover:text-white"
           >
             ← Listeye dön
           </button>
@@ -241,7 +241,7 @@ export function AdminEvents() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-white/50">
+        <p className="admin-muted">
           Toplam <span className="font-semibold text-white">{events.length}</span> etkinlik
         </p>
         <button
@@ -269,7 +269,7 @@ export function AdminEvents() {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-white/10">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-white/45">
+            <thead className="admin-subtle border-b border-white/10 bg-white/[0.03] text-xs font-semibold uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3">Etkinlik</th>
                 <th className="hidden px-4 py-3 md:table-cell">Tarih</th>
@@ -288,20 +288,20 @@ export function AdminEvents() {
                       )}
                       <div>
                         <p className="font-medium text-white">{ev.eventName}</p>
-                        <p className="text-xs text-white/40 capitalize">{ev.eventCategory}</p>
+                        <p className="text-xs admin-subtle capitalize">{ev.eventCategory}</p>
                         {ev.isHighlight && (
-                          <span className="mt-0.5 inline-block rounded bg-gold/20 px-1.5 py-0.5 text-[10px] font-bold text-gold">
+                          <span className="mt-0.5 inline-block rounded bg-gold/20 px-1.5 py-0.5 text-[11px] font-bold text-gold">
                             GÜNÜN SHOWU
                           </span>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="hidden px-4 py-3 text-white/60 md:table-cell">
+                  <td className="admin-muted hidden px-4 py-3 md:table-cell">
                     {ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("tr-TR") : "—"}
                     {ev.eventTimeLabel && ` · ${ev.eventTimeLabel}`}
                   </td>
-                  <td className="hidden max-w-[160px] truncate px-4 py-3 text-white/60 lg:table-cell">
+                  <td className="admin-muted hidden max-w-[160px] truncate px-4 py-3 lg:table-cell">
                     {ev.eventLocation || "—"}
                   </td>
                   <td className="px-4 py-3">
@@ -328,7 +328,7 @@ export function AdminEvents() {
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <p className="py-12 text-center text-sm text-white/40">Etkinlik bulunamadı</p>
+            <p className="admin-subtle py-12 text-center">Etkinlik bulunamadı</p>
           )}
         </div>
       )}
@@ -339,7 +339,7 @@ export function AdminEvents() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-white/50">{label}</label>
+      <label className="admin-label">{label}</label>
       {children}
     </div>
   );

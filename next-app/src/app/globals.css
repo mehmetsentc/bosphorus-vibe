@@ -11,8 +11,9 @@
   --vibe-dark: #005f78;
 
   --background: #f7f6f2;
-  --foreground: #0d0d0d;
-  --muted: #5c5c5c;
+  --foreground: #0a0a0a;
+  --muted: #3d3d3d;
+  --muted-subtle: #525252;
   --border: rgba(13, 13, 13, 0.1);
   --surface: #ffffff;
   --surface-raised: #f0efe8;
@@ -34,7 +35,8 @@
 
   --background: #000000;
   --foreground: #f5f5f5;
-  --muted: #a3a3a3;
+  --muted: #c4c4c4;
+  --muted-subtle: #a8a8a8;
   --border: rgba(255, 255, 255, 0.08);
   --surface: #0a0a0a;
   --surface-raised: #111111;
@@ -56,6 +58,10 @@ html {
 
 body {
   @apply bg-background text-foreground font-body antialiased;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   background-image: radial-gradient(
       ellipse 80% 50% at 50% -20%,
       color-mix(in srgb, var(--gold) 12%, transparent),
@@ -102,7 +108,11 @@ body {
 }
 
 .input-field {
-  @apply w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted outline-none transition;
+  @apply w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-subtle outline-none transition;
+}
+
+.input-field::placeholder {
+  opacity: 1;
 }
 
 .input-field:focus {
@@ -112,10 +122,29 @@ body {
 /* Admin panel is always dark — inputs must not inherit light theme tokens */
 .admin-panel {
   color-scheme: dark;
+  --admin-label: rgba(255, 255, 255, 0.86);
+  --admin-text: rgba(255, 255, 255, 0.92);
+  --admin-muted: rgba(255, 255, 255, 0.74);
+  --admin-subtle: rgba(255, 255, 255, 0.6);
+}
+
+.admin-panel .admin-label {
+  @apply text-xs font-semibold;
+  color: var(--admin-label);
+}
+
+.admin-panel .admin-muted {
+  @apply text-sm;
+  color: var(--admin-muted);
+}
+
+.admin-panel .admin-subtle {
+  @apply text-sm;
+  color: var(--admin-subtle);
 }
 
 .admin-panel .input-field {
-  @apply border-white/15 bg-white/[0.06] text-white placeholder:text-white/35;
+  @apply border-white/20 bg-white/[0.08] py-2.5 text-white placeholder:text-white/55;
 }
 
 .admin-panel .input-field:focus {

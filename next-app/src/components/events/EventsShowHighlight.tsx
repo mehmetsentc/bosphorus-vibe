@@ -54,7 +54,7 @@ export function EventsShowHighlight({ event }: EventsShowHighlightProps) {
 
       {/* Badge — top left */}
       <div className="absolute left-4 top-4 z-10">
-        <span className="inline-flex items-center gap-1.5 rounded-full gold-gradient px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black shadow-lg">
+        <span className="inline-flex items-center gap-1.5 rounded-full gold-gradient px-3 py-1 text-xs font-black uppercase tracking-widest text-black shadow-lg">
           {t("showOfTheDay")}
         </span>
       </div>
@@ -79,13 +79,13 @@ export function EventsShowHighlight({ event }: EventsShowHighlightProps) {
         </div>
 
         {event.eventDescription && (
-          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-white/65">
+          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-white/85">
             {event.eventDescription}
           </p>
         )}
 
         {/* CTA hint */}
-        <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gold/80">
+        <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gold">
           <span>Detayları Gör</span>
           <span>→</span>
         </div>

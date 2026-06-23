@@ -86,7 +86,7 @@ export function AdminPosts() {
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-white/50">Son 50 post · moderasyon</p>
+      <p className="admin-muted text-sm">Son 50 post · moderasyon</p>
 
       <div className="flex flex-wrap gap-2">
         <input
@@ -145,7 +145,7 @@ export function AdminPosts() {
                     </div>
                   )}
                   <span
-                    className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                       isVideo ? "bg-purple-500/80 text-white" : "bg-blue-500/80 text-white"
                     }`}
                   >
@@ -154,11 +154,11 @@ export function AdminPosts() {
                 </div>
                 <div className="space-y-2 p-3">
                   {p.postText && (
-                    <p className="line-clamp-2 text-xs text-white/70">{p.postText}</p>
+                    <p className="line-clamp-2 text-xs admin-muted">{p.postText}</p>
                   )}
-                  <p className="truncate font-mono text-[10px] text-white/35">{p.id}</p>
+                  <p className="admin-subtle truncate font-mono text-[11px]">{p.id}</p>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-white/40">
+                    <span className="admin-subtle text-xs">
                       {p.timePosted
                         ? new Date(p.timePosted).toLocaleDateString("tr-TR")
                         : "—"}
@@ -180,7 +180,7 @@ export function AdminPosts() {
         </div>
       )}
       {!loading && filtered.length === 0 && (
-        <p className="py-12 text-center text-sm text-white/40">Post bulunamadı</p>
+        <p className="admin-subtle py-12 text-center">Post bulunamadı</p>
       )}
     </div>
   );

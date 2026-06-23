@@ -206,7 +206,7 @@ export default function EventsPage() {
 
                 <div className="mt-6">
                   {listSubheading && (
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-subtle">
                       {listSubheading}
                     </p>
                   )}
@@ -217,7 +217,7 @@ export default function EventsPage() {
                       <p className="text-sm font-semibold text-gold">
                         {t("sundayDayOff")}
                       </p>
-                      <p className="mt-1 text-xs text-muted">{t("dailyRepeat")}</p>
+                      <p className="mt-1 text-sm text-muted">{t("dailyRepeat")}</p>
                     </div>
                   ) : !listedEvents.length ? (
                     <p className="py-12 text-center text-sm text-muted">

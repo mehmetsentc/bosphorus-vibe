@@ -39,7 +39,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0c] px-6 text-center">
         <p className="text-5xl">🔒</p>
         <h1 className="mt-4 text-xl font-bold text-white">Yetkisiz Erişim</h1>
-        <p className="mt-2 max-w-sm text-sm text-white/50">
+        <p className="admin-muted mt-2 max-w-sm">
           Bu panele yalnızca admin yetkisine sahip hesaplar erişebilir.
         </p>
         <Link
@@ -55,7 +55,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="border-b border-white/10 px-5 py-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">
           Admin Panel
         </p>
         <p className="mt-1 font-display text-lg font-bold text-white">{BRAND_NAME}</p>
@@ -72,7 +72,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                 active
                   ? "bg-gold/15 text-gold"
-                  : "text-white/60 hover:bg-white/5 hover:text-white"
+                  : "admin-muted hover:bg-white/5 hover:text-white"
               }`}
             >
               <span className="text-base">{icon}</span>
@@ -85,7 +85,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="border-t border-white/10 p-4">
         <Link
           href="/home"
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-2.5 text-sm text-white/70 transition hover:bg-white/5 hover:text-white"
+          className="admin-muted flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-2.5 text-sm transition hover:bg-white/5 hover:text-white"
         >
           ← Uygulamaya Dön
         </Link>
@@ -98,7 +98,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       {/* Mobile header */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-white/10 bg-[#0c0c0c]/95 px-4 py-3 backdrop-blur-md lg:hidden">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gold">Admin</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gold">Admin</p>
           <p className="text-sm font-semibold">{BRAND_NAME}</p>
         </div>
         <button
@@ -135,7 +135,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <h1 className="font-display text-2xl font-bold">
               {NAV.find((n) => isActive(pathname, n.href, n.exact))?.label ?? "Admin"}
             </h1>
-            <p className="mt-0.5 text-sm text-white/45">
+            <p className="admin-subtle mt-0.5 text-sm">
               Bosphorus Vibe yönetim merkezi
             </p>
           </div>

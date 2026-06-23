@@ -158,14 +158,14 @@ function TimelineRow({
     <Link
       href={`/events/${entry.event.id}?from=/events`}
       className={`relative flex items-start transition active:scale-[0.99] ${
-        isPast && !isOngoing ? "opacity-40" : ""
+        isPast && !isOngoing ? "opacity-55" : ""
       }`}
     >
       {/* Time column */}
       <div className="w-[60px] shrink-0 pt-4 pr-4 text-right">
         <span
-          className={`text-[12px] font-bold tabular-nums leading-none ${
-            isNext ? "text-gold" : isPast ? "text-muted" : "text-foreground/70"
+          className={`text-xs font-bold tabular-nums leading-none ${
+            isNext ? "text-gold" : isPast ? "text-muted-subtle" : "text-foreground"
           }`}
         >
           {entry.timeLabel}
@@ -225,18 +225,18 @@ function TimelineRow({
 
               {/* Status badge */}
               {isNext && (
-                <span className="shrink-0 rounded-full gold-gradient px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-black">
+                <span className="shrink-0 rounded-full gold-gradient px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-black">
                   Sıradaki
                 </span>
               )}
               {isOngoing && (
-                <span className="shrink-0 rounded-full bg-vibe px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">
+                <span className="shrink-0 rounded-full bg-vibe px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">
                   Devam ediyor
                 </span>
               )}
               {!isNext && !isOngoing && (
                 <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase ${
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
                     entry.category === "sports"
                       ? "bg-vibe/10 text-vibe"
                       : "bg-gold/10 text-gold"
@@ -248,14 +248,14 @@ function TimelineRow({
             </div>
 
             {entry.event.eventLocation && (
-              <div className="mt-1.5 flex items-center gap-1 text-[12px] text-muted">
-                <IconLocation size={12} className="shrink-0 text-gold/70" />
+              <div className="mt-1.5 flex items-center gap-1 text-sm text-muted">
+                <IconLocation size={13} className="shrink-0 text-gold" />
                 <span className="truncate">{entry.event.eventLocation}</span>
               </div>
             )}
 
             {entry.event.eventDescription && (
-              <p className="mt-1 line-clamp-1 text-[11px] text-muted/60">
+              <p className="mt-1 line-clamp-1 text-xs text-muted-subtle">
                 {entry.event.eventDescription}
               </p>
             )}
