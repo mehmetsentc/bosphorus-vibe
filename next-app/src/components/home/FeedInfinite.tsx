@@ -35,7 +35,11 @@ import {
 import { isCacheExpired } from "@/lib/cache/constants";
 import { useFeedPosts } from "@/lib/hooks/usePosts";
 import { useInfiniteScrollPosts, type InfiniteScrollItem } from "@/lib/hooks/useInfiniteScrollPosts";
-import { FEED_SUGGESTIONS_DEFER_MS, FEED_POSTER_PREFETCH_MAX } from "@/lib/performance/app-state";
+import {
+  FEED_SUGGESTIONS_DEFER_MS,
+  FEED_POSTER_PREFETCH_MAX,
+  FEED_VIRTUAL_ROW_ESTIMATE_PX,
+} from "@/lib/performance/app-state";
 import {
   getPostFeedImageCandidates,
   getPostFeedThumbnailCandidates,
@@ -275,7 +279,7 @@ export function FeedInfinite() {
               <div className="h-8 w-8 animate-pulse rounded-full bg-surface-overlay" />
               <div className="h-3 w-28 animate-pulse rounded bg-surface-overlay" />
             </div>
-            <div className="aspect-square w-full animate-pulse bg-surface-overlay" />
+            <div className="aspect-[4/5] w-full animate-pulse bg-surface-overlay" />
           </div>
         ))}
       </section>
@@ -303,6 +307,7 @@ export function FeedInfinite() {
       <section>
         <VirtualFeedList
           items={feedRows}
+          estimateSize={FEED_VIRTUAL_ROW_ESTIMATE_PX}
           getItemKey={(row, index) =>
             row.kind === "post" ? row.itemKey : `${row.kind}-${index}`
           }

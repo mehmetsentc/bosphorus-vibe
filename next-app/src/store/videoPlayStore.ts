@@ -8,16 +8,27 @@
 
 import { create } from "zustand";
 
-/** Pause + mute every reel video except the active post (iOS audio bleed fix). */
-export function pauseAllVideosExcept(activeId: string | null): void {
+/** Pause + mute every feed/reel video except the active post. */
+export function pauseAllFeedVideosExcept(activeId: string | null): void {
   if (typeof document === "undefined") return;
-  document.querySelectorAll("video[data-reel-id]").forEach((node) => {
-    const video = node as HTMLVideoElement;
-    if (video.dataset.reelId === activeId) return;
-    video.pause();
-    video.muted = true;
-    video.setAttribute("muted", "");
-  });
+  document
+    .querySelectorAll("video[data-feed-video-id], video[data-reel-id]")
+    .forEach((node) => {
+      const video = node as HTMLVideoElement;
+      const id = video.dataset.feedVideoId ?? video.dataset.reelId ?? "";
+      if (activeId && id === activeId) return;
+      video.pause();
+      if (video.dataset.feedVideoId) {
+        video.currentTime = 0;
+      }
+      video.muted = true;
+      video.setAttribute("muted", "");
+    });
+}
+
+/** @deprecated use pauseAllFeedVideosExcept */
+export function pauseAllVideosExcept(activeId: string | null): void {
+  pauseAllFeedVideosExcept(activeId);
 }
 
 type VideoPlayState = {
@@ -32,7 +43,7 @@ type VideoPlayState = {
 export const useVideoPlayStore = create<VideoPlayState>()((set, get) => ({
   playingId: null,
   requestPlay: (id) => {
-    pauseAllVideosExcept(id);
+    pauseAllFeedVideosExcept(id);
     set({ playingId: id });
   },
   releasePlay: (id) => {

@@ -19,7 +19,16 @@ export const SESSION_POSTS_MAX = 120;
 export const FEED_POSTER_PREFETCH_MAX = 2;
 
 /** Virtual feed row height estimate (px) — remeasured on mount */
-export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 540;
+export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 620;
+
+/** Instagram feed portrait ratio (4:5) — width:height */
+export const FEED_VIDEO_ASPECT_CLASS = "aspect-[4/5]";
+
+/** Min visible fraction before a feed video may autoplay (single winner) */
+export const FEED_VIDEO_AUTOPLAY_MIN_RATIO = 0.55;
+
+/** Preload video metadata when card is this fraction visible */
+export const FEED_VIDEO_PRELOAD_MIN_RATIO = 0.08;
 
 /** Defer mounting feed video until after poster paints (LCP) */
 export const FEED_VIDEO_MOUNT_DEFER_MS = 80;

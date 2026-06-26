@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
+import { useFeedVideoVisibility } from "@/lib/hooks/useFeedVideoVisibility";
 import { useAdaptiveVideoSrc } from "@/lib/hooks/useAdaptiveVideoSrc";
 import { useHideLikeCounts } from "@/lib/hooks/useSettingsEffects";
 import {
@@ -29,6 +29,7 @@ import {
 } from "@/lib/utils/video-sources";
 import {
   FEED_POSTER_PREFETCH_MAX,
+  FEED_VIDEO_ASPECT_CLASS,
 } from "@/lib/performance/app-state";
 import { formatTimeAgo } from "@/lib/utils/time";
 import {
@@ -93,10 +94,7 @@ function FeedPostCardInner({
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
   const [followBusy, setFollowBusy] = useState(false);
   const hideLikeCounts = useHideLikeCounts();
-  const { ref, isActive, isNear } = useIntersectionActive<HTMLElement>({
-    threshold: 0.45,
-    rootMargin: "500px 0px",
-  });
+  const { ref, isActive, isNear } = useFeedVideoVisibility<HTMLElement>(post.id);
 
   const video = getPostVideoUrl(post);
   const imageCandidates = useMemo(
@@ -162,10 +160,11 @@ function FeedPostCardInner({
     }
   }, [playingId, video, post.id]);
 
-  // Autoplay when scrolled into view
+  // Autoplay only when this card wins visibility (Instagram-style single active video)
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !video || !videoSrc || !mountVideo) return;
+
     if (isActive) {
       el.muted = feedMuted;
       if (feedMuted) el.setAttribute("muted", "");
@@ -184,11 +183,13 @@ function FeedPostCardInner({
         });
       });
       requestPlay(post.id);
-    } else {
-      el.pause();
-      releasePlay(post.id);
-      setShowPoster(true);
+      return;
     }
+
+    el.pause();
+    el.currentTime = 0;
+    releasePlay(post.id);
+    setShowPoster(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, mountVideo, video, videoSrc, feedMuted, post.id, requestPlay, releasePlay]);
 
@@ -315,10 +316,10 @@ function FeedPostCardInner({
       {/* Media */}
       {video ? (
         <div className="relative w-full bg-black">
-          <div className="relative aspect-square w-full overflow-hidden bg-surface-overlay">
+          <div className={`relative ${FEED_VIDEO_ASPECT_CLASS} w-full overflow-hidden bg-black`}>
             {/* Poster always visible until video plays */}
             <div
-              className={`absolute inset-0 z-[4] transition-opacity duration-200 ${
+              className={`absolute inset-0 z-[4] transition-opacity duration-150 ${
                 showPoster ? "opacity-100" : "pointer-events-none opacity-0"
               }`}
             >
@@ -332,12 +333,13 @@ function FeedPostCardInner({
             <video
               ref={videoRef}
               key={post.id}
+              data-feed-video-id={post.id}
               src={videoSrc}
               loop
               playsInline
               muted={isMuted}
               preload={videoPreload}
-              className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-200 ${
+              className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
                 showPoster ? "opacity-0" : "opacity-100"
               }`}
               onPlaying={() => {
@@ -375,11 +377,11 @@ function FeedPostCardInner({
               </div>
             )}
 
-            {/* Mute button — top-right, above tap area */}
+            {/* Mute — bottom-right (Instagram feed) */}
             <button
               type="button"
               onClick={handleMuteToggle}
-              className="absolute right-2 top-2 z-[10] flex h-9 w-9 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm"
+              className="absolute bottom-3 right-3 z-[10] flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm"
               aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
             >
               {isMuted
