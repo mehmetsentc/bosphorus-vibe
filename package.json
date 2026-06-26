@@ -12,6 +12,7 @@
     "firebase:deploy:functions": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions",
     "firebase:deploy:transcode": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions:transcodeVideoPost,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch,functions:adminRunTranscodeBatch",
     "firebase:deploy:thumbnails": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions:processPendingVideoThumbnails,functions:runVideoThumbnailBatch,functions:adminRunThumbnailBatch",
-    "firebase:deploy:indexes": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only firestore:indexes"
+    "firebase:deploy:indexes": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only firestore:indexes",
+    "deploy:firebase": "bash scripts/deploy-firebase.sh"
   }
 }
