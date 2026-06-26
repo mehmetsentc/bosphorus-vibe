@@ -27,6 +27,12 @@ export const FEED_VIDEO_ASPECT_CLASS = "aspect-[4/5]";
 /** Min visible fraction before a feed video may autoplay (single winner) */
 export const FEED_VIDEO_AUTOPLAY_MIN_RATIO = 0.55;
 
+/** Reels phase-1: show uploads from the last N days (newest first) */
+export const REELS_RECENT_DAYS = 7;
+
+/** Likes weighted higher than raw views in reels popular ranking */
+export const REELS_LIKE_SCORE_WEIGHT = 12;
+
 /** Preload video metadata when card is this fraction visible */
 export const FEED_VIDEO_PRELOAD_MIN_RATIO = 0.08;
 

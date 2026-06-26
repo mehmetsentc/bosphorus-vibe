@@ -4,6 +4,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { isCacheExpired } from "@/lib/cache/constants";
 import { fetchReelsFirstPage } from "@/lib/cache/reels-fetch";
 import {
+  resetReelsPopularCatalog,
+  sliceReelsPopularCatalog,
+} from "@/lib/cache/reels-popular-catalog";
+import type { ReelsFeedPhase } from "@/lib/reels/reels-feed-algorithm";
+import {
   FEED_PAGE_SIZE,
   REELS_PAGE_SIZE,
 } from "@/lib/performance/app-state";
@@ -17,7 +22,7 @@ import {
 import {
   enrichPostsWithUsers,
   getFeedPostsPage,
-  getVideoPostsPage,
+  getRecentWeekVideoPostsPage,
 } from "@/lib/services/firestore";
 import { useAppStore, type EnrichedPost } from "@/store/appStore";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
@@ -221,6 +226,8 @@ export function useReelsPosts() {
   const emptyPageStreakRef = useRef(0);
   const fetchRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const phaseRef = useRef<ReelsFeedPhase>("recent");
+  const popularOffsetRef = useRef(0);
   const [localPosts, setLocalPosts] = useState<EnrichedPost[]>(() => {
     if (typeof window === "undefined") return [];
     const { reels, lastFetched: fetched } = useAppStore.getState();
@@ -308,6 +315,9 @@ export function useReelsPosts() {
       cursorRef.current = null;
       fallbackCursorRef.current = null;
       emptyPageStreakRef.current = 0;
+      phaseRef.current = "recent";
+      popularOffsetRef.current = 0;
+      resetReelsPopularCatalog();
 
       try {
         const page = await fetchReelsFirstPage(force);
@@ -318,6 +328,8 @@ export function useReelsPosts() {
           page.lastDoc || page.posts.length === 0
             ? null
             : postPageCursorFromPost(page.posts[page.posts.length - 1]!);
+        phaseRef.current = page.phase;
+        popularOffsetRef.current = page.popularOffset ?? 0;
         postsRef.current = page.posts;
         hasMoreRef.current = page.hasMore;
         setLocalPosts(page.posts);
@@ -338,53 +350,78 @@ export function useReelsPosts() {
     void fetchFirstPage(false);
   }, [hydrated, fetchFirstPage]);
 
+  const appendPopularPage = useCallback(async () => {
+    const slice = await sliceReelsPopularCatalog(
+      popularOffsetRef.current,
+      REELS_PAGE_SIZE,
+    );
+    popularOffsetRef.current = slice.nextOffset;
+    const existingIds = new Set(postsRef.current.map((p) => p.id));
+    const fresh = slice.posts.filter((p) => !existingIds.has(p.id));
+
+    hasMoreRef.current = slice.hasMore;
+    setHasMore(slice.hasMore);
+    if (!fresh.length) return;
+
+    const next = dedupePostsById([...postsRef.current, ...fresh]);
+    postsRef.current = next;
+    setLocalPosts(next);
+    appendReelsPosts(fresh, slice.hasMore);
+  }, [appendReelsPosts]);
+
+  const switchToPopularPhase = useCallback(() => {
+    phaseRef.current = "popular";
+    cursorRef.current = null;
+    fallbackCursorRef.current = null;
+    emptyPageStreakRef.current = 0;
+    hasMoreRef.current = true;
+    setHasMore(true);
+  }, []);
+
   const loadMore = useCallback(async () => {
     if (!hasMore || loadingMore || loadingMoreRef.current) return;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const cursor = await resolvePostPageCursor(
-        cursorRef.current ?? fallbackCursorRef.current,
-      );
-      const page = await getVideoPostsPage(REELS_PAGE_SIZE, cursor);
-      const enriched = await enrichPostsWithUsers(page.posts);
-      const existingIds = new Set(postsRef.current.map((p) => p.id));
-      const fresh = enriched.filter((p) => !existingIds.has(p.id));
+      if (phaseRef.current === "recent") {
+        const cursor = await resolvePostPageCursor(
+          cursorRef.current ?? fallbackCursorRef.current,
+        );
+        const page = await getRecentWeekVideoPostsPage(REELS_PAGE_SIZE, cursor);
+        const enriched = await enrichPostsWithUsers(page.posts);
+        const existingIds = new Set(postsRef.current.map((p) => p.id));
+        const fresh = enriched.filter((p) => !existingIds.has(p.id));
 
-      if (fresh.length === 0 && page.posts.length > 0) {
-        emptyPageStreakRef.current += 1;
-        const last = enriched[enriched.length - 1];
-        if (page.lastDoc) {
-          fallbackCursorRef.current = null;
+        if (fresh.length) {
+          emptyPageStreakRef.current = 0;
           cursorRef.current = page.lastDoc;
-        } else if (last) {
-          fallbackCursorRef.current = postPageCursorFromPost(last);
+          fallbackCursorRef.current = page.lastDoc
+            ? null
+            : postPageCursorFromPost(enriched[enriched.length - 1]!);
+          const next = dedupePostsById([...postsRef.current, ...fresh]);
+          postsRef.current = next;
+          setLocalPosts(next);
+          appendReelsPosts(fresh, page.hasMore);
+        } else if (page.lastDoc) {
+          cursorRef.current = page.lastDoc;
         }
-        if (emptyPageStreakRef.current >= 3 || !page.hasMore) {
-          hasMoreRef.current = false;
-          setHasMore(false);
+
+        if (!page.hasMore) {
+          switchToPopularPhase();
+          await appendPopularPage();
+        } else {
+          hasMoreRef.current = page.hasMore;
+          setHasMore(page.hasMore);
         }
         return;
       }
 
-      emptyPageStreakRef.current = 0;
-      cursorRef.current = page.lastDoc;
-      fallbackCursorRef.current = page.lastDoc
-        ? null
-        : enriched.length > 0
-          ? postPageCursorFromPost(enriched[enriched.length - 1]!)
-          : fallbackCursorRef.current;
-      hasMoreRef.current = page.hasMore;
-      setHasMore(page.hasMore);
-      const next = dedupePostsById([...postsRef.current, ...fresh]);
-      postsRef.current = next;
-      setLocalPosts(next);
-      if (fresh.length) appendReelsPosts(fresh, page.hasMore);
+      await appendPopularPage();
     } finally {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, appendReelsPosts]);
+  }, [hasMore, loadingMore, appendReelsPosts, appendPopularPage, switchToPopularPhase]);
 
   const refresh = useCallback(async () => {
     clearReelsCache();

@@ -26,7 +26,7 @@ export default function ReelsPage() {
     hasMoreSnapshot,
   } = useReelsPosts();
   const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts();
-  const { items, appendCycle, resetCycles } = useInfiniteScrollPosts(
+  const { items, resetCycles } = useInfiniteScrollPosts(
     posts,
     hasMore,
     filterPosts,
@@ -89,7 +89,6 @@ export default function ReelsPage() {
           hasMore={!isGuest && hasMore}
           loadingMore={loadingMore}
           onLoadMore={isGuest ? undefined : loadMore}
-          onNearCatalogEnd={isGuest ? undefined : appendCycle}
           onPostDeleted={deletePost}
           guestPreview={isGuest}
           onPostSeen={markSeen}

@@ -16,6 +16,7 @@ import {
   arrayUnion,
   arrayRemove,
   serverTimestamp,
+  Timestamp,
   type QueryConstraint,
   type QueryDocumentSnapshot,
   type DocumentData,
@@ -25,6 +26,7 @@ import { STORAGE_MEDIA_CACHE_CONTROL } from "@/lib/media/video-encode";
 import { videoEncodeStatusForUpload } from "@/lib/media/video-encode";
 import { compressImage, videoThumbnailFromFile, isImageBlob, createPlaceholderThumbnail } from "@/lib/utils/media-compress";
 import { hasPostVideo } from "@/lib/utils/video-sources";
+import { getReelsRecentWindowStart } from "@/lib/reels/reels-feed-algorithm";
 import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase";
 import {
   toDate,
@@ -389,6 +391,55 @@ export async function getVideoPostsPage(
     posts,
     lastDoc,
     hasMore: snap.docs.length === pageSize,
+  };
+}
+
+/** Reels phase-1: videos uploaded in the last 7 days, newest first. */
+export async function getRecentWeekVideoPostsPage(
+  pageSize = 12,
+  cursor?: QueryDocumentSnapshot<DocumentData> | null,
+): Promise<VideoPostsPage> {
+  const windowStart = Timestamp.fromDate(getReelsRecentWindowStart());
+  const batchSize = Math.max(pageSize, 25);
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
+  const collected: UserPostDoc[] = [];
+  let hasMore = true;
+  let pageCursor: QueryDocumentSnapshot<DocumentData> | null = cursor ?? null;
+
+  while (collected.length < pageSize && hasMore) {
+    const constraints: QueryConstraint[] = [
+      where("timePosted", ">=", windowStart),
+      orderBy("timePosted", "desc"),
+      limit(batchSize),
+    ];
+    if (pageCursor) {
+      constraints.push(startAfter(pageCursor));
+    }
+
+    const snap = await getDocs(
+      query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
+    );
+
+    if (snap.empty) {
+      hasMore = false;
+      break;
+    }
+
+    for (const d of snap.docs) {
+      lastDoc = d;
+      const post = mapPost(d.id, d.data());
+      if (getPostVideoUrl(post)) collected.push(post);
+      if (collected.length >= pageSize) break;
+    }
+
+    hasMore = snap.docs.length === batchSize;
+    pageCursor = lastDoc;
+  }
+
+  return {
+    posts: collected,
+    lastDoc,
+    hasMore,
   };
 }
 

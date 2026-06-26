@@ -36,7 +36,7 @@ export default function FeedPostViewPage({
   const { markSeen, filterPosts, needsMore, refreshWithUnseen } = useSeenPosts({
     pinIds: [params.postId],
   });
-  const { items, appendCycle, resetCycles } = useInfiniteScrollPosts(
+  const { items, resetCycles } = useInfiniteScrollPosts(
     posts,
     hasMore,
     filterPosts,
@@ -93,7 +93,6 @@ export default function FeedPostViewPage({
           hasMore={!isGuest && hasMore}
           loadingMore={loadingMore}
           onLoadMore={isGuest ? undefined : loadMore}
-          onNearCatalogEnd={isGuest ? undefined : appendCycle}
           onPostDeleted={deletePost}
           guestPreview={isGuest}
           initialPostId={params.postId}
