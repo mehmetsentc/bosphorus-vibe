@@ -73,6 +73,9 @@ function getNowMinutes(now: Date): number {
   return now.getHours() * 60 + now.getMinutes();
 }
 
+/** Her aktivite maksimum bu kadar dakika sürer; bu süreden sonra "bitti" sayılır */
+const ACTIVITY_DURATION_MINUTES = 30;
+
 type Props = {
   dailyEvents: EventDoc[];
   showTimeEvents: EventDoc[];
@@ -89,11 +92,19 @@ export function TodayTimeline({ dailyEvents, showTimeEvents, weeklyEvents, now =
     [dailyEvents, showTimeEvents, weeklyEvents, today],
   );
 
-  const nextIndex = useMemo(() => {
-    return entries.findIndex((e) => e.timeMinutes > nowMinutes);
-  }, [entries, nowMinutes]);
+  // Biten aktiviteleri gizle (başlangıç + 30dk geçti ise)
+  const visibleEntries = useMemo(
+    () => entries.filter((e) => e.timeMinutes + ACTIVITY_DURATION_MINUTES > nowMinutes),
+    [entries, nowMinutes],
+  );
 
-  if (!entries.length) return null;
+  // Sıradaki = henüz başlamamış ilk aktivite
+  const nextIndex = useMemo(
+    () => visibleEntries.findIndex((e) => e.timeMinutes > nowMinutes),
+    [visibleEntries, nowMinutes],
+  );
+
+  if (!visibleEntries.length) return null;
 
   return (
     <>
@@ -121,17 +132,16 @@ export function TodayTimeline({ dailyEvents, showTimeEvents, weeklyEvents, now =
         />
 
         <div className="space-y-2">
-          {entries.map((entry, i) => {
-            const isPast = entry.timeMinutes < nowMinutes;
+          {visibleEntries.map((entry, i) => {
+            // Devam ediyor: başladı ama 30dk geçmedi
+            const isOngoing = entry.timeMinutes <= nowMinutes;
             const isNext = i === nextIndex;
-            const isOngoing =
-              nextIndex > 0 && i === nextIndex - 1 && entry.timeMinutes <= nowMinutes;
 
             return (
               <TimelineRow
                 key={`${entry.event.id}-${i}`}
                 entry={entry}
-                isPast={isPast}
+                isPast={false}
                 isNext={isNext}
                 isOngoing={isOngoing}
               />
