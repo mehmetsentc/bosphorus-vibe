@@ -27,6 +27,9 @@ import {
   prewarmReelsPost,
   prefetchImageUrl,
 } from "@/lib/utils/video-sources";
+import {
+  FEED_POSTER_PREFETCH_MAX,
+} from "@/lib/performance/app-state";
 import { formatTimeAgo } from "@/lib/utils/time";
 import {
   IconPlay,
@@ -104,7 +107,11 @@ function FeedPostCardInner({
   const caption = getPostCaption(post, locale);
 
   useEffect(() => {
-    if (priority || isNear || isActive) setMountVideo(true);
+    if (priority || isNear || isActive) {
+      setMountVideo(true);
+    } else {
+      setMountVideo(false);
+    }
   }, [priority, isNear, isActive]);
 
   const {
@@ -125,11 +132,11 @@ function FeedPostCardInner({
 
   // Prefetch poster early so feed never flashes black
   useEffect(() => {
-    if (!video) return;
-    for (const url of thumbCandidates.slice(0, 6)) {
+    if (!video || !isNear && !isActive && !priority) return;
+    for (const url of thumbCandidates.slice(0, FEED_POSTER_PREFETCH_MAX)) {
       prefetchImageUrl(url);
     }
-  }, [video, thumbCandidates, post.id]);
+  }, [video, thumbCandidates, post.id, isNear, isActive, priority]);
 
   useEffect(() => {
     if (!video) return;

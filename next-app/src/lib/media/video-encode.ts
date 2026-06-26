@@ -50,6 +50,16 @@ export const VIDEO_ENCODE_PROFILE = {
     profile: "main",
     level: "3.1",
   },
+  /** Server — 480p tier for slow cellular */
+  serverMedium: {
+    maxWidth: 854,
+    maxHeight: 480,
+    crf: "24",
+    preset: "fast",
+    audioBitrate: "96k",
+    profile: "main",
+    level: "3.0",
+  },
   /** Server — high quality (1080p, Wi‑Fi / user preference) */
   serverHigh: {
     maxWidth: 1920,
@@ -67,6 +77,7 @@ export function standardEncodePaths(userId: string, postId: string) {
   return {
     base,
     preview: `${base}/preview.mp4`,
+    medium: `${base}/medium.mp4`,
     low: `${base}/low.mp4`,
     high: `${base}/high.mp4`,
     thumb: `${base}/thumb.jpg`,
@@ -112,6 +123,7 @@ export function videoEncodeStatusForUpload(): VideoEncodeStatus {
 export function isEncodedPlaybackUrl(url: string, postId?: string): boolean {
   if (!url) return false;
   if (url.includes("/preview.mp4")) return true;
+  if (url.includes("/medium.mp4")) return true;
   if (url.includes("/low.mp4")) return true;
   if (url.includes("/high.mp4")) return true;
   if (postId && url.includes(`/videos/${postId}/`)) return true;

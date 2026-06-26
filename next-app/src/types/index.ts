@@ -49,6 +49,10 @@ export interface UserPostDoc {
   postVideoURL_low?: string;
   /** Standardized fast-playback tier (client or server preview.mp4) */
   postVideoURL_preview?: string;
+  /** Server-encoded 480p tier (users/{uid}/videos/{postId}/medium.mp4) */
+  postVideoURL_medium?: string;
+  /** Optional HLS manifest when adaptive streaming is enabled */
+  postVideoURL_hls?: string;
   /** Server-encoded 1080p tier (users/{uid}/videos/{postId}/high.mp4) */
   postVideoURL_high?: string;
   postVideothumbnail?: string;

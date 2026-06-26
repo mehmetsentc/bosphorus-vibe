@@ -83,7 +83,7 @@ export function VideoPlayer({
     ? isActive || isNext
     : isActive || isNext || isNear;
 
-  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive);
+  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive, isNext);
   const adaptiveVideo = useAdaptiveVideoSrc(
     post,
     playbackContext,

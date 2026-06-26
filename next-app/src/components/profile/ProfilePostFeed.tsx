@@ -6,7 +6,7 @@ import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { ReelsShell } from "@/components/reels/ReelsShell";
 import { getPostVideoUrl } from "@/lib/services/firestore";
 import { getPostVideoPoster, prewarmReelsPosts } from "@/lib/utils/video-sources";
-import { REELS_VIDEO_WINDOW_RADIUS } from "@/lib/performance/app-state";
+import { REELS_VIDEO_WINDOW_RADIUS, REELS_DOM_WINDOW_RADIUS } from "@/lib/performance/app-state";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { VideoFeedSideActions } from "@/components/video/VideoFeedSideActions";
 import { PostCommentModal } from "@/components/post/PostCommentModal";
@@ -162,8 +162,8 @@ export function ProfilePostFeed({
   }, []);
 
   useEffect(() => {
-    const slice = posts.slice(activeIndex, activeIndex + 2);
-    prewarmReelsPosts(slice, networkTier);
+    const next = posts[activeIndex + 1];
+    if (next) prewarmReelsPosts([next], networkTier);
   }, [activeIndex, posts, networkTier]);
 
   if (!posts.length) {
@@ -179,18 +179,26 @@ export function ProfilePostFeed({
   return (
     <ReelsShell backHref={backHref}>
       <div ref={containerRef} className="reels-shell-scroll">
-        {posts.map((post, i) => (
-          <ProfileFeedItem
-            key={post.id}
-            post={post}
-            isActive={i === activeIndex}
-            isNext={i === activeIndex + 1}
-            isNear={Math.abs(i - activeIndex) === 2}
-            mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
-            onBecameActive={() => handleActive(i)}
-            onPostDeleted={() => handlePostDeleted(post.id)}
-          />
-        ))}
+        {posts.map((post, i) => {
+          const inDomWindow = Math.abs(i - activeIndex) <= REELS_DOM_WINDOW_RADIUS;
+          if (!inDomWindow) {
+            return (
+              <div key={post.id} className="reels-slide bg-black" aria-hidden />
+            );
+          }
+          return (
+            <ProfileFeedItem
+              key={post.id}
+              post={post}
+              isActive={i === activeIndex}
+              isNext={i === activeIndex + 1}
+              isNear={Math.abs(i - activeIndex) === 1}
+              mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
+              onBecameActive={() => handleActive(i)}
+              onPostDeleted={() => handlePostDeleted(post.id)}
+            />
+          );
+        })}
       </div>
     </ReelsShell>
   );

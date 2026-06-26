@@ -1,5 +1,7 @@
 import type { UserPostDoc } from "@/types";
 import type { NetworkTier } from "@/lib/hooks/useNetworkQuality";
+import { prefetchVideoLeadingBytesManaged } from "@/lib/performance/video-prefetch-manager";
+import { warmNextReelBlob } from "@/lib/utils/video-blob-cache";
 
 function uniqueUrls(...urls: (string | undefined)[]): string[] {
   const seen = new Set<string>();
@@ -142,6 +144,7 @@ export function getPostVideoPoster(post: UserPostDoc): string | undefined {
 export function getPostVideoVariants(post: UserPostDoc): {
   original: string;
   preview: string;
+  medium: string;
   low: string;
   high: string;
   poster?: string;
@@ -155,6 +158,7 @@ export function getPostVideoVariants(post: UserPostDoc): {
     post.postVideoURL_preview ||
     inferPreviewUrlFromVideo(original) ||
     "";
+  const medium = post.postVideoURL_medium || inferTranscodedMediumUrl(post) || "";
   const low =
     post.postVideoURL_low ||
     post.postVideoURL ||
@@ -166,7 +170,7 @@ export function getPostVideoVariants(post: UserPostDoc): {
       : "") || inferTranscodedHighUrl(post) || "";
   const poster = getPostVideoPoster(post);
 
-  return { original, preview, low, high, poster };
+  return { original, preview, medium, low, high, poster };
 }
 
 /** Guess sibling asset beside original.mov/mp4 in Firebase Storage URLs. */
@@ -278,6 +282,33 @@ export function inferTranscodedPreviewUrl(post: UserPostDoc): string | undefined
   }
 }
 
+/** Server-encoded medium.mp4: users/{uid}/videos/{postId}/medium.mp4 (480p) */
+export function inferTranscodedMediumUrl(post: UserPostDoc): string | undefined {
+  if (!post.id) return undefined;
+  const original =
+    post.postVideoURL_original ||
+    post.postVideo ||
+    post.postVideoURL ||
+    "";
+  if (!original) return undefined;
+
+  try {
+    const bucket = original.match(/\/v0\/b\/([^/]+)\//)?.[1];
+    if (!bucket) return undefined;
+
+    const userId =
+      post.postUserId ||
+      decodeStoragePathFromUrl(original)?.match(/^users\/([^/]+)\//)?.[1] ||
+      "";
+    if (!userId) return undefined;
+
+    const mediumPath = `users/${userId}/videos/${post.id}/medium.mp4`;
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(mediumPath)}?alt=media`;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Server-encoded high.mp4: users/{uid}/videos/{postId}/high.mp4 */
 export function inferTranscodedHighUrl(post: UserPostDoc): string | undefined {
   if (!post.id) return undefined;
@@ -318,7 +349,7 @@ function decodeStoragePathFromUrl(url: string): string | null {
 
 /** Smaller transcodes / previews — preferred for feed & reels playback. */
 export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
-  const { original, preview, low, high } = getPostVideoVariants(post);
+  const { original, preview, medium, low, high } = getPostVideoVariants(post);
   const candidates: string[] = [];
 
   const distinctPreview =
@@ -335,6 +366,17 @@ export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
   const serverPreview = inferTranscodedPreviewUrl(post);
   if (serverPreview && !candidates.includes(serverPreview)) {
     candidates.push(serverPreview);
+  }
+
+  const distinctMedium =
+    medium && medium !== original && medium !== distinctPreview ? medium : "";
+  if (distinctMedium) {
+    candidates.push(distinctMedium);
+  }
+
+  const transcodedMedium = inferTranscodedMediumUrl(post);
+  if (transcodedMedium && !candidates.includes(transcodedMedium)) {
+    candidates.push(transcodedMedium);
   }
 
   const distinctLow = low && low !== original && low !== distinctPreview ? low : "";
@@ -409,6 +451,7 @@ export function isServerTranscodeReady(post: UserPostDoc): boolean {
 export function getTrustedVideoUrls(post: UserPostDoc): {
   original: string;
   preview: string;
+  medium: string;
   low: string;
   high: string;
   primary: string;
@@ -418,6 +461,7 @@ export function getTrustedVideoUrls(post: UserPostDoc): {
     post.postVideo ||
     "";
   const preview = post.postVideoURL_preview || "";
+  const medium = post.postVideoURL_medium || "";
   const low =
     post.postVideoURL_low && post.postVideoURL_low !== original
       ? post.postVideoURL_low
@@ -430,6 +474,7 @@ export function getTrustedVideoUrls(post: UserPostDoc): {
   return {
     original: original || primary,
     preview,
+    medium,
     low,
     high,
     primary,
@@ -448,7 +493,7 @@ export function getReelsImmediatePlayback(
   tier: NetworkTier,
   options?: ReelsPlaybackOptions,
 ): { src: string; fallbacks: string[]; poster?: string } {
-  const { original, preview, low, high, primary } = getTrustedVideoUrls(post);
+  const { original, preview, medium, low, high, primary } = getTrustedVideoUrls(post);
   const poster = getPostVideoPoster(post);
   const preferHigh = options?.preferHighQuality === true;
   const encoded = isServerTranscodeReady(post);
@@ -457,15 +502,17 @@ export function getReelsImmediatePlayback(
   if (encoded) {
     if (tier === "slow") {
       if (preview) trusted.push(preview);
+      if (medium) trusted.push(medium);
       if (low) trusted.push(low);
       if (high) trusted.push(high);
     } else if (preferHigh) {
       if (high) trusted.push(high);
       if (low) trusted.push(low);
+      if (medium) trusted.push(medium);
       if (preview) trusted.push(preview);
     } else {
-      // Preview is smallest — fastest first frame on mobile
       if (preview) trusted.push(preview);
+      if (medium) trusted.push(medium);
       if (low) trusted.push(low);
       if (high) trusted.push(high);
     }
@@ -581,23 +628,15 @@ export function pickVideoSource(
 }
 
 const prewarmedUrls = new Set<string>();
-const prefetchedLeadBytes = new Set<string>();
+const prefetchedImages = new Set<string>();
+const MAX_PREFETCH_IMAGES = 48;
 const prewarmElements: HTMLVideoElement[] = [];
 /** Hidden prewarm videos also consume iOS decoders — keep tiny. */
-const MAX_PREWARM_ELEMENTS = 2;
+const MAX_PREWARM_ELEMENTS = 1;
 
 /** Warm first ~512KB (moov + initial mdat) for faster first frame on +faststart MP4. */
-export function prefetchVideoLeadingBytes(url: string): void {
-  if (!url || typeof window === "undefined" || prefetchedLeadBytes.has(url)) return;
-  prefetchedLeadBytes.add(url);
-  void fetch(url, {
-    method: "GET",
-    mode: "cors",
-    cache: "force-cache",
-    headers: { Range: "bytes=0-524287" },
-  }).catch(() => {
-    prefetchedLeadBytes.delete(url);
-  });
+export function prefetchVideoLeadingBytes(url: string, postId?: string): void {
+  prefetchVideoLeadingBytesManaged(url, postId);
 }
 
 function disposePrewarmVideo(video: HTMLVideoElement): void {
@@ -648,14 +687,14 @@ export function prewarmVideoUrl(url: string): void {
 }
 
 export function prewarmVideoUrls(urls: string[]): void {
-  for (const url of urls) prewarmVideoUrl(url);
+  const first = urls[0];
+  if (first) prewarmVideoUrl(first);
 }
-
-const prefetchedImages = new Set<string>();
 
 /** Warm poster/thumbnail HTTP cache for faster LCP. */
 export function prefetchImageUrl(url: string): void {
   if (!url || typeof document === "undefined" || prefetchedImages.has(url)) return;
+  if (prefetchedImages.size >= MAX_PREFETCH_IMAGES) return;
   prefetchedImages.add(url);
   const link = document.createElement("link");
   link.rel = "preload";
@@ -684,7 +723,7 @@ export function prewarmPostVideo(
   if (poster) prefetchImageUrl(poster);
 }
 
-/** Prewarm reels — leading bytes always; hidden <video> only when `withElement`. */
+/** Prewarm reels — next clip only (leading bytes + optional blob). */
 export function prewarmReelsPost(
   post: UserPostDoc,
   tier: NetworkTier,
@@ -693,7 +732,8 @@ export function prewarmReelsPost(
   const src = getReelsPrewarmUrl(post, tier);
   const poster = getPostVideoPoster(post);
   if (src) {
-    prefetchVideoLeadingBytes(src);
+    prefetchVideoLeadingBytes(src, post.id);
+    warmNextReelBlob(src, post.id);
     if (withElement) prewarmVideoUrl(src);
   }
   if (poster) prefetchImageUrl(poster);
@@ -703,9 +743,8 @@ export function prewarmReelsPosts(
   posts: UserPostDoc[],
   tier: NetworkTier,
 ): void {
-  posts.forEach((post, index) => {
-    prewarmReelsPost(post, tier, index === 0);
-  });
+  const next = posts[0];
+  if (next) prewarmReelsPost(next, tier, false);
 }
 
 /**

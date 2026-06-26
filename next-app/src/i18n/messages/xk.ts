@@ -1,6 +1,6 @@
 import type { Messages } from "./en";
 
-const sq: Messages = {
+const xk: Messages = {
   navHome: "Kryefaqja",
   navBrand: "Marka",
   navEvents: "Eventet",

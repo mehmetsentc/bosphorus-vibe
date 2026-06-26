@@ -198,6 +198,7 @@ async function transcodeVideoForPost(postId, data, docRef) {
 
   const tmpInput = path.join(os.tmpdir(), `${postId}_orig`);
   const tmpPreview = path.join(os.tmpdir(), `${postId}_preview.mp4`);
+  const tmpMedium = path.join(os.tmpdir(), `${postId}_medium.mp4`);
   const tmpLow = path.join(os.tmpdir(), `${postId}_low.mp4`);
   const tmpHigh = path.join(os.tmpdir(), `${postId}_high.mp4`);
 
@@ -221,12 +222,15 @@ async function transcodeVideoForPost(postId, data, docRef) {
         tmpPreview,
         VIDEO_ENCODE_PROFILE.serverPreview,
       ),
+      runFfmpegEncode(tmpInput, tmpMedium, VIDEO_ENCODE_PROFILE.serverMedium),
       runFfmpegEncode(tmpInput, tmpLow, VIDEO_ENCODE_PROFILE.serverLow),
       runFfmpegEncode(tmpInput, tmpHigh, VIDEO_ENCODE_PROFILE.serverHigh),
     ]);
 
     const paths = standardEncodePaths(userId, postId);
     const previewToken =
+      Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const mediumToken =
       Math.random().toString(36).substring(2) + Date.now().toString(36);
     const lowToken =
       Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -244,6 +248,10 @@ async function transcodeVideoForPost(postId, data, docRef) {
         destination: paths.preview,
         metadata: uploadMeta(previewToken),
       }),
+      bucket.upload(tmpMedium, {
+        destination: paths.medium,
+        metadata: uploadMeta(mediumToken),
+      }),
       bucket.upload(tmpLow, {
         destination: paths.low,
         metadata: uploadMeta(lowToken),
@@ -259,11 +267,17 @@ async function transcodeVideoForPost(postId, data, docRef) {
       paths.preview,
       previewToken,
     );
+    const mediumUrl = buildFirebaseDownloadUrl(
+      bucket.name,
+      paths.medium,
+      mediumToken,
+    );
     const lowUrl = buildFirebaseDownloadUrl(bucket.name, paths.low, lowToken);
     const highUrl = buildFirebaseDownloadUrl(bucket.name, paths.high, highToken);
 
     await docRef.update({
       postVideoURL_preview: previewUrl,
+      postVideoURL_medium: mediumUrl,
       postVideoURL_low: lowUrl,
       postVideoURL_high: highUrl,
       postVideoURL: lowUrl,
@@ -288,7 +302,7 @@ async function transcodeVideoForPost(postId, data, docRef) {
     });
     return { ok: false, reason: "failed", error: message };
   } finally {
-    for (const f of [tmpInput, tmpPreview, tmpLow, tmpHigh]) {
+    for (const f of [tmpInput, tmpPreview, tmpMedium, tmpLow, tmpHigh]) {
       if (fs.existsSync(f)) fs.unlinkSync(f);
     }
   }

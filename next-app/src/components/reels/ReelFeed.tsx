@@ -11,8 +11,16 @@ import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { prewarmReelsPosts } from "@/lib/utils/video-sources";
-import { REELS_VIDEO_WINDOW_RADIUS, INFINITE_SCROLL_NEAR_END } from "@/lib/performance/app-state";
+import { prewarmReelsPosts, getReelsPrewarmUrl } from "@/lib/utils/video-sources";
+import {
+  REELS_VIDEO_WINDOW_RADIUS,
+  REELS_DOM_WINDOW_RADIUS,
+  INFINITE_SCROLL_NEAR_END,
+} from "@/lib/performance/app-state";
+import {
+  cancelVideoPrefetchesExcept,
+  setReelPrefetchScope,
+} from "@/lib/performance/video-prefetch-manager";
 import { Skeleton } from "@/components/ui/SkeletonLoader";
 import type { UserPostDoc } from "@/types";
 
@@ -284,11 +292,16 @@ export function ReelFeed({
     }
   }, [visiblePosts.length]);
 
-  // Prewarm active + next reel
+  // Prewarm next reel only — cancel stale downloads on swipe
   useLayoutEffect(() => {
     const current = visiblePosts[activeIndex];
     const next = visiblePosts[activeIndex + 1];
-    if (current) prewarmReelsPosts([current], networkTier);
+    setReelPrefetchScope(current?.id ?? null, next?.id ?? null);
+
+    const keepUrls: string[] = [];
+    if (next) keepUrls.push(getReelsPrewarmUrl(next, networkTier));
+    cancelVideoPrefetchesExcept(keepUrls);
+
     if (next) prewarmReelsPosts([next], networkTier);
   }, [activeIndex, visiblePosts, networkTier]);
 
@@ -329,19 +342,35 @@ export function ReelFeed({
 
   return (
     <div ref={setContainerRef} className="reels-shell-scroll">
-      {visiblePosts.map((post, i) => (
-        <ReelItem
-          key={postKeys?.[i] ?? post.id}
-          post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
-          isActive={i === activeIndex}
-          isNext={i === activeIndex + 1}
-          isNear={false}
-          mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS || i === 0}
-          onBecameActive={makeActiveHandler(i)}
-          onPostDeleted={() => handlePostDeleted(post.id)}
-          onCommentClick={() => openComment(post.id)}
-        />
-      ))}
+      {visiblePosts.map((post, i) => {
+        const inDomWindow = Math.abs(i - activeIndex) <= REELS_DOM_WINDOW_RADIUS;
+        const itemKey = postKeys?.[i] ?? post.id;
+
+        if (!inDomWindow) {
+          return (
+            <div
+              key={itemKey}
+              className="reels-slide bg-black"
+              aria-hidden
+              data-reel-spacer={post.id}
+            />
+          );
+        }
+
+        return (
+          <ReelItem
+            key={itemKey}
+            post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
+            isActive={i === activeIndex}
+            isNext={i === activeIndex + 1}
+            isNear={Math.abs(i - activeIndex) === 1}
+            mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
+            onBecameActive={makeActiveHandler(i)}
+            onPostDeleted={() => handlePostDeleted(post.id)}
+            onCommentClick={() => openComment(post.id)}
+          />
+        );
+      })}
 
       {guestPreview && videoPosts.length > 6 && (
         <div className="reels-slide flex flex-col items-center justify-center gap-4 px-8 text-center">

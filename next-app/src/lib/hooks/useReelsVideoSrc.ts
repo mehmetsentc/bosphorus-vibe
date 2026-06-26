@@ -4,7 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsOptional } from "@/components/settings/SettingsProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { VIDEO_STALL_DOWNGRADE_REELS_MS } from "@/lib/performance/app-state";
+import {
+  recordQualityDowngrade,
+  recordTimeToFirstFrame,
+  recordVideoStart,
+} from "@/lib/performance/video-metrics";
 import { filterExistingVideoUrls, getVideoUrlProbeResult } from "@/lib/utils/video-url-probe";
+import {
+  getCachedVideoBlobUrl,
+  prefetchVideoBlob,
+} from "@/lib/utils/video-blob-cache";
 import {
   getReelsImmediatePlayback,
   hasDownloadToken,
@@ -20,6 +29,7 @@ export function useReelsVideoSrc(
   post: UserPostDoc,
   shouldLoad: boolean,
   isActive: boolean,
+  isNext = false,
 ) {
   const tier = useEffectiveNetworkTier();
   const settings = useSettingsOptional();
@@ -90,15 +100,35 @@ export function useReelsVideoSrc(
   const playbackSrc = shouldLoad ? (playableUrls[srcIndex] ?? playableUrls[0] ?? "") : "";
   const resolving = shouldLoad && probing && !playbackSrc && hasPostVideo(post);
 
+  const blobSrc = useMemo(() => {
+    if (!playbackSrc || !shouldLoad) return null;
+    return getCachedVideoBlobUrl(playbackSrc);
+  }, [playbackSrc, shouldLoad]);
+
+  const effectiveSrc = blobSrc ?? playbackSrc;
+
+  const loadStartedRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (isActive && playbackSrc) {
+      loadStartedRef.current = performance.now();
+    }
+  }, [isActive, playbackSrc, post.id]);
+
+  useEffect(() => {
+    if (!isNext || !playbackSrc) return;
+    void prefetchVideoBlob(playbackSrc, "high", post.id)?.catch(() => {});
+  }, [isNext, playbackSrc, post.id]);
+
   const downgrade = useCallback((): boolean => {
     const next = srcIndexRef.current + 1;
     if (next < urlsRef.current.length) {
       srcIndexRef.current = next;
       setSrcIndex(next);
+      recordQualityDowngrade(post.id, urlsRef.current[next] ?? "unknown", "reels");
       return true;
     }
     return false;
-  }, []);
+  }, [post.id]);
 
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -120,7 +150,13 @@ export function useReelsVideoSrc(
 
   const onPlaying = useCallback(() => {
     clearStallTimer();
-  }, [clearStallTimer]);
+    if (loadStartedRef.current !== null) {
+      const ms = Math.round(performance.now() - loadStartedRef.current);
+      recordTimeToFirstFrame(post.id, ms, "reels");
+      recordVideoStart(post.id, ms, "reels");
+      loadStartedRef.current = null;
+    }
+  }, [clearStallTimer, post.id]);
 
   const onError = useCallback((): boolean => {
     clearStallTimer();
@@ -130,7 +166,7 @@ export function useReelsVideoSrc(
   useEffect(() => clearStallTimer, [clearStallTimer]);
 
   return {
-    src: playbackSrc,
+    src: effectiveSrc,
     remoteSrc: playbackSrc,
     poster: playback.poster,
     tier,

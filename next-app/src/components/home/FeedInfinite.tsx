@@ -35,7 +35,7 @@ import {
 import { isCacheExpired } from "@/lib/cache/constants";
 import { useFeedPosts } from "@/lib/hooks/usePosts";
 import { useInfiniteScrollPosts, type InfiniteScrollItem } from "@/lib/hooks/useInfiniteScrollPosts";
-import { FEED_SUGGESTIONS_DEFER_MS } from "@/lib/performance/app-state";
+import { FEED_SUGGESTIONS_DEFER_MS, FEED_POSTER_PREFETCH_MAX } from "@/lib/performance/app-state";
 import {
   getPostFeedImageCandidates,
   getPostFeedThumbnailCandidates,
@@ -46,6 +46,7 @@ import { useAppStore } from "@/store/appStore";
 import type { PublicUser } from "@/lib/services/friends";
 import type { EnrichedPost } from "@/store/appStore";
 import type { EventDoc } from "@/types";
+import { VirtualFeedList } from "@/components/feed/VirtualFeedList";
 
 type FeedRow =
   | { kind: "post"; post: EnrichedPost; itemKey: string }
@@ -252,14 +253,14 @@ export function FeedInfinite() {
     [items, availability],
   );
 
-  // Prefetch posters for upcoming feed cards before they scroll into view
+  // Prefetch posters for first visible cards only
   useEffect(() => {
-    const upcoming = displayPostsFiltered.slice(0, 12);
+    const upcoming = displayPostsFiltered.slice(0, 8);
     for (const post of upcoming) {
       const urls = getPostVideoUrl(post)
         ? getPostFeedThumbnailCandidates(post)
         : getPostFeedImageCandidates(post);
-      for (const url of urls.slice(0, 2)) {
+      for (const url of urls.slice(0, FEED_POSTER_PREFETCH_MAX)) {
         prefetchImageUrl(url);
       }
     }
@@ -300,59 +301,51 @@ export function FeedInfinite() {
   return (
     <PullToRefresh onRefresh={handleRefresh} refreshing={refreshing}>
       <section>
-        {feedRows.map((row, index) => {
-        if (row.kind === "post") {
-          return (
-            <FeedPostCard
-              key={row.itemKey}
-              post={row.post}
-              followingIds={following}
-              onFollowChange={handleFollowChange}
-              priority={index === 0}
-              onPostSeen={markSeen}
-            />
-          );
-        }
-
-        if (row.kind === "friends") {
-          return (
-            <FeedFriendSuggestions
-              key={`suggest-friends-${index}`}
-              users={friendSuggestions}
-              following={following}
-              onFollowChange={handleFollowChange}
-            />
-          );
-        }
-
-        if (row.kind === "videos") {
-          return (
-            <FeedVideoSuggestions
-              key={`suggest-videos-${index}`}
-              posts={filteredVideoSuggestions}
-            />
-          );
-        }
-
-        if (row.kind === "events") {
-          return (
-            <FeedEventSuggestions
-              key={`suggest-events-${index}`}
-              events={eventSuggestions}
-            />
-          );
-        }
-
-        return null;
-      })}
-
-      <div ref={sentinelRef} className="h-1" aria-hidden />
-
-      {loadingMore && (
-        <div className="flex justify-center py-10">
-          <div className="h-7 w-7 animate-spin rounded-full border-2 border-gold border-t-transparent" />
-        </div>
-      )}
+        <VirtualFeedList
+          items={feedRows}
+          getItemKey={(row, index) =>
+            row.kind === "post" ? row.itemKey : `${row.kind}-${index}`
+          }
+          renderItem={(row, index) => {
+            if (row.kind === "post") {
+              return (
+                <FeedPostCard
+                  post={row.post}
+                  followingIds={following}
+                  onFollowChange={handleFollowChange}
+                  priority={index === 0}
+                  onPostSeen={markSeen}
+                />
+              );
+            }
+            if (row.kind === "friends") {
+              return (
+                <FeedFriendSuggestions
+                  users={friendSuggestions}
+                  following={following}
+                  onFollowChange={handleFollowChange}
+                />
+              );
+            }
+            if (row.kind === "videos") {
+              return <FeedVideoSuggestions posts={filteredVideoSuggestions} />;
+            }
+            if (row.kind === "events") {
+              return <FeedEventSuggestions events={eventSuggestions} />;
+            }
+            return null;
+          }}
+          footer={
+            <>
+              <div ref={sentinelRef} className="h-1" aria-hidden />
+              {loadingMore && (
+                <div className="flex justify-center py-10">
+                  <div className="h-7 w-7 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+                </div>
+              )}
+            </>
+          }
+        />
       </section>
     </PullToRefresh>
   );

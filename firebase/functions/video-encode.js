@@ -16,6 +16,15 @@ const VIDEO_ENCODE_PROFILE = {
     profile: "main",
     level: "3.1",
   },
+  serverMedium: {
+    maxWidth: 854,
+    maxHeight: 480,
+    crf: "24",
+    preset: "fast",
+    audioBitrate: "96k",
+    profile: "main",
+    level: "3.0",
+  },
   serverLow: {
     maxWidth: 1280,
     maxHeight: 720,
@@ -41,6 +50,7 @@ function standardEncodePaths(userId, postId) {
   return {
     base,
     preview: `${base}/preview.mp4`,
+    medium: `${base}/medium.mp4`,
     low: `${base}/low.mp4`,
     high: `${base}/high.mp4`,
     thumb: `${base}/thumb.jpg`,

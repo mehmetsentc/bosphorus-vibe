@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { dedupePostsById } from "@/lib/utils/dedupe-posts";
+import { SESSION_POSTS_MAX } from "@/lib/performance/app-state";
 import { persist, createJSONStorage } from "zustand/middleware";
 import {
   PERSIST_POSTS_MAX,
@@ -138,9 +139,10 @@ export const useAppStore = create<AppStoreState>()(
           const merged = state.posts
             ? [...state.posts.posts, ...newPosts]
             : newPosts;
+          const deduped = dedupePostsById(merged);
           return {
             posts: {
-              posts: dedupePostsById(merged),
+              posts: deduped.slice(-SESSION_POSTS_MAX),
               hasMore: hasMore ?? state.posts?.hasMore ?? true,
             },
           };
@@ -160,9 +162,10 @@ export const useAppStore = create<AppStoreState>()(
           const merged = state.reels
             ? [...state.reels.posts, ...newPosts]
             : newPosts;
+          const deduped = dedupePostsById(merged);
           return {
             reels: {
-              posts: dedupePostsById(merged),
+              posts: deduped.slice(-SESSION_POSTS_MAX),
               hasMore: hasMore ?? state.reels?.hasMore ?? true,
             },
           };

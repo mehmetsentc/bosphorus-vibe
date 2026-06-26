@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { getPostImageUrl, getPostVideoUrl } from "@/lib/services/firestore";
 import { getVideoReelsPath } from "@/lib/utils/video-sources";
-import { AdaptiveVideo } from "@/components/video/AdaptiveVideo";
+import { FeedVideoPoster } from "@/components/post/FeedVideoPoster";
 import { useT } from "@/components/providers/I18nProvider";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import type { UserPostDoc } from "@/types";
@@ -15,6 +15,7 @@ type EventMediaFeedProps = {
   eventId: string;
 };
 
+/** Grid shows poster thumbnails only — no video decoders until user taps. */
 export function EventMediaFeed({ posts, eventId }: EventMediaFeedProps) {
   const t = useT();
 
@@ -39,7 +40,7 @@ export function EventMediaFeed({ posts, eventId }: EventMediaFeedProps) {
             >
               {hasVideo ? (
                 <>
-                  <AdaptiveVideo post={post} />
+                  <FeedVideoPoster post={post} />
                   <span className="absolute right-1.5 top-1.5 text-[10px] text-white drop-shadow">
                     ▶
                   </span>

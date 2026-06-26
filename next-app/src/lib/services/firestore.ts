@@ -106,6 +106,7 @@ function mapPost(id: string, data: Record<string, unknown>): UserPostDoc {
     postVideoURL: sanitizeMediaUrl(data.postVideoURL),
     postVideoURL_original: sanitizeMediaUrl(data.postVideoURL_original),
     postVideoURL_preview: sanitizeMediaUrl(data.postVideoURL_preview),
+    postVideoURL_medium: sanitizeMediaUrl(data.postVideoURL_medium),
     postVideoURL_low: sanitizeMediaUrl(data.postVideoURL_low),
     postVideoURL_high: sanitizeMediaUrl(data.postVideoURL_high),
     postVideothumbnail: sanitizeMediaUrl(data.postVideothumbnail),
@@ -362,52 +363,32 @@ export type VideoPostsPage = {
   hasMore: boolean;
 };
 
-/** Paginated video posts — loops through batches until enough video posts collected. */
+/** Paginated video posts — indexed Firestore query (postVideo != ""). */
 export async function getVideoPostsPage(
   pageSize = 12,
   cursor?: QueryDocumentSnapshot<DocumentData> | null,
 ): Promise<VideoPostsPage> {
-  const batchSize = 20;
-  let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
-  const collected: { post: UserPostDoc; doc: QueryDocumentSnapshot<DocumentData> }[] = [];
-  let hasMore = true;
-  let pageCursor: QueryDocumentSnapshot<DocumentData> | null = cursor ?? null;
-
-  while (collected.length < pageSize && hasMore) {
-    const constraints: QueryConstraint[] = [
-      orderBy("timePosted", "desc"),
-      limit(batchSize),
-    ];
-    if (pageCursor) {
-      constraints.push(startAfter(pageCursor));
-    }
-
-    const snap = await getDocs(
-      query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
-    );
-
-    if (snap.empty) {
-      hasMore = false;
-      break;
-    }
-
-    for (const d of snap.docs) {
-      lastDoc = d;
-      const post = mapPost(d.id, d.data());
-      if (getPostVideoUrl(post)) {
-        collected.push({ post, doc: d });
-      }
-      if (collected.length >= pageSize) break;
-    }
-
-    hasMore = snap.docs.length === batchSize;
-    pageCursor = null;
+  const constraints: QueryConstraint[] = [
+    where("postVideo", "!=", ""),
+    orderBy("postVideo"),
+    orderBy("timePosted", "desc"),
+    limit(pageSize),
+  ];
+  if (cursor) {
+    constraints.push(startAfter(cursor));
   }
 
+  const snap = await getDocs(
+    query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
+  );
+
+  const posts = snap.docs.map((d) => mapPost(d.id, d.data()));
+  const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
+
   return {
-    posts: collected.map((r) => r.post),
-    lastDoc: collected[collected.length - 1]?.doc ?? lastDoc,
-    hasMore,
+    posts,
+    lastDoc,
+    hasMore: snap.docs.length === pageSize,
   };
 }
 

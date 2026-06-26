@@ -9,6 +9,18 @@ export const PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
 /** How many reel slides keep a mounted <video> (active ± radius). iOS caps ~4 decoders. */
 export const REELS_VIDEO_WINDOW_RADIUS = 1;
 
+/** Reel DOM shells rendered outside the video window (poster-only buffer). */
+export const REELS_DOM_WINDOW_RADIUS = 2;
+
+/** Max posts kept in session memory (feed + reels append). Older pages drop off. */
+export const SESSION_POSTS_MAX = 120;
+
+/** Max concurrent poster prefetches per feed card */
+export const FEED_POSTER_PREFETCH_MAX = 2;
+
+/** Virtual feed row height estimate (px) — remeasured on mount */
+export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 540;
+
 /** Defer mounting feed video until after poster paints (LCP) */
 export const FEED_VIDEO_MOUNT_DEFER_MS = 80;
 
