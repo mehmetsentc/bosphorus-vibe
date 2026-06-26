@@ -7,11 +7,11 @@
     "dev:clean": "cd next-app && npm run dev:clean",
     "dev:reset": "cd next-app && npm run dev:reset",
     "start": "cd next-app && npm start",
-    "firebase:deploy:storage": "cd firebase && firebase deploy --only storage",
-    "firebase:deploy:rules": "cd firebase && firebase deploy --only firestore:rules,storage",
-    "firebase:deploy:functions": "cd firebase && firebase deploy --only functions",
-    "firebase:deploy:transcode": "cd firebase && firebase deploy --only functions:transcodeVideoPost,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch,functions:adminRunTranscodeBatch",
-    "firebase:deploy:thumbnails": "cd firebase && firebase deploy --only functions:processPendingVideoThumbnails,functions:runVideoThumbnailBatch,functions:adminRunThumbnailBatch",
-    "firebase:deploy:indexes": "cd firebase && firebase deploy --only firestore:indexes"
+    "firebase:deploy:storage": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only storage",
+    "firebase:deploy:rules": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only firestore:rules,storage",
+    "firebase:deploy:functions": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions",
+    "firebase:deploy:transcode": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions:transcodeVideoPost,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch,functions:adminRunTranscodeBatch",
+    "firebase:deploy:thumbnails": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions:processPendingVideoThumbnails,functions:runVideoThumbnailBatch,functions:adminRunThumbnailBatch",
+    "firebase:deploy:indexes": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only firestore:indexes"
   }
 }
