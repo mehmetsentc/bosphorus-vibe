@@ -21,7 +21,8 @@ export function ReelsPrefetcher() {
     if (!hydrated) return;
     const { reels, lastFetched } = useAppStore.getState();
     if (reels && !isCacheExpired(lastFetched.reels)) {
-      prewarmReelsPosts(reels.posts.slice(0, 3), tier);
+      prewarmReelsPosts(reels.posts.slice(0, 1), tier, true);
+      if (reels.posts[1]) prewarmReelsPosts([reels.posts[1]], tier, false);
     }
     void fetchReelsFirstPage().catch(() => {});
   }, [hydrated, tier]);

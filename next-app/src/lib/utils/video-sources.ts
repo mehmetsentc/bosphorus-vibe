@@ -525,10 +525,9 @@ export function getReelsImmediatePlayback(
 
   if (original && !trusted.includes(original)) trusted.push(original);
 
-  const ladderExtra = getReelsPlaybackLadder(post).filter((u) => !trusted.includes(u));
-  const playable = orderUrlsTokenizedFirst(uniqueUrls(...trusted, ...ladderExtra));
-  const src = pickPlayableSrc(playable) || playable[0] || "";
-  const fallbacks = playable.filter((url) => url !== src);
+  const trustedPlayable = orderUrlsTokenizedFirst(uniqueUrls(...trusted));
+  const src = pickPlayableSrc(trustedPlayable) || trustedPlayable[0] || "";
+  const fallbacks = trustedPlayable.filter((url) => url !== src);
   return { src, fallbacks, poster };
 }
 
@@ -723,18 +722,17 @@ export function prewarmPostVideo(
   if (poster) prefetchImageUrl(poster);
 }
 
-/** Prewarm reels — next clip only (leading bytes + optional blob). */
+/** Prewarm reels — current + next clip (leading bytes + blob for next). */
 export function prewarmReelsPost(
   post: UserPostDoc,
   tier: NetworkTier,
-  withElement = false,
+  withBlob = false,
 ): void {
   const src = getReelsPrewarmUrl(post, tier);
   const poster = getPostVideoPoster(post);
   if (src) {
     prefetchVideoLeadingBytes(src, post.id);
-    warmNextReelBlob(src, post.id);
-    if (withElement) prewarmVideoUrl(src);
+    if (withBlob) warmNextReelBlob(src, post.id);
   }
   if (poster) prefetchImageUrl(poster);
 }
@@ -742,9 +740,11 @@ export function prewarmReelsPost(
 export function prewarmReelsPosts(
   posts: UserPostDoc[],
   tier: NetworkTier,
+  withBlobForFirst = false,
 ): void {
-  const next = posts[0];
-  if (next) prewarmReelsPost(next, tier, false);
+  posts.forEach((post, index) => {
+    prewarmReelsPost(post, tier, withBlobForFirst && index === 0);
+  });
 }
 
 /**

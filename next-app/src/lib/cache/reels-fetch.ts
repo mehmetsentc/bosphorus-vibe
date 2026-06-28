@@ -80,7 +80,8 @@ export async function fetchReelsFirstPage(
       hasMore: result.hasMore,
     });
     if (typeof window !== "undefined" && result.posts.length > 0) {
-      prewarmReelsPosts([result.posts[0]!], "slow");
+      prewarmReelsPosts([result.posts[0]!], "slow", true);
+      if (result.posts[1]) prewarmReelsPosts([result.posts[1]], "slow", false);
     }
     return result;
   })();

@@ -16,6 +16,7 @@ import {
 } from "@/components/icons/Icons";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
+import { REELS_FIRST_FRAME_TIMEOUT_MS } from "@/lib/performance/app-state";
 import type { UserPostDoc } from "@/types";
 
 const SEEK_STEP = 10;
@@ -99,7 +100,15 @@ export function VideoPlayer({
   } = isReels ? reelsVideo : adaptiveVideo;
 
   const resolving = isReels && reelsVideo.resolving;
-  const preload = isActive ? "auto" : isNext ? "metadata" : "none";
+  const preload = isReels
+    ? isActive || isNext
+      ? "auto"
+      : "none"
+    : isActive
+      ? "auto"
+      : isNext
+        ? "metadata"
+        : "none";
 
   const reelsMuted = useVideoSoundStore((s) => s.reelsMuted);
   const setReelsMuted = useVideoSoundStore((s) => s.setReelsMuted);
@@ -168,12 +177,16 @@ export function VideoPlayer({
     if (video) applyMuted(video, reelsMuted);
   }, [reelsMuted, isActive, isReels]);
 
-  // Active slide: load + play
+  // Active slide: load + play immediately
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoSrc) return;
 
     if (isActive && autoPlay) {
+      applyMuted(video, isReels ? true : reelsMuted);
+      if (video.src !== videoSrc) {
+        video.src = videoSrc;
+      }
       if (video.readyState < HTMLMediaElement.HAVE_METADATA) video.load();
       attemptPlay(video);
       return;
@@ -195,6 +208,7 @@ export function VideoPlayer({
     videoSrc,
     post.id,
     isReels,
+    reelsMuted,
     attemptPlay,
     releasePlay,
   ]);
@@ -204,6 +218,7 @@ export function VideoPlayer({
   // Force fallback when active video never reaches first frame
   useEffect(() => {
     if (!isActive || !videoSrc) return;
+    const timeoutMs = isReels ? REELS_FIRST_FRAME_TIMEOUT_MS : 3000;
     const timeout = window.setTimeout(() => {
       const video = videoRef.current;
       if (!video || hasPlayedRef.current) return;
@@ -214,9 +229,9 @@ export function VideoPlayer({
           setLoading(true);
         }
       }
-    }, 3000);
+    }, timeoutMs);
     return () => window.clearTimeout(timeout);
-  }, [isActive, videoSrc, handleAdaptiveError]);
+  }, [isActive, videoSrc, handleAdaptiveError, isReels]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -272,7 +287,7 @@ export function VideoPlayer({
 
   if (!videoSrc && !resolving && !poster) return null;
 
-  const videoKey = isReels ? `${post.id}:${videoSrc}` : `${post.id}-${videoSrc}`;
+  const videoKey = isReels ? post.id : `${post.id}-${videoSrc}`;
 
   return (
     <div

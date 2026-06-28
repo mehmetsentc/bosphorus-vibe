@@ -57,3 +57,21 @@ export async function filterExistingVideoUrls(urls: string[]): Promise<string[]>
   );
   return results.filter((r) => r.ok).map((r) => r.url);
 }
+
+/** Fire-and-forget probe — updates cache; optional callback when done. */
+export function probeVideoUrlsInBackground(
+  urls: string[],
+  onComplete?: (existing: string[]) => void,
+): () => void {
+  const unique = [...new Set(urls.filter(Boolean))];
+  if (!unique.length) return () => {};
+
+  let cancelled = false;
+  void filterExistingVideoUrls(unique).then((existing) => {
+    if (!cancelled) onComplete?.(existing);
+  });
+
+  return () => {
+    cancelled = true;
+  };
+}

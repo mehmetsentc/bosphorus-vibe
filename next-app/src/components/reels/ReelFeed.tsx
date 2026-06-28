@@ -93,7 +93,7 @@ const ReelItem = memo(function ReelItem({
 
   return (
     <div ref={ref} className="reels-slide bg-black">
-      {slidePoster && (
+      {slidePoster && !(mountVideo && isActive) && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={slidePoster}
@@ -292,17 +292,19 @@ export function ReelFeed({
     }
   }, [visiblePosts.length]);
 
-  // Prewarm next reel only — cancel stale downloads on swipe
+  // Prewarm active reel (blob) + next reel leading bytes
   useLayoutEffect(() => {
     const current = visiblePosts[activeIndex];
     const next = visiblePosts[activeIndex + 1];
     setReelPrefetchScope(current?.id ?? null, next?.id ?? null);
 
     const keepUrls: string[] = [];
+    if (current) keepUrls.push(getReelsPrewarmUrl(current, networkTier));
     if (next) keepUrls.push(getReelsPrewarmUrl(next, networkTier));
     cancelVideoPrefetchesExcept(keepUrls);
 
-    if (next) prewarmReelsPosts([next], networkTier);
+    if (current) prewarmReelsPosts([current], networkTier, true);
+    if (next) prewarmReelsPosts([next], networkTier, false);
   }, [activeIndex, visiblePosts, networkTier]);
 
   // Jump to tapped post before paint when opening from feed
