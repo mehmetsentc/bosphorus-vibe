@@ -10,6 +10,12 @@ const {
 
 const STORAGE_MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
+/** CLI + Cloud Functions — single admin app for this module's firebase-admin copy. */
+function initFirebaseAdmin(options) {
+  if (admin.apps.length > 0) return;
+  admin.initializeApp(options);
+}
+
 function getPostUserId(data) {
   const ref = data.postUser;
   if (!ref) return null;
@@ -208,6 +214,7 @@ async function enqueueTranscodeBatch(limit = 100) {
 }
 
 module.exports = {
+  initFirebaseAdmin,
   getPostUserId,
   getOriginalVideoUrl,
   hasServerEncodedVariants,

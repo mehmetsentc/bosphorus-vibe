@@ -4,22 +4,19 @@
  * 1. Storage CORS (Range istekleri — hızlı akış)
  * 2. Storage'daki mevcut preview/low → Firestore URL sync
  * 3. Eksik encode kuyruğu
- * 4. FFmpeg transcode batch
+ * 4. FFmpeg transcode batch (TRANSCODE_BACKFILL_SECRET veya Cloud scheduler)
  *
  * Kullanım:
- *   node scripts/storage-video-pipeline.mjs
+ *   npm run storage:configure
  *   node scripts/storage-video-pipeline.mjs --cors-only
- *   node scripts/storage-video-pipeline.mjs --max-rounds=20
  *
  * Gerekli: bosphorusvibe-dbd93-firebase-adminsdk-*.json (repo kökü)
- *          veya TRANSCODE_BACKFILL_SECRET (.env.local)
+ * Opsiyonel: TRANSCODE_BACKFILL_SECRET in next-app/.env.local
  */
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, readdirSync } from "fs";
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { initializeApp, cert } from "firebase-admin/app";
-import { getStorage } from "firebase-admin/storage";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -27,68 +24,84 @@ const PROJECT = "bosphorusvibe-dbd93";
 const BUCKET = "bosphorusvibe-dbd93.firebasestorage.app";
 const CF_URL = `https://europe-central2-${PROJECT}.cloudfunctions.net/configureAllVideoStorage`;
 
-const require = createRequire(import.meta.url);
-const { syncStorageBatch, enqueueTranscodeBatch } = require(
-  join(ROOT, "firebase/functions/storage-video-sync.js"),
+const requireFunctions = createRequire(
+  join(ROOT, "firebase/functions/package.json"),
 );
+const admin = requireFunctions("firebase-admin");
+const { syncStorageBatch, enqueueTranscodeBatch, initFirebaseAdmin } =
+  requireFunctions("./storage-video-sync.js");
 
 function loadEnv() {
   const envPath = join(ROOT, "next-app/.env.local");
   if (!existsSync(envPath)) return;
   for (const line of readFileSync(envPath, "utf8").split("\n")) {
-    const m = line.match(/^(\w+)=(.+)$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const m = trimmed.match(/^([\w_]+)=(.*)$/);
+    if (!m || process.env[m[1]]) continue;
+    let val = m[2].trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    process.env[m[1]] = val;
   }
 }
 
 function loadServiceAccount() {
-  const glob = join(ROOT, `${PROJECT}-firebase-adminsdk`);
-  const candidates = [
-    join(ROOT, `${PROJECT}-firebase-adminsdk-fbsvc-299c1777aa.json`),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8"));
+  const fromRoot = readdirSync(ROOT).filter(
+    (f) => f.includes("firebase-adminsdk") && f.endsWith(".json"),
+  );
+  for (const name of fromRoot) {
+    return JSON.parse(readFileSync(join(ROOT, name), "utf8"));
   }
-  throw new Error(`Service account JSON bulunamadı (${glob}*.json)`);
+  throw new Error(
+    `Service account JSON bulunamadı — repo köküne ${PROJECT}-firebase-adminsdk-*.json koyun`,
+  );
+}
+
+/** Same firebase-admin instance as storage-video-sync.js (functions/node_modules). */
+function ensureAdminInitialized() {
+  if (admin.apps.length > 0) return;
+  const sa = loadServiceAccount();
+  initFirebaseAdmin({
+    credential: admin.credential.cert(sa),
+    projectId: PROJECT,
+    storageBucket: BUCKET,
+  });
 }
 
 function parseArgs() {
   const args = process.argv.slice(2);
   return {
     corsOnly: args.includes("--cors-only"),
-    maxRounds: Number(args.find((a) => a.startsWith("--max-rounds="))?.split("=")[1] || 50),
-    syncLimit: Number(args.find((a) => a.startsWith("--sync="))?.split("=")[1] || 100),
-    enqueueLimit: Number(args.find((a) => a.startsWith("--enqueue="))?.split("=")[1] || 500),
-    transcodeLimit: Number(args.find((a) => a.startsWith("--transcode="))?.split("=")[1] || 5),
+    maxRounds: Number(
+      args.find((a) => a.startsWith("--max-rounds="))?.split("=")[1] || 50,
+    ),
+    syncLimit: Number(
+      args.find((a) => a.startsWith("--sync="))?.split("=")[1] || 100,
+    ),
+    enqueueLimit: Number(
+      args.find((a) => a.startsWith("--enqueue="))?.split("=")[1] || 500,
+    ),
+    transcodeLimit: Number(
+      args.find((a) => a.startsWith("--transcode="))?.split("=")[1] || 5,
+    ),
   };
 }
 
 async function applyStorageCors() {
-  const sa = loadServiceAccount();
-  initializeApp({
-    credential: cert(sa),
-    projectId: PROJECT,
-    storageBucket: BUCKET,
-  });
-
+  ensureAdminInitialized();
   const corsPath = join(__dirname, "storage-cors.json");
   const cors = JSON.parse(readFileSync(corsPath, "utf8"));
-  const bucket = getStorage().bucket(BUCKET);
-  await bucket.setMetadata({ cors });
+  await admin.storage().bucket(BUCKET).setMetadata({ cors });
   console.log("✓ Storage CORS yapılandırıldı:", BUCKET);
 }
 
 async function runLocalBatch(opts) {
-  const sa = loadServiceAccount();
-  try {
-    initializeApp({
-      credential: cert(sa),
-      projectId: PROJECT,
-      storageBucket: BUCKET,
-    });
-  } catch {
-    // already initialized
-  }
+  ensureAdminInitialized();
 
   const sync = await syncStorageBatch(opts.syncLimit);
   const enqueue = await enqueueTranscodeBatch(opts.enqueueLimit);
@@ -97,7 +110,9 @@ async function runLocalBatch(opts) {
 
   const secret = process.env.TRANSCODE_BACKFILL_SECRET?.trim();
   if (!secret) {
-    console.warn("⚠ TRANSCODE_BACKFILL_SECRET yok — transcode batch atlandı");
+    console.warn(
+      "⚠ TRANSCODE_BACKFILL_SECRET yok — encode batch atlandı (kuyruk 10 dk scheduler ile işlenecek)",
+    );
     return { hasMore: Boolean(sync.hasMore || enqueue.hasMore), transcode: null };
   }
 
@@ -188,7 +203,9 @@ async function main() {
   }
 
   if (hasMore) {
-    console.log(`\n⚠ ${opts.maxRounds} tur tamamlandı — kalan işler var. Tekrar çalıştırın veya admin panelden devam edin.`);
+    console.log(
+      `\n⚠ ${opts.maxRounds} tur tamamlandı — kalan işler var. Tekrar çalıştırın veya admin panelden devam edin.`,
+    );
   } else {
     console.log("\n✓ Tüm Storage video katmanları yapılandırıldı (veya kuyruk boş).");
   }
