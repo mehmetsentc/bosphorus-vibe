@@ -60,7 +60,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
 function ReelsVideoPlayer(props: VideoPlayerProps) {
   const { post, isActive = true, isNext = false, isNear = false } = props;
   const shouldLoad = isActive || isNext || isNear;
-  const { src, poster, onError } = useReelsVideoSrc(post, shouldLoad);
+  const { src, poster, onError, srcIndex } = useReelsVideoSrc(post, shouldLoad);
   const videoSrc = src || getFastFlowPlaybackUrl(post);
   return (
     <VideoPlayerCore
@@ -68,6 +68,7 @@ function ReelsVideoPlayer(props: VideoPlayerProps) {
       isReels
       videoSrc={videoSrc}
       poster={poster}
+      playbackSrcIndex={srcIndex}
       onPlaybackError={onError}
     />
   );
@@ -91,6 +92,7 @@ type VideoPlayerCoreProps = VideoPlayerProps & {
   isReels: boolean;
   videoSrc: string;
   poster?: string;
+  playbackSrcIndex?: number;
   onPlaybackError: () => boolean;
 };
 
@@ -108,6 +110,7 @@ function VideoPlayerCore({
   isReels,
   videoSrc,
   poster,
+  playbackSrcIndex = 0,
   onPlaybackError,
 }: VideoPlayerCoreProps) {
   const videoClassName =
@@ -153,6 +156,13 @@ function VideoPlayerCore({
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(() => !poster);
   const [showPoster, setShowPoster] = useState(true);
+
+  const revealReelsFrame = useCallback((video: HTMLVideoElement) => {
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setShowPoster(false);
+      setLoading(false);
+    }
+  }, []);
 
   const attemptPlay = useCallback(
     (video: HTMLVideoElement) => {
@@ -260,6 +270,23 @@ function VideoPlayerCore({
 
   useEffect(() => () => clearLoadingTimer(), [clearLoadingTimer]);
 
+  // Reels: if first URL never decodes, try next tier after a short wait (not during normal buffer)
+  useEffect(() => {
+    if (!isReelsContext || !isActive || !videoSrc) return;
+    const timeoutMs = 5000;
+    const timeout = window.setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || hasPlayedRef.current) return;
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      const downgraded = handleAdaptiveError();
+      if (downgraded) {
+        setShowPoster(true);
+        setLoading(true);
+      }
+    }, timeoutMs);
+    return () => window.clearTimeout(timeout);
+  }, [isActive, videoSrc, playbackSrcIndex, isReelsContext, handleAdaptiveError]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !shouldLoad || isActive || !videoSrc) return;
@@ -314,7 +341,9 @@ function VideoPlayerCore({
 
   if (!videoSrc && !poster) return null;
 
-  const videoKey = isReelsContext ? post.id : `${post.id}-${videoSrc || "pending"}`;
+  const videoKey = isReelsContext
+    ? `${post.id}-${playbackSrcIndex}-${videoSrc}`
+    : `${post.id}-${videoSrc || "pending"}`;
 
   return (
     <div
@@ -346,26 +375,37 @@ function VideoPlayerCore({
           autoPlay={isActive && autoPlay}
           muted={isMuted}
           preload={preload}
-          className={`${videoClassName} z-[1]`}
+          className={`${videoClassName} z-[1] [transform:translateZ(0)]`}
           onLoadStart={() => setLoading(true)}
-          onLoadedData={() => {
+          onLoadedData={(e) => {
+            if (isReelsContext) revealReelsFrame(e.currentTarget);
             if (isActive && autoPlay && videoRef.current?.paused) {
               attemptPlay(videoRef.current);
             }
           }}
           onLoadedMetadata={(e) => {
             setDuration(e.currentTarget.duration || 0);
+            if (isReelsContext) revealReelsFrame(e.currentTarget);
           }}
-          onCanPlay={() => {
+          onCanPlay={(e) => {
             setLoading(false);
+            if (isReelsContext) revealReelsFrame(e.currentTarget);
             if (isActive && autoPlay && videoRef.current?.paused) {
               attemptPlay(videoRef.current);
             }
             onReady?.();
           }}
           onError={handleVideoError}
+          onStalled={() => {
+            const video = videoRef.current;
+            if (!video || !isReelsContext || !isActive) return;
+            window.setTimeout(() => {
+              if (video.paused && isActive) void video.play().catch(() => {});
+            }, 300);
+          }}
           onWaiting={() => {
             clearLoadingTimer();
+            if (isReelsContext) return;
             loadingTimerRef.current = setTimeout(() => setLoading(true), 400);
           }}
           onPlaying={() => {
@@ -376,7 +416,7 @@ function VideoPlayerCore({
             requestPlay(post.id);
           }}
           onPause={() => {
-            if (!hasPlayedRef.current) setShowPoster(true);
+            if (!isReelsContext && !hasPlayedRef.current) setShowPoster(true);
           }}
           onTimeUpdate={(e) => {
             setCurrent(e.currentTarget.currentTime);

@@ -47,6 +47,7 @@ export function useReelsVideoSrc(post: UserPostDoc, shouldLoad: boolean) {
   return {
     src,
     poster: getPostVideoPoster(post),
+    srcIndex,
     onError,
   };
 }

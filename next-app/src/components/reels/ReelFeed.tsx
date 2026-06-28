@@ -73,8 +73,6 @@ const ReelItem = memo(function ReelItem({
 }) {
   if (!getPostVideoUrl(post)) return null;
 
-  const slidePoster = getPostVideoPoster(post) ?? post.postVideothumbnail;
-
   const sideActions = (
     <VideoFeedSideActions
       post={post}
@@ -83,17 +81,10 @@ const ReelItem = memo(function ReelItem({
     />
   );
 
+  const thumbPoster = getPostVideoPoster(post) ?? post.postVideothumbnail;
+
   return (
     <div className="reels-slide bg-black">
-      {slidePoster && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={slidePoster}
-          alt=""
-          aria-hidden
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      )}
       {mountVideo ? (
         <VideoPlayer
           post={post}
@@ -106,12 +97,12 @@ const ReelItem = memo(function ReelItem({
           showSeekBar={isActive}
         />
       ) : (
-        post.postVideothumbnail && (
+        thumbPoster && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={post.postVideothumbnail}
+            src={thumbPoster}
             alt=""
-            className="h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         )
       )}
@@ -301,8 +292,15 @@ export function ReelFeed({
     if (initialScrollDone.current || !initialPostId || !containerRef.current) return;
     const idx = visiblePosts.findIndex((p) => p.id === initialPostId);
     if (idx > 0) {
-      containerRef.current.scrollTop = idx * containerRef.current.clientHeight;
-      setActiveIndex(idx);
+      const el = containerRef.current;
+      const snapToPost = () => {
+        const h = el.clientHeight;
+        if (h <= 0) return;
+        el.scrollTop = idx * h;
+        setActiveIndex(idx);
+      };
+      snapToPost();
+      requestAnimationFrame(snapToPost);
     }
     initialScrollDone.current = true;
   }, [visiblePosts, initialPostId]);
