@@ -93,7 +93,7 @@ const ReelItem = memo(function ReelItem({
 
   return (
     <div ref={ref} className="reels-slide bg-black">
-      {slidePoster && !(mountVideo && isActive) && (
+      {slidePoster && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={slidePoster}
@@ -303,8 +303,8 @@ export function ReelFeed({
     if (next) keepUrls.push(getReelsPrewarmUrl(next, networkTier));
     cancelVideoPrefetchesExcept(keepUrls);
 
-    if (current) prewarmReelsPosts([current], networkTier, true);
-    if (next) prewarmReelsPosts([next], networkTier, false);
+    if (current) prewarmReelsPosts([current], networkTier, false);
+    if (next) prewarmReelsPosts([next], networkTier, true);
   }, [activeIndex, visiblePosts, networkTier]);
 
   // Jump to tapped post before paint when opening from feed

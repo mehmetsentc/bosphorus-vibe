@@ -141,14 +141,7 @@ export function VideoPlayer({
     setShowPoster(true);
     hasPlayedRef.current = false;
     setLoading(!poster);
-  }, [post.id, poster]);
-
-  useEffect(() => {
-    if (!isReels) {
-      setShowPoster(true);
-      hasPlayedRef.current = false;
-    }
-  }, [isReels, videoSrc]);
+  }, [post.id, videoSrc, poster]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -184,9 +177,6 @@ export function VideoPlayer({
 
     if (isActive && autoPlay) {
       applyMuted(video, isReels ? true : reelsMuted);
-      if (video.src !== videoSrc) {
-        video.src = videoSrc;
-      }
       if (video.readyState < HTMLMediaElement.HAVE_METADATA) video.load();
       attemptPlay(video);
       return;
@@ -218,7 +208,7 @@ export function VideoPlayer({
   // Force fallback when active video never reaches first frame
   useEffect(() => {
     if (!isActive || !videoSrc) return;
-    const timeoutMs = isReels ? REELS_FIRST_FRAME_TIMEOUT_MS : 3000;
+    const timeoutMs = isReels ? REELS_FIRST_FRAME_TIMEOUT_MS : 3500;
     const timeout = window.setTimeout(() => {
       const video = videoRef.current;
       if (!video || hasPlayedRef.current) return;
@@ -287,7 +277,7 @@ export function VideoPlayer({
 
   if (!videoSrc && !resolving && !poster) return null;
 
-  const videoKey = isReels ? post.id : `${post.id}-${videoSrc}`;
+  const videoKey = `${post.id}-${videoSrc || "pending"}`;
 
   return (
     <div
@@ -299,7 +289,11 @@ export function VideoPlayer({
     >
       {(showPoster || resolving || !videoSrc) && poster && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={poster}
+          alt=""
+          className="absolute inset-0 z-[2] h-full w-full object-cover"
+        />
       )}
 
       {videoSrc && (
@@ -314,14 +308,11 @@ export function VideoPlayer({
           autoPlay={isActive && autoPlay}
           muted={isMuted}
           preload={preload}
-          className={videoClassName}
+          className={`${videoClassName} z-[1]`}
           onLoadStart={() => setLoading(true)}
           onLoadedData={() => {
-            if (isActive) {
-              setShowPoster(false);
-              if (autoPlay && videoRef.current?.paused) {
-                attemptPlay(videoRef.current);
-              }
+            if (isActive && autoPlay && videoRef.current?.paused) {
+              attemptPlay(videoRef.current);
             }
           }}
           onLoadedMetadata={(e) => {
@@ -329,7 +320,6 @@ export function VideoPlayer({
           }}
           onCanPlay={() => {
             setLoading(false);
-            if (isActive) setShowPoster(false);
             if (isActive && autoPlay && videoRef.current?.paused) {
               attemptPlay(videoRef.current);
             }

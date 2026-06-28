@@ -344,7 +344,15 @@ function FeedPostCardInner({
               }`}
               onPlaying={() => {
                 handleAdaptivePlaying();
-                setShowPoster(false);
+                const el = videoRef.current;
+                if (el && el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                  setShowPoster(false);
+                }
+              }}
+              onTimeUpdate={(e) => {
+                if (showPoster && e.currentTarget.currentTime > 0.05) {
+                  setShowPoster(false);
+                }
               }}
               onPause={() => {
                 if (!isActive) setShowPoster(true);

@@ -598,15 +598,42 @@ export function pickVideoSource(
   if (context === "reels") {
     ordered = getReelsPlaybackLadder(post);
   } else if (context === "feed") {
-    if (tier === "slow") {
-      // Slow network: smallest first (preview → low → original)
-      ordered = uniqueUrls(...lows, low, ...previews, original);
-    } else if (tier === "fast") {
-      // Fast network (WiFi/5G): original (720p+) first, low as fallback
-      ordered = uniqueUrls(original, ...lows, low, ...previews);
+    const trusted = getTrustedVideoUrls(post);
+    const encoded = isServerTranscodeReady(post);
+    const inferred = getFastPlaybackCandidates(post);
+
+    if (encoded) {
+      if (tier === "slow") {
+        ordered = uniqueUrls(
+          trusted.preview,
+          trusted.medium,
+          trusted.low,
+          trusted.high,
+          trusted.original,
+        );
+      } else if (tier === "fast") {
+        ordered = uniqueUrls(
+          trusted.original,
+          trusted.high,
+          trusted.low,
+          trusted.medium,
+          trusted.preview,
+        );
+      } else {
+        ordered = uniqueUrls(
+          trusted.low,
+          trusted.original,
+          trusted.medium,
+          trusted.preview,
+          trusted.high,
+        );
+      }
     } else {
-      // Normal network: low.mp4 (480p) first, original next, preview as last resort
-      ordered = uniqueUrls(...lows, low, original, ...previews);
+      const primary =
+        trusted.primary || trusted.original || post.postVideo || "";
+      ordered = orderUrlsTokenizedFirst(
+        uniqueUrls(primary, ...inferred, trusted.original),
+      );
     }
   } else if (options?.preferHighQuality && original) {
     const { high: trustedHigh, low: trustedLow } = getTrustedVideoUrls(post);

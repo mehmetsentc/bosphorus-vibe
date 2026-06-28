@@ -58,8 +58,8 @@ export const INFINITE_SCROLL_NEAR_END = 3;
 /** Buffering longer than this → switch to lower-quality URL if available */
 export const VIDEO_STALL_DOWNGRADE_MS = 800;
 
-/** Reels: downgrade faster — TikTok/IG start from preview, not full original */
-export const VIDEO_STALL_DOWNGRADE_REELS_MS = 200;
+/** Reels: downgrade after sustained stall — not on normal mobile buffering */
+export const VIDEO_STALL_DOWNGRADE_REELS_MS = 1_200;
 
 /** Reels: switch URL if first frame not reached within this window */
-export const REELS_FIRST_FRAME_TIMEOUT_MS = 1_500;
+export const REELS_FIRST_FRAME_TIMEOUT_MS = 2_500;

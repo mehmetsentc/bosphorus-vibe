@@ -37,8 +37,8 @@ function buildInstantReelsUrls(
 }
 
 /**
- * Reels playback — instant start from Firestore URLs (no blocking HEAD probes).
- * Blob cache + background probing for inferred fallbacks only.
+ * Reels playback — stream from Firestore URL immediately.
+ * Blob URL only when already cached (prewarm); never block on full download.
  */
 export function useReelsVideoSrc(
   post: UserPostDoc,
@@ -81,7 +81,6 @@ export function useReelsVideoSrc(
     setPlayableUrls(instantUrls);
   }, [instantUrls.join("|"), post.id]);
 
-  // Background probe inferred URLs only — never blocks first frame
   useEffect(() => {
     if (!shouldLoad || inferredUrls.length === 0) return;
     return probeVideoUrlsInBackground(inferredUrls, (existing) => {
@@ -109,47 +108,14 @@ export function useReelsVideoSrc(
   const activeUrls = playableUrls.length ? playableUrls : instantUrls;
   const playbackSrc = shouldLoad ? (activeUrls[srcIndex] ?? activeUrls[0] ?? "") : "";
 
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const cachedBlob = playbackSrc ? getCachedVideoBlobUrl(playbackSrc) : null;
+  const effectiveSrc = cachedBlob ?? playbackSrc;
 
+  // Background blob for next slide only — never compete with active stream
   useEffect(() => {
-    if (!shouldLoad || !playbackSrc) {
-      setBlobUrl(null);
-      return;
-    }
-
-    const cached = getCachedVideoBlobUrl(playbackSrc);
-    if (cached) {
-      setBlobUrl(cached);
-      return;
-    }
-
-    if (!isActive && !isNext) {
-      setBlobUrl(null);
-      return;
-    }
-
-    const promise = prefetchVideoBlob(
-      playbackSrc,
-      isActive ? "high" : "low",
-      post.id,
-    );
-    if (!promise) return;
-
-    let cancelled = false;
-    void promise
-      .then((url) => {
-        if (!cancelled) setBlobUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) setBlobUrl(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shouldLoad, playbackSrc, isActive, isNext, post.id]);
-
-  const effectiveSrc = blobUrl ?? playbackSrc;
+    if (!shouldLoad || !playbackSrc || !isNext || isActive) return;
+    void prefetchVideoBlob(playbackSrc, "low", post.id)?.catch(() => {});
+  }, [shouldLoad, playbackSrc, isNext, isActive, post.id]);
 
   const loadStartedRef = useRef<number | null>(null);
   useEffect(() => {
