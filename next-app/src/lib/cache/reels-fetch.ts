@@ -63,6 +63,12 @@ async function loadInitialReelsPosts(): Promise<ReelsFirstPageResult> {
   };
 }
 
+function prewarmLeadingReelsPosts(posts: EnrichedPost[]): void {
+  if (typeof window === "undefined" || posts.length === 0) return;
+  prewarmReelsPosts([posts[0]!], "slow");
+  if (posts[1]) prewarmReelsPosts([posts[1]], "slow");
+}
+
 /** Single shared reels first-page fetch — newest from last 7 days first. */
 export async function fetchReelsFirstPage(
   force = false,
@@ -74,6 +80,7 @@ export async function fetchReelsFirstPage(
     const stalePartial =
       !reels.hasMore && reels.posts.length > 0 && reels.posts.length < REELS_PAGE_SIZE;
     if (!stalePartial) {
+      prewarmLeadingReelsPosts(reels.posts);
       return {
         posts: reels.posts,
         hasMore: reels.hasMore,
@@ -95,8 +102,7 @@ export async function fetchReelsFirstPage(
       popularOffset: result.popularOffset,
     });
     if (typeof window !== "undefined" && result.posts.length > 0) {
-      prewarmReelsPosts([result.posts[0]!], "slow");
-      if (result.posts[1]) prewarmReelsPosts([result.posts[1]], "slow");
+      prewarmLeadingReelsPosts(result.posts);
     }
     return result;
   })();

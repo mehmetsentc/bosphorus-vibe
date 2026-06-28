@@ -279,7 +279,7 @@ export function ReelFeed({
     }
   }, [visiblePosts.length]);
 
-  // Prewarm active reel (blob) + next reel leading bytes
+  // Prewarm active reel + next reel leading bytes
   useLayoutEffect(() => {
     const current = visiblePosts[activeIndex];
     const next = visiblePosts[activeIndex + 1];

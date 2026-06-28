@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, forwardRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -54,6 +54,145 @@ const PostCommentModal = dynamic(
 );
 
 type EnrichedPost = UserPostDoc & { userName?: string; userPhoto?: string };
+
+type FeedMountedVideoProps = {
+  post: EnrichedPost;
+  isActive: boolean;
+  isNear: boolean;
+  isMuted: boolean;
+  feedMuted: boolean;
+  playingId: string | null;
+  requestPlay: (id: string) => void;
+  releasePlay: (id: string) => void;
+  showPoster: boolean;
+  setShowPoster: (value: boolean) => void;
+};
+
+/** Video hook + element — only mounted when card is near viewport. */
+const FeedMountedVideo = forwardRef<HTMLVideoElement, FeedMountedVideoProps>(
+  function FeedMountedVideo(
+    {
+      post,
+      isActive,
+      isNear,
+      isMuted,
+      feedMuted,
+      playingId,
+      requestPlay,
+      releasePlay,
+      showPoster,
+      setShowPoster,
+    },
+    ref,
+  ) {
+    const { src: videoSrc, onError: handleAdaptiveError } = useAdaptiveVideoSrc(
+      post,
+      "feed",
+    );
+    const videoSrcResolved =
+      videoSrc || (isActive ? getFastFlowPlaybackUrl(post) : "");
+    const videoPreload = isActive || isNear ? "auto" : "none";
+
+    useEffect(() => {
+      setShowPoster(true);
+    }, [videoSrcResolved, post.id, setShowPoster]);
+
+    useEffect(() => {
+      const el = typeof ref === "function" ? null : ref?.current;
+      if (!el) return;
+      if (playingId !== null && playingId !== post.id) {
+        el.pause();
+      }
+    }, [playingId, post.id, ref]);
+
+    useEffect(() => {
+      const el = typeof ref === "function" ? null : ref?.current;
+      if (!el || !videoSrcResolved) return;
+
+      if (isActive) {
+        el.muted = feedMuted;
+        if (feedMuted) el.setAttribute("muted", "");
+        else el.removeAttribute("muted");
+        if (el.readyState === 0) el.load();
+        el.play().catch(() => {
+          if (!feedMuted) {
+            el.muted = true;
+            el.setAttribute("muted", "");
+          }
+          el.play().catch(() => {
+            const onCanPlay = () => el.play().catch(() => {});
+            el.addEventListener("canplay", onCanPlay, { once: true });
+          });
+        });
+        requestPlay(post.id);
+        return;
+      }
+
+      el.pause();
+      el.currentTime = 0;
+      releasePlay(post.id);
+      setShowPoster(true);
+    }, [
+      isActive,
+      videoSrcResolved,
+      feedMuted,
+      post.id,
+      requestPlay,
+      releasePlay,
+      ref,
+      setShowPoster,
+    ]);
+
+    if (!videoSrcResolved) return null;
+
+    return (
+      <video
+        ref={ref}
+        key={`${post.id}-${videoSrcResolved}`}
+        data-feed-video-id={post.id}
+        src={videoSrcResolved}
+        loop
+        playsInline
+        {...({ webkitPlaysinline: "true" } as Record<string, string>)}
+        muted={isMuted}
+        preload={videoPreload}
+        className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
+          showPoster ? "opacity-0" : "opacity-100"
+        }`}
+        onCanPlay={() => {
+          const el = typeof ref === "function" ? null : ref?.current;
+          if (isActive && el?.paused) {
+            el.play().catch(() => {});
+          }
+        }}
+        onLoadedData={() => {
+          const el = typeof ref === "function" ? null : ref?.current;
+          if (isActive && el?.paused) {
+            el.play().catch(() => {});
+          }
+        }}
+        onPlaying={() => {
+          const el = typeof ref === "function" ? null : ref?.current;
+          if (el && el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+            setShowPoster(false);
+          }
+        }}
+        onTimeUpdate={(e) => {
+          if (showPoster && e.currentTarget.currentTime > 0.05) {
+            setShowPoster(false);
+          }
+        }}
+        onPause={() => {
+          if (!isActive) setShowPoster(true);
+        }}
+        onWaiting={() => {}}
+        onError={() => {
+          if (handleAdaptiveError()) setShowPoster(true);
+        }}
+      />
+    );
+  },
+);
 
 type FeedPostCardProps = {
   post: EnrichedPost;
@@ -113,23 +252,10 @@ function FeedPostCardInner({
     }
   }, [priority, isNear, isActive]);
 
-  const {
-    src: videoSrc,
-    onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed");
-
-  const videoSrcResolved =
-    videoSrc ||
-    (mountVideo && isActive ? getFastFlowPlaybackUrl(post) : "");
   const thumbCandidates = useMemo(
     () => getPostFeedThumbnailCandidates(post),
     [post],
   );
-  const videoPreload = isActive || isNear ? "auto" : "none";
-
-  useEffect(() => {
-    setShowPoster(true);
-  }, [videoSrcResolved, post.id]);
 
   // Prefetch poster early so feed never flashes black
   useEffect(() => {
@@ -153,48 +279,6 @@ function FeedPostCardInner({
   const isFollowing = post.postUserId
     ? followingIds?.has(post.postUserId)
     : false;
-
-  // Global singleton: pause this video when another one starts playing
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || !video) return;
-    if (playingId !== null && playingId !== post.id) {
-      el.pause();
-    }
-  }, [playingId, video, post.id]);
-
-  // Autoplay only when this card wins visibility (Instagram-style single active video)
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || !video || !videoSrcResolved || !mountVideo) return;
-
-    if (isActive) {
-      el.muted = feedMuted;
-      if (feedMuted) el.setAttribute("muted", "");
-      else el.removeAttribute("muted");
-      setIsMuted(feedMuted);
-      if (el.readyState === 0) el.load();
-      el.play().catch(() => {
-        if (!feedMuted) {
-          el.muted = true;
-          el.setAttribute("muted", "");
-          setIsMuted(true);
-        }
-        el.play().catch(() => {
-          const onCanPlay = () => el.play().catch(() => {});
-          el.addEventListener("canplay", onCanPlay, { once: true });
-        });
-      });
-      requestPlay(post.id);
-      return;
-    }
-
-    el.pause();
-    el.currentTime = 0;
-    releasePlay(post.id);
-    setShowPoster(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, mountVideo, video, videoSrcResolved, feedMuted, post.id, requestPlay, releasePlay]);
 
   // Increment view count once when post first enters viewport
   useEffect(() => {
@@ -226,12 +310,6 @@ function FeedPostCardInner({
     router.push(getVideoReelsPath(post.id));
   }, [video, post, networkTier, router, setReelsMuted]);
 
-  const handleVideoPointerDown = useCallback(() => {
-    if (!video) return;
-    prewarmReelsPost(post, networkTier);
-  }, [video, post, networkTier]);
-
-  // Mute button (top-right corner) — toggle sound only
   const handleMuteToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     const vid = videoRef.current;
@@ -335,57 +413,25 @@ function FeedPostCardInner({
               />
             </div>
 
-            {mountVideo && videoSrcResolved && (
-            <video
-              ref={videoRef}
-              key={`${post.id}-${videoSrcResolved}`}
-              data-feed-video-id={post.id}
-              src={videoSrcResolved}
-              loop
-              playsInline
-              {...({ webkitPlaysinline: "true" } as Record<string, string>)}
-              muted={isMuted}
-              preload={videoPreload}
-              className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
-                showPoster ? "opacity-0" : "opacity-100"
-              }`}
-              onCanPlay={() => {
-                const el = videoRef.current;
-                if (isActive && el?.paused) {
-                  el.play().catch(() => {});
-                }
-              }}
-              onLoadedData={() => {
-                const el = videoRef.current;
-                if (isActive && el?.paused) {
-                  el.play().catch(() => {});
-                }
-              }}
-              onPlaying={() => {
-                const el = videoRef.current;
-                if (el && el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-                  setShowPoster(false);
-                }
-              }}
-              onTimeUpdate={(e) => {
-                if (showPoster && e.currentTarget.currentTime > 0.05) {
-                  setShowPoster(false);
-                }
-              }}
-              onPause={() => {
-                if (!isActive) setShowPoster(true);
-              }}
-              onWaiting={() => {}}
-              onError={() => {
-                if (handleAdaptiveError()) setShowPoster(true);
-              }}
-            />
+            {mountVideo && (
+              <FeedMountedVideo
+                ref={videoRef}
+                post={post}
+                isActive={isActive}
+                isNear={isNear}
+                isMuted={isMuted}
+                feedMuted={feedMuted}
+                playingId={playingId}
+                requestPlay={requestPlay}
+                releasePlay={releasePlay}
+                showPoster={showPoster}
+                setShowPoster={setShowPoster}
+              />
             )}
 
             {/* Tap opens full-screen reels flow (Instagram-style) */}
             <button
               type="button"
-              onPointerDown={handleVideoPointerDown}
               onClick={openReels}
               className="absolute inset-0 z-[5] bg-transparent"
               aria-label={t("navReels")}

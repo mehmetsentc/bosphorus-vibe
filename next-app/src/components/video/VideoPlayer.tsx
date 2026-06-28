@@ -50,7 +50,51 @@ function applyMuted(video: HTMLVideoElement, muted: boolean) {
   else video.removeAttribute("muted");
 }
 
-export function VideoPlayer({
+export function VideoPlayer(props: VideoPlayerProps) {
+  if (props.playbackContext === "reels") {
+    return <ReelsVideoPlayer {...props} />;
+  }
+  return <AdaptiveVideoPlayer {...props} />;
+}
+
+function ReelsVideoPlayer(props: VideoPlayerProps) {
+  const { post, isActive = true, isNext = false, isNear = false } = props;
+  const shouldLoad = isActive || isNext || isNear;
+  const { src, poster, onError } = useReelsVideoSrc(post, shouldLoad);
+  const videoSrc = src || getFastFlowPlaybackUrl(post);
+  return (
+    <VideoPlayerCore
+      {...props}
+      isReels
+      videoSrc={videoSrc}
+      poster={poster}
+      onPlaybackError={onError}
+    />
+  );
+}
+
+function AdaptiveVideoPlayer(props: VideoPlayerProps) {
+  const { post, playbackContext = "detail" } = props;
+  const { src, poster, onError } = useAdaptiveVideoSrc(post, playbackContext);
+  return (
+    <VideoPlayerCore
+      {...props}
+      isReels={false}
+      videoSrc={src}
+      poster={poster}
+      onPlaybackError={onError}
+    />
+  );
+}
+
+type VideoPlayerCoreProps = VideoPlayerProps & {
+  isReels: boolean;
+  videoSrc: string;
+  poster?: string;
+  onPlaybackError: () => boolean;
+};
+
+function VideoPlayerCore({
   post,
   isActive = true,
   isNext = false,
@@ -61,8 +105,11 @@ export function VideoPlayer({
   overlay,
   showSeekBar = true,
   onReady,
-  playbackContext = "detail",
-}: VideoPlayerProps) {
+  isReels,
+  videoSrc,
+  poster,
+  onPlaybackError,
+}: VideoPlayerCoreProps) {
   const videoClassName =
     className ??
     (fit === "cover"
@@ -80,22 +127,12 @@ export function VideoPlayer({
     }
   }, []);
 
-  const isReels = playbackContext === "reels";
+  const isReelsContext = isReels;
   const shouldLoad = isActive || isNext || isNear;
 
-  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad);
-  const adaptiveVideo = useAdaptiveVideoSrc(post, playbackContext);
+  const handleAdaptiveError = onPlaybackError;
 
-  const {
-    src: hookSrc,
-    poster,
-    onError: handleAdaptiveError,
-  } = isReels ? reelsVideo : adaptiveVideo;
-
-  const videoSrc =
-    hookSrc || (isReels ? getFastFlowPlaybackUrl(post) : hookSrc);
-
-  const preload = isReels
+  const preload = isReelsContext
     ? isActive || isNext
       ? "auto"
       : "none"
@@ -111,7 +148,7 @@ export function VideoPlayer({
   const releasePlay = useVideoPlayStore((s) => s.releasePlay);
   const playingId = useVideoPlayStore((s) => s.playingId);
 
-  const [isMuted, setIsMuted] = useState(() => (isReels ? true : reelsMuted));
+  const [isMuted, setIsMuted] = useState(() => (isReelsContext ? true : reelsMuted));
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(() => !poster);
@@ -119,7 +156,7 @@ export function VideoPlayer({
 
   const attemptPlay = useCallback(
     (video: HTMLVideoElement) => {
-      const muted = isReels ? true : reelsMuted;
+      const muted = isReelsContext ? true : reelsMuted;
       setIsMuted(muted);
       applyMuted(video, muted);
       const tryPlay = () => {
@@ -132,7 +169,7 @@ export function VideoPlayer({
         });
       };
       tryPlay();
-      if (isReels && isActive) {
+      if (isReelsContext && isActive) {
         window.setTimeout(() => {
           if (video.paused && isActive) tryPlay();
         }, 120);
@@ -141,7 +178,7 @@ export function VideoPlayer({
         }, 400);
       }
     },
-    [isReels, isActive, reelsMuted, requestPlay, post.id],
+    [isReelsContext, isActive, reelsMuted, requestPlay, post.id],
   );
 
   useEffect(() => {
@@ -163,14 +200,14 @@ export function VideoPlayer({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !isReels) return;
+    if (!video || !isReelsContext) return;
     if (shouldLoad) return;
     video.pause();
     applyMuted(video, true);
     video.removeAttribute("src");
     video.load();
     releasePlay(post.id);
-  }, [shouldLoad, isReels, releasePlay, post.id]);
+  }, [shouldLoad, isReelsContext, releasePlay, post.id]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -182,11 +219,11 @@ export function VideoPlayer({
   }, [playingId, post.id]);
 
   useEffect(() => {
-    if (isReels || !isActive) return;
+    if (isReelsContext || !isActive) return;
     setIsMuted(reelsMuted);
     const video = videoRef.current;
     if (video) applyMuted(video, reelsMuted);
-  }, [reelsMuted, isActive, isReels]);
+  }, [reelsMuted, isActive, isReelsContext]);
 
   // Active slide: load + play immediately
   useEffect(() => {
@@ -194,7 +231,7 @@ export function VideoPlayer({
     if (!video || !videoSrc) return;
 
     if (isActive && autoPlay) {
-      applyMuted(video, isReels ? true : reelsMuted);
+      applyMuted(video, isReelsContext ? true : reelsMuted);
       if (video.readyState < HTMLMediaElement.HAVE_METADATA) video.load();
       attemptPlay(video);
       return;
@@ -202,7 +239,7 @@ export function VideoPlayer({
 
     video.pause();
     applyMuted(video, true);
-    if (!isActive && !isNext && !(isReels && isNear)) {
+    if (!isActive && !isNext && !(isReelsContext && isNear)) {
       video.currentTime = 0;
       setShowPoster(true);
       hasPlayedRef.current = false;
@@ -215,7 +252,7 @@ export function VideoPlayer({
     autoPlay,
     videoSrc,
     post.id,
-    isReels,
+    isReelsContext,
     reelsMuted,
     attemptPlay,
     releasePlay,
@@ -225,7 +262,7 @@ export function VideoPlayer({
 
   // Non-reels only: downgrade if first frame never arrives
   useEffect(() => {
-    if (isReels || !isActive || !videoSrc) return;
+    if (isReelsContext || !isActive || !videoSrc) return;
     const timeoutMs = 3500;
     const timeout = window.setTimeout(() => {
       const video = videoRef.current;
@@ -239,7 +276,7 @@ export function VideoPlayer({
       }
     }, timeoutMs);
     return () => window.clearTimeout(timeout);
-  }, [isActive, videoSrc, handleAdaptiveError, isReels]);
+  }, [isActive, videoSrc, handleAdaptiveError, isReelsContext]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -295,7 +332,7 @@ export function VideoPlayer({
 
   if (!videoSrc && !poster) return null;
 
-  const videoKey = isReels ? post.id : `${post.id}-${videoSrc || "pending"}`;
+  const videoKey = isReelsContext ? post.id : `${post.id}-${videoSrc || "pending"}`;
 
   return (
     <div

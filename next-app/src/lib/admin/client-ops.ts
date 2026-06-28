@@ -429,28 +429,6 @@ function batchResult(data: Record<string, unknown>) {
   };
 }
 
-export async function enqueueTranscodeViaApi(idToken: string, maxMark = 500) {
-  const data = await postAdminApi("/api/admin/transcode/enqueue", idToken, {
-    limit: maxMark,
-  });
-  return {
-    scanned: typeof data.scanned === "number" ? data.scanned : 0,
-    marked: typeof data.marked === "number" ? data.marked : 0,
-    alreadyQueued: typeof data.alreadyQueued === "number" ? data.alreadyQueued : 0,
-  };
-}
-
-export async function enqueueThumbnailViaApi(idToken: string, maxMark = 500) {
-  const data = await postAdminApi("/api/admin/thumbnails/enqueue", idToken, {
-    limit: maxMark,
-  });
-  return {
-    scanned: typeof data.scanned === "number" ? data.scanned : 0,
-    marked: typeof data.marked === "number" ? data.marked : 0,
-    alreadyQueued: typeof data.alreadyQueued === "number" ? data.alreadyQueued : 0,
-  };
-}
-
 export async function runThumbnailBatchClient(idToken: string, batchLimit = 5) {
   const data = await runBatchWithFallback(
     "/api/admin/thumbnails/run",
