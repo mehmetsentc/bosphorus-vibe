@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsOptional } from "@/components/settings/SettingsProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { VIDEO_STALL_DOWNGRADE_MS, VIDEO_STALL_DOWNGRADE_REELS_MS } from "@/lib/performance/app-state";
 import {
   hasPostVideo,
   pickVideoSource,
@@ -61,38 +60,13 @@ export function useAdaptiveVideoSrc(
     return false;
   }, []);
 
-  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearStallTimer = useCallback(() => {
-    if (stallTimerRef.current) {
-      clearTimeout(stallTimerRef.current);
-      stallTimerRef.current = null;
-    }
+  const onWaiting = useCallback(() => {
+    /* Only switch URLs on hard media errors — not on buffering */
   }, []);
 
-  const onWaiting = useCallback(() => {
-    if (!isActive || srcIndex >= sources.length - 1) return;
-    if (stallTimerRef.current) return;
-    const stallMs =
-      context === "reels"
-        ? VIDEO_STALL_DOWNGRADE_REELS_MS
-        : VIDEO_STALL_DOWNGRADE_MS;
-    stallTimerRef.current = setTimeout(() => {
-      stallTimerRef.current = null;
-      downgrade();
-    }, stallMs);
-  }, [isActive, srcIndex, sources.length, downgrade, context]);
+  const onPlaying = useCallback(() => {}, []);
 
-  const onPlaying = useCallback(() => {
-    clearStallTimer();
-  }, [clearStallTimer]);
-
-  const onError = useCallback((): boolean => {
-    clearStallTimer();
-    return downgrade();
-  }, [clearStallTimer, downgrade]);
-
-  useEffect(() => clearStallTimer, [clearStallTimer]);
+  const onError = useCallback((): boolean => downgrade(), [downgrade]);
 
   return {
     src,

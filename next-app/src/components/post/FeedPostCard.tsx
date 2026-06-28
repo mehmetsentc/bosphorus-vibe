@@ -22,6 +22,7 @@ import {
 import {
   getPostFeedImageCandidates,
   getPostFeedThumbnailCandidates,
+  getFastFlowPlaybackUrl,
   getVideoReelsPath,
   pickImageSource,
   prewarmReelsPost,
@@ -121,18 +122,12 @@ function FeedPostCardInner({
 
   const videoSrcResolved =
     videoSrc ||
-    (mountVideo && isActive
-      ? (post.postVideoURL_original ||
-          post.postVideo ||
-          post.postVideoURL ||
-          post.postVideoURL_low ||
-          "")
-      : "");
+    (mountVideo && isActive ? getFastFlowPlaybackUrl(post) : "");
   const thumbCandidates = useMemo(
     () => getPostFeedThumbnailCandidates(post),
     [post],
   );
-  const videoPreload = isActive ? "auto" : isNear ? "metadata" : "none";
+  const videoPreload = isActive || isNear ? "auto" : "none";
 
   useEffect(() => {
     setShowPoster(true);
@@ -350,6 +345,7 @@ function FeedPostCardInner({
               src={videoSrcResolved}
               loop
               playsInline
+              {...({ webkitPlaysinline: "true" } as Record<string, string>)}
               muted={isMuted}
               preload={videoPreload}
               className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
@@ -383,7 +379,6 @@ function FeedPostCardInner({
                 if (!isActive) setShowPoster(true);
               }}
               onWaiting={() => {
-                setShowPoster(true);
                 handleAdaptiveWaiting();
               }}
               onError={() => {

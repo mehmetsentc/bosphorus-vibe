@@ -485,7 +485,7 @@ type ReelsPlaybackOptions = {
   preferHighQuality?: boolean;
 };
 
-/** Canonical playable URL from Firestore — same priority as feed/detail. */
+/** Canonical playable URL from Firestore — fallback when no tier list applies. */
 export function getCanonicalVideoPlaybackUrl(post: UserPostDoc): string {
   return (
     post.postVideoURL_original ||
@@ -497,45 +497,49 @@ export function getCanonicalVideoPlaybackUrl(post: UserPostDoc): string {
 }
 
 /**
- * Ordered reels candidates — encode tiers when transcode is done; canonical URL always included.
+ * Fast-flow ladder — smallest tokenized Firestore URL first (preview → low → … → original).
+ * Used for feed, reels, and prewarm so playback starts on lightweight MP4s.
+ */
+export function getFastFlowPlaybackUrls(post: UserPostDoc): string[] {
+  const { original, preview, medium, low, high, primary } = getTrustedVideoUrls(post);
+  return orderUrlsTokenizedFirst(
+    uniqueUrls(
+      preview,
+      low,
+      medium,
+      high,
+      primary,
+      post.postVideoURL_preview,
+      post.postVideoURL_low,
+      post.postVideoURL_medium,
+      post.postVideoURL_high,
+      post.postVideoURL,
+      post.postVideoURL_original,
+      post.postVideo,
+      original,
+    ).filter((u) => u && !isImageMediaUrl(u)),
+  );
+}
+
+export function getFastFlowPlaybackUrl(post: UserPostDoc): string {
+  const urls = getFastFlowPlaybackUrls(post);
+  return pickPlayableSrc(urls) || getCanonicalVideoPlaybackUrl(post);
+}
+
+/** @deprecated alias — same as getFastFlowPlaybackUrls */
+export function getReelsTrustedFirestoreUrls(post: UserPostDoc): string[] {
+  return getFastFlowPlaybackUrls(post);
+}
+
+/**
+ * Ordered reels candidates — canonical Firestore URL first.
  */
 export function getReelsPlaybackUrlOrder(
   post: UserPostDoc,
-  tier: NetworkTier,
-  options?: ReelsPlaybackOptions,
+  _tier: NetworkTier,
+  _options?: ReelsPlaybackOptions,
 ): string[] {
-  const canonical = getCanonicalVideoPlaybackUrl(post);
-  const { original, preview, medium, low, high, primary } = getTrustedVideoUrls(post);
-  const encoded = isServerTranscodeReady(post);
-  const preferHigh = options?.preferHighQuality === true;
-  const ordered: string[] = [];
-
-  if (encoded) {
-    if (tier === "slow") {
-      ordered.push(...uniqueUrls(primary, low, preview, medium, high));
-    } else if (preferHigh) {
-      ordered.push(...uniqueUrls(primary, high, low, medium, preview));
-    } else {
-      ordered.push(...uniqueUrls(primary, low, preview, medium, high));
-    }
-  }
-
-  ordered.push(
-    ...uniqueUrls(
-      canonical,
-      post.postVideoURL_original,
-      post.postVideo,
-      primary,
-      original,
-      preview,
-      low,
-      high,
-    ),
-  );
-
-  return orderUrlsTokenizedFirst(
-    uniqueUrls(...ordered).filter((u) => u && !isImageMediaUrl(u)),
-  );
+  return getReelsTrustedFirestoreUrls(post);
 }
 
 /**
@@ -543,14 +547,13 @@ export function getReelsPlaybackUrlOrder(
  */
 export function getReelsImmediatePlayback(
   post: UserPostDoc,
-  tier: NetworkTier,
-  options?: ReelsPlaybackOptions,
+  _tier: NetworkTier,
+  _options?: ReelsPlaybackOptions,
 ): { src: string; fallbacks: string[]; poster?: string } {
   const poster = getPostVideoPoster(post);
-  const urls = getReelsPlaybackUrlOrder(post, tier, options);
-  const src = pickPlayableSrc(urls) || urls[0] || "";
-  const fallbacks = urls.filter((url) => url !== src);
-  return { src, fallbacks, poster };
+  const urls = getFastFlowPlaybackUrls(post);
+  const src = getFastFlowPlaybackUrl(post);
+  return { src, fallbacks: urls.filter((u) => u !== src), poster };
 }
 
 /** Lightweight prewarm — preview/low URL + leading bytes only (no extra decoders). */
@@ -617,50 +620,8 @@ export function pickVideoSource(
   const lows = fast.filter((u) => !previews.includes(u));
 
   let ordered: string[];
-  if (context === "reels") {
-    ordered = getReelsPlaybackLadder(post);
-  } else if (context === "feed") {
-    const trusted = getTrustedVideoUrls(post);
-    const encoded = isServerTranscodeReady(post);
-    const inferred = getFastPlaybackCandidates(post);
-    const direct = getCanonicalVideoPlaybackUrl(post);
-
-    if (encoded) {
-      if (tier === "slow") {
-        ordered = uniqueUrls(
-          direct,
-          trusted.preview,
-          trusted.medium,
-          trusted.low,
-          trusted.high,
-          trusted.original,
-        );
-      } else if (tier === "fast") {
-        ordered = uniqueUrls(
-          direct,
-          trusted.preview,
-          trusted.medium,
-          trusted.low,
-          trusted.high,
-          trusted.original,
-        );
-      } else {
-        ordered = uniqueUrls(
-          direct,
-          trusted.low,
-          trusted.original,
-          trusted.medium,
-          trusted.preview,
-          trusted.high,
-        );
-      }
-    } else {
-      const primary =
-        trusted.primary || trusted.original || post.postVideo || "";
-      ordered = orderUrlsTokenizedFirst(
-        uniqueUrls(primary, ...inferred, trusted.original),
-      );
-    }
+  if (context === "reels" || context === "feed") {
+    ordered = getFastFlowPlaybackUrls(post);
   } else if (options?.preferHighQuality && original) {
     const { high: trustedHigh, low: trustedLow } = getTrustedVideoUrls(post);
     ordered = uniqueUrls(trustedHigh, trustedLow, ...fast, original);

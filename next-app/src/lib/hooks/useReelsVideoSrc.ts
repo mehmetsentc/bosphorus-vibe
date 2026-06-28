@@ -1,152 +1,68 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSettingsOptional } from "@/components/settings/SettingsProvider";
-import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { VIDEO_STALL_DOWNGRADE_REELS_MS } from "@/lib/performance/app-state";
+import { getCachedVideoBlobUrl } from "@/lib/utils/video-blob-cache";
 import {
-  recordQualityDowngrade,
-  recordTimeToFirstFrame,
-  recordVideoStart,
-} from "@/lib/performance/video-metrics";
-import { markVideoUrlProbe } from "@/lib/utils/video-url-probe";
-import {
-  getCachedVideoBlobUrl,
-  isVideoBlobUrlValid,
-  prefetchVideoBlob,
-} from "@/lib/utils/video-blob-cache";
-import {
-  getReelsImmediatePlayback,
-  getReelsPlaybackLadder,
-  getReelsPlaybackUrlOrder,
+  getFastFlowPlaybackUrl,
+  getFastFlowPlaybackUrls,
+  getPostVideoPoster,
   hasPostVideo,
-  orderUrlsTokenizedFirst,
 } from "@/lib/utils/video-sources";
 import type { UserPostDoc } from "@/types";
 
 /**
- * Reels playback — try Firestore URL ladder; downgrade only on real video errors.
+ * Reels — preview/low first; use prefetched blob when ready; error-only URL fallback.
  */
 export function useReelsVideoSrc(
   post: UserPostDoc,
   shouldLoad: boolean,
   isActive: boolean,
-  isNext = false,
 ) {
-  const tier = useEffectiveNetworkTier();
-  const settings = useSettingsOptional();
-  const preferHighQuality = settings?.prefs.mediaQuality === "high";
-
-  const playback = useMemo(() => {
-    if (!hasPostVideo(post)) {
-      return { src: "", fallbacks: [] as string[], poster: undefined as string | undefined };
-    }
-    return getReelsImmediatePlayback(post, tier, { preferHighQuality });
-  }, [post, tier, preferHighQuality]);
-
-  const urlLadder = useMemo(
-    () =>
-      shouldLoad
-        ? orderUrlsTokenizedFirst([
-            ...new Set([
-              ...getReelsPlaybackUrlOrder(post, tier, { preferHighQuality }),
-              ...getReelsPlaybackLadder(post),
-            ]),
-          ])
-        : [],
-    [shouldLoad, post, tier, preferHighQuality],
+  const urls = useMemo(
+    () => (shouldLoad && hasPostVideo(post) ? getFastFlowPlaybackUrls(post) : []),
+    [shouldLoad, post],
   );
 
   const [srcIndex, setSrcIndex] = useState(0);
   const srcIndexRef = useRef(0);
-  const ladderRef = useRef(urlLadder);
-  ladderRef.current = urlLadder;
+  const urlsRef = useRef(urls);
+  urlsRef.current = urls;
 
   useEffect(() => {
     srcIndexRef.current = 0;
     setSrcIndex(0);
-  }, [post.id, urlLadder.join("|")]);
+  }, [post.id, urls.join("|")]);
 
   useEffect(() => {
     srcIndexRef.current = srcIndex;
   }, [srcIndex]);
 
-  const playbackSrc = shouldLoad
-    ? (urlLadder[srcIndex] ?? urlLadder[0] ?? "")
-    : "";
-
-  const cachedBlob = playbackSrc ? getCachedVideoBlobUrl(playbackSrc) : null;
-  const effectiveSrc =
-    cachedBlob && isVideoBlobUrlValid(playbackSrc, cachedBlob)
-      ? cachedBlob
-      : playbackSrc;
-
-  useEffect(() => {
-    if (!shouldLoad || !playbackSrc || !isNext || isActive) return;
-    void prefetchVideoBlob(playbackSrc, "low", post.id)?.catch(() => {});
-  }, [shouldLoad, playbackSrc, isNext, isActive, post.id]);
-
-  const loadStartedRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (isActive && playbackSrc) {
-      loadStartedRef.current = performance.now();
-    }
-  }, [isActive, playbackSrc, post.id]);
+  const remoteSrc =
+    shouldLoad ? (urls[srcIndex] ?? urls[0] ?? getFastFlowPlaybackUrl(post)) : "";
+  const cachedBlob = remoteSrc ? getCachedVideoBlobUrl(remoteSrc) : null;
+  const playbackSrc = shouldLoad && cachedBlob ? cachedBlob : remoteSrc;
 
   const downgrade = useCallback((): boolean => {
     const next = srcIndexRef.current + 1;
-    if (next < ladderRef.current.length) {
+    if (next < urlsRef.current.length) {
       srcIndexRef.current = next;
       setSrcIndex(next);
-      recordQualityDowngrade(post.id, ladderRef.current[next] ?? "unknown", "reels");
       return true;
     }
     return false;
-  }, [post.id]);
-
-  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearStallTimer = useCallback(() => {
-    if (stallTimerRef.current) {
-      clearTimeout(stallTimerRef.current);
-      stallTimerRef.current = null;
-    }
   }, []);
 
-  const onWaiting = useCallback(() => {
-    if (!isActive || srcIndexRef.current >= ladderRef.current.length - 1) return;
-    if (stallTimerRef.current) return;
-    stallTimerRef.current = setTimeout(() => {
-      stallTimerRef.current = null;
-      downgrade();
-    }, VIDEO_STALL_DOWNGRADE_REELS_MS);
-  }, [isActive, downgrade]);
+  const onWaiting = useCallback(() => {}, []);
 
-  const onPlaying = useCallback(() => {
-    clearStallTimer();
-    if (playbackSrc) markVideoUrlProbe(playbackSrc, true);
-    if (loadStartedRef.current !== null) {
-      const ms = Math.round(performance.now() - loadStartedRef.current);
-      recordTimeToFirstFrame(post.id, ms, "reels");
-      recordVideoStart(post.id, ms, "reels");
-      loadStartedRef.current = null;
-    }
-  }, [clearStallTimer, post.id, playbackSrc]);
+  const onPlaying = useCallback(() => {}, []);
 
-  const onError = useCallback((): boolean => {
-    clearStallTimer();
-    const failed = ladderRef.current[srcIndexRef.current];
-    if (failed) markVideoUrlProbe(failed, false);
-    return downgrade();
-  }, [clearStallTimer, downgrade]);
-
-  useEffect(() => clearStallTimer, [clearStallTimer]);
+  const onError = useCallback((): boolean => downgrade(), [downgrade]);
 
   return {
-    src: effectiveSrc,
-    remoteSrc: playbackSrc,
-    poster: playback.poster,
-    tier,
+    src: playbackSrc,
+    remoteSrc,
+    poster: getPostVideoPoster(post),
+    tier: "normal" as const,
     resolving: false,
     onWaiting,
     onPlaying,

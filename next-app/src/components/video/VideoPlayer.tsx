@@ -16,7 +16,7 @@ import {
 } from "@/components/icons/Icons";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
-import { REELS_FIRST_FRAME_TIMEOUT_MS } from "@/lib/performance/app-state";
+import { getFastFlowPlaybackUrl } from "@/lib/utils/video-sources";
 import type { UserPostDoc } from "@/types";
 
 const SEEK_STEP = 10;
@@ -70,6 +70,7 @@ export function VideoPlayer({
       : "max-h-full max-w-full object-contain");
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasPlayedRef = useRef(false);
+  const prevVideoSrcRef = useRef("");
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearLoadingTimer = useCallback(() => {
@@ -82,7 +83,7 @@ export function VideoPlayer({
   const isReels = playbackContext === "reels";
   const shouldLoad = isActive || isNext || isNear;
 
-  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive, isNext);
+  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive);
   const adaptiveVideo = useAdaptiveVideoSrc(
     post,
     playbackContext,
@@ -90,12 +91,15 @@ export function VideoPlayer({
   );
 
   const {
-    src: videoSrc,
+    src: hookSrc,
     poster,
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
   } = isReels ? reelsVideo : adaptiveVideo;
+
+  const videoSrc =
+    hookSrc || (isReels ? getFastFlowPlaybackUrl(post) : hookSrc);
 
   const resolving = isReels && reelsVideo.resolving;
   const preload = isReels
@@ -150,8 +154,19 @@ export function VideoPlayer({
   useEffect(() => {
     setShowPoster(true);
     hasPlayedRef.current = false;
+    prevVideoSrcRef.current = "";
     setLoading(!poster);
   }, [post.id, videoSrc, poster]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoSrc) return;
+    if (prevVideoSrcRef.current && prevVideoSrcRef.current !== videoSrc) {
+      video.load();
+      if (isActive && autoPlay) attemptPlay(video);
+    }
+    prevVideoSrcRef.current = videoSrc;
+  }, [videoSrc, isActive, autoPlay, attemptPlay]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -215,10 +230,10 @@ export function VideoPlayer({
 
   useEffect(() => () => clearLoadingTimer(), [clearLoadingTimer]);
 
-  // Force fallback when active video never reaches first frame
+  // Non-reels only: downgrade if first frame never arrives
   useEffect(() => {
-    if (!isActive || !videoSrc) return;
-    const timeoutMs = isReels ? REELS_FIRST_FRAME_TIMEOUT_MS : 3500;
+    if (isReels || !isActive || !videoSrc) return;
+    const timeoutMs = 3500;
     const timeout = window.setTimeout(() => {
       const video = videoRef.current;
       if (!video || hasPlayedRef.current) return;
@@ -287,7 +302,7 @@ export function VideoPlayer({
 
   if (!videoSrc && !resolving && !poster) return null;
 
-  const videoKey = `${post.id}-${videoSrc || "pending"}`;
+  const videoKey = isReels ? post.id : `${post.id}-${videoSrc || "pending"}`;
 
   return (
     <div
@@ -315,6 +330,7 @@ export function VideoPlayer({
           poster={poster}
           loop
           playsInline
+          {...({ webkitPlaysinline: "true" } as Record<string, string>)}
           autoPlay={isActive && autoPlay}
           muted={isMuted}
           preload={preload}
