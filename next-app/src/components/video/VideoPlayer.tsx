@@ -260,24 +260,6 @@ function VideoPlayerCore({
 
   useEffect(() => () => clearLoadingTimer(), [clearLoadingTimer]);
 
-  // Non-reels only: downgrade if first frame never arrives
-  useEffect(() => {
-    if (isReelsContext || !isActive || !videoSrc) return;
-    const timeoutMs = 3500;
-    const timeout = window.setTimeout(() => {
-      const video = videoRef.current;
-      if (!video || hasPlayedRef.current) return;
-      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        const downgraded = handleAdaptiveError();
-        if (downgraded) {
-          setShowPoster(true);
-          setLoading(true);
-        }
-      }
-    }, timeoutMs);
-    return () => window.clearTimeout(timeout);
-  }, [isActive, videoSrc, handleAdaptiveError, isReelsContext]);
-
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !shouldLoad || isActive || !videoSrc) return;

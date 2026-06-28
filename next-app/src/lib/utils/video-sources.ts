@@ -234,7 +234,7 @@ type PickVideoSourceOptions = {
 /**
  * Returns the best video URL for the given context.
  *
- * - `"feed"` / slow network / auto → low quality first (faster start)
+ * - `"feed"` → preview/low first (fast start)
  * - `"detail"` + fast + high quality setting → original first
  * - Otherwise low first when a distinct low.mp4 exists (Cloud Function transcode)
  *
@@ -242,7 +242,6 @@ type PickVideoSourceOptions = {
  */
 export function pickVideoSource(
   post: UserPostDoc,
-  _tier: NetworkTier,
   context: VideoPlaybackContext = "feed",
   options?: PickVideoSourceOptions,
 ): { src: string; poster?: string; fallbacks: string[] } {

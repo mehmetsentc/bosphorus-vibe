@@ -2,3 +2,5 @@
 *firebase-adminsdk*.json
 next-app/.env.local
 translate_missing.mjs
+.tmp/
+.vercel

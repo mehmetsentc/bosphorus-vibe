@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsOptional } from "@/components/settings/SettingsProvider";
-import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import {
   hasPostVideo,
   pickVideoSource,
@@ -15,7 +14,6 @@ export function useAdaptiveVideoSrc(
   post: UserPostDoc,
   context: VideoPlaybackContext,
 ) {
-  const tier = useEffectiveNetworkTier();
   const settings = useSettingsOptional();
   const preferHighQuality = settings?.prefs.mediaQuality === "high";
 
@@ -23,8 +21,8 @@ export function useAdaptiveVideoSrc(
     if (!hasPostVideo(post)) {
       return { src: "", poster: undefined as string | undefined, fallbacks: [] as string[] };
     }
-    return pickVideoSource(post, tier, context, { preferHighQuality });
-  }, [post, tier, context, preferHighQuality]);
+    return pickVideoSource(post, context, { preferHighQuality });
+  }, [post, context, preferHighQuality]);
 
   const sources = useMemo(
     () => [picked.src, ...picked.fallbacks].filter(Boolean),
@@ -40,7 +38,7 @@ export function useAdaptiveVideoSrc(
   useEffect(() => {
     srcIndexRef.current = 0;
     setSrcIndex(0);
-  }, [post.id, picked.src, tier, preferHighQuality, context]);
+  }, [post.id, picked.src, preferHighQuality, context]);
 
   useEffect(() => {
     srcIndexRef.current = srcIndex;
@@ -59,7 +57,6 @@ export function useAdaptiveVideoSrc(
   return {
     src,
     poster: picked.poster,
-    tier,
     onError,
   };
 }
