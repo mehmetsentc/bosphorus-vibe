@@ -29,14 +29,9 @@ function buildInstantReelsUrls(
   playback: { src: string; fallbacks: string[] },
   post: UserPostDoc,
 ): string[] {
-  const trusted = orderUrlsTokenizedFirst(
-    [...new Set([playback.src, ...playback.fallbacks].filter(Boolean))],
-  );
-  if (trusted.length) return trusted;
-
   const { primary, original } = getTrustedVideoUrls(post);
   return orderUrlsTokenizedFirst(
-    [primary, original, post.postVideo].filter((u): u is string => Boolean(u)),
+    [...new Set([post.postVideo, primary, original, playback.src, ...playback.fallbacks].filter((u): u is string => Boolean(u)))],
   );
 }
 

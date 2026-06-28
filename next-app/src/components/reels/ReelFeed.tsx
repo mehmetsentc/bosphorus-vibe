@@ -85,7 +85,7 @@ const ReelItem = memo(function ReelItem({
 
   return (
     <div className="reels-slide bg-black">
-      {slidePoster && (
+      {slidePoster && !mountVideo && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={slidePoster}

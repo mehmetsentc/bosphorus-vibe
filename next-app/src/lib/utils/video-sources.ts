@@ -502,6 +502,12 @@ export function getReelsImmediatePlayback(
   const encoded = isServerTranscodeReady(post);
   const trusted: string[] = [];
 
+  // Always try the Firestore download URL first — most reliable on iOS
+  const direct = orderUrlsTokenizedFirst(
+    [post.postVideo, primary, original].filter((u): u is string => Boolean(u)),
+  )[0];
+  if (direct) trusted.push(direct);
+
   if (encoded) {
     if (tier === "slow") {
       if (preview) trusted.push(preview);
@@ -604,10 +610,16 @@ export function pickVideoSource(
     const trusted = getTrustedVideoUrls(post);
     const encoded = isServerTranscodeReady(post);
     const inferred = getFastPlaybackCandidates(post);
+    const direct = orderUrlsTokenizedFirst(
+      [post.postVideo, trusted.primary, trusted.original].filter((u): u is string =>
+        Boolean(u),
+      ),
+    )[0];
 
     if (encoded) {
       if (tier === "slow") {
         ordered = uniqueUrls(
+          direct,
           trusted.preview,
           trusted.medium,
           trusted.low,
@@ -616,6 +628,7 @@ export function pickVideoSource(
         );
       } else if (tier === "fast") {
         ordered = uniqueUrls(
+          direct,
           trusted.preview,
           trusted.medium,
           trusted.low,
@@ -624,6 +637,7 @@ export function pickVideoSource(
         );
       } else {
         ordered = uniqueUrls(
+          direct,
           trusted.low,
           trusted.original,
           trusted.medium,

@@ -125,14 +125,26 @@ export function VideoPlayer({
       const muted = isReels ? true : reelsMuted;
       setIsMuted(muted);
       applyMuted(video, muted);
-      void video.play().catch(() => {
-        applyMuted(video, true);
-        setIsMuted(true);
-        void video.play().catch(() => {});
-      });
-      requestPlay(post.id);
+      const tryPlay = () => {
+        void video.play().then(() => {
+          requestPlay(post.id);
+        }).catch(() => {
+          applyMuted(video, true);
+          setIsMuted(true);
+          void video.play().catch(() => {});
+        });
+      };
+      tryPlay();
+      if (isReels && isActive) {
+        window.setTimeout(() => {
+          if (video.paused && isActive) tryPlay();
+        }, 120);
+        window.setTimeout(() => {
+          if (video.paused && isActive) tryPlay();
+        }, 400);
+      }
     },
-    [isReels, reelsMuted, requestPlay, post.id],
+    [isReels, isActive, reelsMuted, requestPlay, post.id],
   );
 
   useEffect(() => {
@@ -343,6 +355,10 @@ export function VideoPlayer({
           onTimeUpdate={(e) => {
             setCurrent(e.currentTarget.currentTime);
             setDuration(e.currentTarget.duration || 0);
+            if (isActive && e.currentTarget.currentTime > 0.05) {
+              hasPlayedRef.current = true;
+              setShowPoster(false);
+            }
           }}
         />
       )}
