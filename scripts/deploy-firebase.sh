@@ -26,6 +26,7 @@ functions:adminRunTranscodeBatch,\
 functions:runStorageVideoSyncBatch,\
 functions:adminRunStorageVideoSync,\
 functions:configureAllVideoStorage,\
+functions:adminConfigureAllVideoStorage,\
 functions:autoMaintainVideoStorage
 
 echo "→ Artifact cleanup policy (opsiyonel uyarı giderici)..."

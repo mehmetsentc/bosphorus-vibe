@@ -10,7 +10,7 @@
     "firebase:deploy:storage": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only storage",
     "firebase:deploy:rules": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only firestore:rules,storage",
     "firebase:deploy:functions": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions",
-    "firebase:deploy:transcode": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions:transcodeVideoPost,functions:transcodeVideoPostOnUpdate,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch,functions:adminRunTranscodeBatch,functions:runStorageVideoSyncBatch,functions:adminRunStorageVideoSync,functions:configureAllVideoStorage,functions:autoMaintainVideoStorage",
+    "firebase:deploy:transcode": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions:transcodeVideoPost,functions:transcodeVideoPostOnUpdate,functions:processPendingVideoTranscodes,functions:runVideoTranscodeBatch,functions:adminRunTranscodeBatch,functions:runStorageVideoSyncBatch,functions:adminRunStorageVideoSync,functions:configureAllVideoStorage,functions:adminConfigureAllVideoStorage,functions:autoMaintainVideoStorage",
     "storage:configure": "node scripts/storage-video-pipeline.mjs",
     "storage:cors": "node scripts/storage-video-pipeline.mjs --cors-only",
     "firebase:deploy:thumbnails": "cd firebase && firebase deploy -P bosphorusvibe-dbd93 --only functions:processPendingVideoThumbnails,functions:runVideoThumbnailBatch,functions:adminRunThumbnailBatch",

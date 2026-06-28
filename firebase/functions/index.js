@@ -462,6 +462,43 @@ exports.adminRunStorageVideoSync = functions
     return syncStorageBatch(limit);
   });
 
+/** Shared configure-all logic — HTTP + callable. */
+async function runConfigureAllVideoStorage(opts) {
+  const syncLimit = Math.min(Math.max(parseInt(opts?.syncLimit, 10) || 50, 1), 100);
+  const enqueueLimit = Math.min(
+    Math.max(parseInt(opts?.enqueueLimit, 10) || 100, 1),
+    500,
+  );
+  const transcodeLimit = Math.min(
+    Math.max(parseInt(opts?.transcodeLimit, 10) || 5, 1),
+    MAX_BATCH_LIMIT,
+  );
+
+  const sync =
+    syncLimit > 0
+      ? await syncStorageBatch(syncLimit)
+      : { scanned: 0, synced: 0, skipped: 0, hasMore: false };
+  const enqueue =
+    enqueueLimit > 0
+      ? await enqueueTranscodeBatch(enqueueLimit)
+      : { scanned: 0, marked: 0, alreadyQueued: 0, hasMore: false };
+  const transcode =
+    transcodeLimit > 0
+      ? await processPendingBatch(transcodeLimit)
+      : { processed: 0, succeeded: 0, failed: 0, results: [] };
+
+  return {
+    sync,
+    enqueue,
+    transcode,
+    hasMore: Boolean(
+      sync.hasMore ||
+        enqueue.hasMore ||
+        (transcodeLimit > 0 && transcode.processed >= transcodeLimit),
+    ),
+  };
+}
+
 /** One-shot maintenance: sync Storage → Firestore, enqueue missing, run encode batch. */
 exports.configureAllVideoStorage = functions
   .region(REGION)
@@ -477,48 +514,23 @@ exports.configureAllVideoStorage = functions
 
     try {
       await assertBackfillOrAdminAuth(req);
-      const syncLimit = Math.min(
-        Math.max(parseInt(req.body?.syncLimit, 10) || 50, 1),
-        100,
-      );
-      const enqueueLimit = Math.min(
-        Math.max(parseInt(req.body?.enqueueLimit, 10) || 100, 1),
-        500,
-      );
-      const transcodeLimit = Math.min(
-        Math.max(parseInt(req.body?.transcodeLimit, 10) || 5, 1),
-        MAX_BATCH_LIMIT,
-      );
-
-      const sync =
-        syncLimit > 0
-          ? await syncStorageBatch(syncLimit)
-          : { scanned: 0, synced: 0, skipped: 0, hasMore: false };
-      const enqueue =
-        enqueueLimit > 0
-          ? await enqueueTranscodeBatch(enqueueLimit)
-          : { scanned: 0, marked: 0, alreadyQueued: 0, hasMore: false };
-      const transcode =
-        transcodeLimit > 0
-          ? await processPendingBatch(transcodeLimit)
-          : { processed: 0, succeeded: 0, failed: 0, results: [] };
-
-      res.json({
-        sync,
-        enqueue,
-        transcode,
-        hasMore: Boolean(
-          sync.hasMore ||
-            enqueue.hasMore ||
-            (transcodeLimit > 0 && transcode.processed >= transcodeLimit),
-        ),
-      });
+      const summary = await runConfigureAllVideoStorage(req.body ?? {});
+      res.json(summary);
     } catch (err) {
       const status = err.status || 500;
       res.status(status).json({
         error: err instanceof Error ? err.message : "Internal error",
       });
     }
+  });
+
+/** Callable — admin UI uses Firebase Auth token (no Vercel session required). */
+exports.adminConfigureAllVideoStorage = functions
+  .region(REGION)
+  .runWith(TRANSCODE_RUN_OPTS)
+  .https.onCall(async (data, context) => {
+    await assertCallableAdmin(context);
+    return runConfigureAllVideoStorage(data ?? {});
   });
 
 /** Every 10 minutes — sync tiers, enqueue stragglers, process a small encode batch. */

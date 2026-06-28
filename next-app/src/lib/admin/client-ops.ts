@@ -304,12 +304,12 @@ async function postAdminApi(
 }
 
 async function postAdminCallable(
-  name: "adminRunTranscodeBatch" | "adminRunThumbnailBatch",
-  limit: number,
+  name: "adminRunTranscodeBatch" | "adminRunThumbnailBatch" | "adminConfigureAllVideoStorage",
+  payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const fn = httpsCallable(getFirebaseFunctions(), name);
   try {
-    const result = await fn({ limit });
+    const result = await fn(payload);
     return (result.data ?? {}) as Record<string, unknown>;
   } catch (err: unknown) {
     const code =
@@ -327,6 +327,20 @@ async function postAdminCallable(
         ? String((err as { message: string }).message)
         : "İşlem başarısız";
     throw new Error(message);
+  }
+}
+
+/** Refresh server session cookie — helps Next.js admin API routes. */
+export async function refreshAdminSession(idToken: string): Promise<void> {
+  try {
+    await fetch(clientApiUrl("/api/auth/session"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ idToken }),
+    });
+  } catch {
+    // optional — callable / direct CF still work without cookie
   }
 }
 
@@ -394,7 +408,7 @@ async function runBatchWithFallback(
 ): Promise<Record<string, unknown>> {
   const limit = typeof body.limit === "number" ? body.limit : 15;
   try {
-    return await postAdminCallable(callableName, limit);
+    return await postAdminCallable(callableName, { limit });
   } catch (callableErr) {
     try {
       return await postCloudFunctionBatch(httpFunctionName, idToken, body);
@@ -466,20 +480,7 @@ export type StorageConfigureRound = {
   hasMore: boolean;
 };
 
-export async function configureAllVideoStorageClient(
-  idToken: string,
-  options?: {
-    syncLimit?: number;
-    enqueueLimit?: number;
-    transcodeLimit?: number;
-  },
-): Promise<StorageConfigureRound> {
-  const data = await postAdminApi("/api/admin/storage/configure-all", idToken, {
-    syncLimit: options?.syncLimit ?? 50,
-    enqueueLimit: options?.enqueueLimit ?? 100,
-    transcodeLimit: options?.transcodeLimit ?? 5,
-  });
-
+function parseStorageConfigureRound(data: Record<string, unknown>): StorageConfigureRound {
   return {
     sync: (data.sync as StorageConfigureRound["sync"]) ?? {},
     enqueue: (data.enqueue as StorageConfigureRound["enqueue"]) ?? {},
@@ -488,10 +489,50 @@ export async function configureAllVideoStorageClient(
   };
 }
 
+async function runConfigureAllWithFallback(
+  idToken: string,
+  body: Record<string, unknown>,
+): Promise<StorageConfigureRound> {
+  try {
+    const data = await postAdminCallable("adminConfigureAllVideoStorage", body);
+    return parseStorageConfigureRound(data);
+  } catch (callableErr) {
+    try {
+      const data = await postCloudFunctionBatch(
+        "configureAllVideoStorage",
+        idToken,
+        body,
+      );
+      return parseStorageConfigureRound(data);
+    } catch (httpErr) {
+      if (!isAuthBatchError(callableErr) && !isAuthBatchError(httpErr)) {
+        throw callableErr;
+      }
+      const data = await postAdminApi("/api/admin/storage/configure-all", idToken, body);
+      return parseStorageConfigureRound(data);
+    }
+  }
+}
+
+export async function configureAllVideoStorageClient(
+  idToken: string,
+  options?: {
+    syncLimit?: number;
+    enqueueLimit?: number;
+    transcodeLimit?: number;
+  },
+): Promise<StorageConfigureRound> {
+  return runConfigureAllWithFallback(idToken, {
+    syncLimit: options?.syncLimit ?? 50,
+    enqueueLimit: options?.enqueueLimit ?? 100,
+    transcodeLimit: options?.transcodeLimit ?? 5,
+  });
+}
+
 /** Otomatik tur — sync + kuyruk + encode; hasMore false olana kadar. */
 export async function configureAllVideoStorageUntilDone(
-  idToken: string,
-  maxRounds = 30,
+  getIdToken: () => Promise<string>,
+  maxRounds = 15,
   onProgress?: (round: number, result: StorageConfigureRound) => void,
 ): Promise<{ rounds: number; last: StorageConfigureRound }> {
   let round = 0;
@@ -502,8 +543,11 @@ export async function configureAllVideoStorageUntilDone(
     hasMore: true,
   };
 
+  await refreshAdminSession(await getIdToken());
+
   while (last.hasMore && round < maxRounds) {
     round += 1;
+    const idToken = await getIdToken();
     last = await configureAllVideoStorageClient(idToken, {
       syncLimit: 100,
       enqueueLimit: 500,

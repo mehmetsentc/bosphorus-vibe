@@ -61,10 +61,10 @@ export function AdminTools() {
           disabled={busy}
           onClick={() =>
             withBusy(async () => {
-              const token = await user!.getIdToken(true);
+              const getIdToken = () => user!.getIdToken(true);
               const { rounds, last } = await configureAllVideoStorageUntilDone(
-                token,
-                25,
+                getIdToken,
+                15,
                 (round, r) => {
                   setMsg(
                     `Tur ${round}: sync ${r.sync.synced ?? 0}, kuyruk +${r.enqueue.marked ?? 0}, encode ${r.transcode.succeeded ?? 0}/${r.transcode.processed ?? 0}…`,
