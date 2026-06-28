@@ -1,12 +1,12 @@
 /**
- * Verify Firebase video URLs before playback — avoids 5–10s waits on 404s
- * and wrong guesses before falling back to huge originals.
+ * Optional URL existence hints — never block playback on inconclusive results.
+ * Only cache definitive success (2xx) or hard failures (403/404).
  */
 
 const probeCache = new Map<string, boolean>();
 
 export function isVideoUrlProbeCached(url: string): boolean {
-  return probeCache.has(url);
+  return probeCache.get(url) === true;
 }
 
 export function getVideoUrlProbeResult(url: string): boolean | undefined {
@@ -14,14 +14,19 @@ export function getVideoUrlProbeResult(url: string): boolean | undefined {
 }
 
 export function markVideoUrlProbe(url: string, ok: boolean): void {
-  probeCache.set(url, ok);
+  if (ok) probeCache.set(url, true);
+  else probeCache.set(url, false);
 }
 
-/** HEAD with Range fallback — Firebase Storage supports both. */
+function isHardNotFound(status: number): boolean {
+  return status === 404 || status === 403;
+}
+
+/** HEAD with Range fallback — inconclusive results are NOT cached as false. */
 export async function probeVideoUrlExists(url: string): Promise<boolean> {
   if (!url) return false;
-  const cached = probeCache.get(url);
-  if (cached !== undefined) return cached;
+  if (probeCache.get(url) === true) return true;
+  if (probeCache.get(url) === false) return false;
 
   try {
     const head = await fetch(url, { method: "HEAD", mode: "cors", cache: "force-cache" });
@@ -29,8 +34,12 @@ export async function probeVideoUrlExists(url: string): Promise<boolean> {
       probeCache.set(url, true);
       return true;
     }
+    if (isHardNotFound(head.status)) {
+      probeCache.set(url, false);
+      return false;
+    }
   } catch {
-    // continue to range probe
+    // CORS/network — inconclusive
   }
 
   try {
@@ -40,13 +49,19 @@ export async function probeVideoUrlExists(url: string): Promise<boolean> {
       cache: "force-cache",
       headers: { Range: "bytes=0-1" },
     });
-    const ok = range.ok || range.status === 206;
-    probeCache.set(url, ok);
-    return ok;
+    if (range.ok || range.status === 206) {
+      probeCache.set(url, true);
+      return true;
+    }
+    if (isHardNotFound(range.status)) {
+      probeCache.set(url, false);
+      return false;
+    }
   } catch {
-    probeCache.set(url, false);
-    return false;
+    // inconclusive — do not cache false
   }
+
+  return false;
 }
 
 /** Probe all URLs in parallel; returns those that exist (input order preserved). */
@@ -58,7 +73,7 @@ export async function filterExistingVideoUrls(urls: string[]): Promise<string[]>
   return results.filter((r) => r.ok).map((r) => r.url);
 }
 
-/** Fire-and-forget probe — updates cache; optional callback when done. */
+/** Fire-and-forget probe — promotes confirmed URLs only; never removes candidates. */
 export function probeVideoUrlsInBackground(
   urls: string[],
   onComplete?: (existing: string[]) => void,

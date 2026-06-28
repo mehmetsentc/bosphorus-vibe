@@ -9,12 +9,7 @@ import {
   recordTimeToFirstFrame,
   recordVideoStart,
 } from "@/lib/performance/video-metrics";
-import {
-  filterExistingVideoUrls,
-  getVideoUrlProbeResult,
-  markVideoUrlProbe,
-  probeVideoUrlsInBackground,
-} from "@/lib/utils/video-url-probe";
+import { markVideoUrlProbe } from "@/lib/utils/video-url-probe";
 import {
   getCachedVideoBlobUrl,
   isVideoBlobUrlValid,
@@ -24,19 +19,13 @@ import {
   getReelsImmediatePlayback,
   getReelsPlaybackLadder,
   getReelsPlaybackUrlOrder,
-  hasDownloadToken,
   hasPostVideo,
   orderUrlsTokenizedFirst,
 } from "@/lib/utils/video-sources";
 import type { UserPostDoc } from "@/types";
 
-function withoutKnownBadUrls(urls: string[]): string[] {
-  const filtered = urls.filter((u) => getVideoUrlProbeResult(u) !== false);
-  return filtered.length ? filtered : urls;
-}
-
 /**
- * Reels playback — pick a URL that exists, then stream immediately.
+ * Reels playback — try Firestore URL ladder; downgrade only on real video errors.
  */
 export function useReelsVideoSrc(
   post: UserPostDoc,
@@ -55,104 +44,36 @@ export function useReelsVideoSrc(
     return getReelsImmediatePlayback(post, tier, { preferHighQuality });
   }, [post, tier, preferHighQuality]);
 
-  const instantUrls = useMemo(
+  const urlLadder = useMemo(
     () =>
       shouldLoad
-        ? getReelsPlaybackUrlOrder(post, tier, { preferHighQuality })
+        ? orderUrlsTokenizedFirst([
+            ...new Set([
+              ...getReelsPlaybackUrlOrder(post, tier, { preferHighQuality }),
+              ...getReelsPlaybackLadder(post),
+            ]),
+          ])
         : [],
     [shouldLoad, post, tier, preferHighQuality],
   );
 
-  const fullLadder = useMemo(
-    () => (hasPostVideo(post) ? getReelsPlaybackLadder(post) : []),
-    [post],
-  );
-
-  const inferredUrls = useMemo(
-    () =>
-      fullLadder.filter(
-        (u) => u && !instantUrls.includes(u) && !hasDownloadToken(u),
-      ),
-    [fullLadder, instantUrls],
-  );
-
-  const [playableUrls, setPlayableUrls] = useState<string[]>(instantUrls);
-  const [probing, setProbing] = useState(false);
-
-  useEffect(() => {
-    setPlayableUrls(withoutKnownBadUrls(instantUrls));
-  }, [instantUrls.join("|"), post.id]);
-
-  // Active slide: fast parallel probe of tokenized tiers (skips 404 encode URLs)
-  useEffect(() => {
-    if (!shouldLoad || !isActive || instantUrls.length === 0) {
-      setProbing(false);
-      return;
-    }
-
-    const knownGood = instantUrls.filter((u) => getVideoUrlProbeResult(u) === true);
-    if (knownGood.length) {
-      setPlayableUrls(
-        orderUrlsTokenizedFirst([...knownGood, ...withoutKnownBadUrls(instantUrls)]),
-      );
-      setProbing(false);
-      return;
-    }
-
-    const toProbe = instantUrls.filter(
-      (u) => hasDownloadToken(u) && getVideoUrlProbeResult(u) === undefined,
-    );
-    if (!toProbe.length) {
-      setProbing(false);
-      return;
-    }
-
-    let cancelled = false;
-    setProbing(true);
-    void filterExistingVideoUrls(toProbe.slice(0, 6)).then((existing) => {
-      if (cancelled) return;
-      for (const url of toProbe) {
-        markVideoUrlProbe(url, existing.includes(url));
-      }
-      const next = existing.length
-        ? orderUrlsTokenizedFirst([...existing, ...withoutKnownBadUrls(instantUrls)])
-        : withoutKnownBadUrls(instantUrls);
-      setPlayableUrls(next);
-      setProbing(false);
-    });
-
-    return () => {
-      cancelled = true;
-      setProbing(false);
-    };
-  }, [isActive, shouldLoad, instantUrls.join("|"), post.id]);
-
-  useEffect(() => {
-    if (!shouldLoad || inferredUrls.length === 0) return;
-    return probeVideoUrlsInBackground(inferredUrls, (existing) => {
-      if (!existing.length) return;
-      setPlayableUrls((prev) =>
-        orderUrlsTokenizedFirst([...new Set([...prev, ...existing])]),
-      );
-    });
-  }, [shouldLoad, inferredUrls.join("|"), post.id]);
-
   const [srcIndex, setSrcIndex] = useState(0);
   const srcIndexRef = useRef(0);
-  const urlsRef = useRef(playableUrls);
-  urlsRef.current = playableUrls;
+  const ladderRef = useRef(urlLadder);
+  ladderRef.current = urlLadder;
 
   useEffect(() => {
     srcIndexRef.current = 0;
     setSrcIndex(0);
-  }, [post.id, playableUrls.join("|")]);
+  }, [post.id, urlLadder.join("|")]);
 
   useEffect(() => {
     srcIndexRef.current = srcIndex;
   }, [srcIndex]);
 
-  const activeUrls = playableUrls.length ? playableUrls : instantUrls;
-  const playbackSrc = shouldLoad ? (activeUrls[srcIndex] ?? activeUrls[0] ?? "") : "";
+  const playbackSrc = shouldLoad
+    ? (urlLadder[srcIndex] ?? urlLadder[0] ?? "")
+    : "";
 
   const cachedBlob = playbackSrc ? getCachedVideoBlobUrl(playbackSrc) : null;
   const effectiveSrc =
@@ -173,20 +94,15 @@ export function useReelsVideoSrc(
   }, [isActive, playbackSrc, post.id]);
 
   const downgrade = useCallback((): boolean => {
-    const ladder = orderUrlsTokenizedFirst([
-      ...new Set([...urlsRef.current, ...fullLadder, ...instantUrls]),
-    ]).filter((u) => getVideoUrlProbeResult(u) !== false);
-    urlsRef.current = ladder;
     const next = srcIndexRef.current + 1;
-    if (next < ladder.length) {
+    if (next < ladderRef.current.length) {
       srcIndexRef.current = next;
       setSrcIndex(next);
-      setPlayableUrls(ladder);
-      recordQualityDowngrade(post.id, ladder[next] ?? "unknown", "reels");
+      recordQualityDowngrade(post.id, ladderRef.current[next] ?? "unknown", "reels");
       return true;
     }
     return false;
-  }, [post.id, fullLadder, instantUrls]);
+  }, [post.id]);
 
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -198,7 +114,7 @@ export function useReelsVideoSrc(
   }, []);
 
   const onWaiting = useCallback(() => {
-    if (!isActive || srcIndexRef.current >= urlsRef.current.length - 1) return;
+    if (!isActive || srcIndexRef.current >= ladderRef.current.length - 1) return;
     if (stallTimerRef.current) return;
     stallTimerRef.current = setTimeout(() => {
       stallTimerRef.current = null;
@@ -208,17 +124,18 @@ export function useReelsVideoSrc(
 
   const onPlaying = useCallback(() => {
     clearStallTimer();
+    if (playbackSrc) markVideoUrlProbe(playbackSrc, true);
     if (loadStartedRef.current !== null) {
       const ms = Math.round(performance.now() - loadStartedRef.current);
       recordTimeToFirstFrame(post.id, ms, "reels");
       recordVideoStart(post.id, ms, "reels");
       loadStartedRef.current = null;
     }
-  }, [clearStallTimer, post.id]);
+  }, [clearStallTimer, post.id, playbackSrc]);
 
   const onError = useCallback((): boolean => {
     clearStallTimer();
-    const failed = urlsRef.current[srcIndexRef.current];
+    const failed = ladderRef.current[srcIndexRef.current];
     if (failed) markVideoUrlProbe(failed, false);
     return downgrade();
   }, [clearStallTimer, downgrade]);
@@ -230,7 +147,7 @@ export function useReelsVideoSrc(
     remoteSrc: playbackSrc,
     poster: playback.poster,
     tier,
-    resolving: probing && isActive && !playbackSrc,
+    resolving: false,
     onWaiting,
     onPlaying,
     onError,

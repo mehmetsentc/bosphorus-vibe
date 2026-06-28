@@ -118,6 +118,16 @@ function FeedPostCardInner({
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
   } = useAdaptiveVideoSrc(post, "feed", Boolean(mountVideo && isActive));
+
+  const videoSrcResolved =
+    videoSrc ||
+    (mountVideo && isActive
+      ? (post.postVideoURL_original ||
+          post.postVideo ||
+          post.postVideoURL ||
+          post.postVideoURL_low ||
+          "")
+      : "");
   const thumbCandidates = useMemo(
     () => getPostFeedThumbnailCandidates(post),
     [post],
@@ -126,7 +136,7 @@ function FeedPostCardInner({
 
   useEffect(() => {
     setShowPoster(true);
-  }, [videoSrc, post.id]);
+  }, [videoSrcResolved, post.id]);
 
   // Prefetch poster early so feed never flashes black
   useEffect(() => {
@@ -163,7 +173,7 @@ function FeedPostCardInner({
   // Autoplay only when this card wins visibility (Instagram-style single active video)
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || !video || !videoSrc || !mountVideo) return;
+    if (!el || !video || !videoSrcResolved || !mountVideo) return;
 
     if (isActive) {
       el.muted = feedMuted;
@@ -191,7 +201,7 @@ function FeedPostCardInner({
     releasePlay(post.id);
     setShowPoster(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, mountVideo, video, videoSrc, feedMuted, post.id, requestPlay, releasePlay]);
+  }, [isActive, mountVideo, video, videoSrcResolved, feedMuted, post.id, requestPlay, releasePlay]);
 
   // Increment view count once when post first enters viewport
   useEffect(() => {
@@ -332,12 +342,12 @@ function FeedPostCardInner({
               />
             </div>
 
-            {mountVideo && videoSrc && (
+            {mountVideo && videoSrcResolved && (
             <video
               ref={videoRef}
-              key={`${post.id}-${videoSrc}`}
+              key={`${post.id}-${videoSrcResolved}`}
               data-feed-video-id={post.id}
-              src={videoSrc}
+              src={videoSrcResolved}
               loop
               playsInline
               muted={isMuted}
