@@ -45,6 +45,8 @@ export type PostsCache = {
 export type ReelsCache = {
   posts: EnrichedPost[];
   hasMore: boolean;
+  phase?: "recent" | "popular";
+  popularOffset?: number;
 };
 
 export type StoriesFeedCache = {
@@ -167,6 +169,8 @@ export const useAppStore = create<AppStoreState>()(
             reels: {
               posts: deduped.slice(-SESSION_POSTS_MAX),
               hasMore: hasMore ?? state.reels?.hasMore ?? true,
+              phase: state.reels?.phase,
+              popularOffset: state.reels?.popularOffset,
             },
           };
         }),

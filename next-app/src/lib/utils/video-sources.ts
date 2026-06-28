@@ -434,17 +434,20 @@ export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
 /** Server FFmpeg finished — encoded tiers have +faststart (safe to play directly). */
 export function isServerTranscodeReady(post: UserPostDoc): boolean {
   if (!post.id) return false;
-  const marker = `/videos/${post.id}/`;
-  const urls = [
+  if (post.videoTranscodeStatus === "done") return true;
+  if (
+    post.videoTranscodeStatus === "processing" ||
+    post.videoTranscodeStatus === "failed"
+  ) {
+    return false;
+  }
+  const tiers = [
+    post.postVideoURL_preview,
+    post.postVideoURL_medium,
     post.postVideoURL_low,
     post.postVideoURL_high,
-    post.postVideoURL_preview,
-  ].filter(Boolean);
-  const hasEncodedTiers = urls.some((u) => u!.includes(marker));
-  if (!hasEncodedTiers) return false;
-  if (post.videoTranscodeStatus === "done") return true;
-  // Legacy docs: tiers written before status field was mapped
-  return post.videoTranscodeStatus !== "failed" && post.videoTranscodeStatus !== "processing";
+  ].filter(Boolean) as string[];
+  return tiers.some((u) => hasDownloadToken(u));
 }
 
 /** Firestore-backed URLs only — tokenized, no inference (instant playback). */
@@ -613,11 +616,11 @@ export function pickVideoSource(
         );
       } else if (tier === "fast") {
         ordered = uniqueUrls(
-          trusted.original,
-          trusted.high,
-          trusted.low,
-          trusted.medium,
           trusted.preview,
+          trusted.medium,
+          trusted.low,
+          trusted.high,
+          trusted.original,
         );
       } else {
         ordered = uniqueUrls(

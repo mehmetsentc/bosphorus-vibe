@@ -94,7 +94,7 @@ function FeedPostCardInner({
   const [likeCount, setLikeCount] = useState(post.likedByIds.length);
   const [followBusy, setFollowBusy] = useState(false);
   const hideLikeCounts = useHideLikeCounts();
-  const { ref, isActive, isNear } = useFeedVideoVisibility<HTMLElement>(post.id);
+  const { ref, isActive, isNear } = useFeedVideoVisibility<HTMLDivElement>(post.id);
 
   const video = getPostVideoUrl(post);
   const imageCandidates = useMemo(
@@ -117,7 +117,7 @@ function FeedPostCardInner({
     onWaiting: handleAdaptiveWaiting,
     onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed", Boolean(mountVideo && (isActive || isNear)));
+  } = useAdaptiveVideoSrc(post, "feed", Boolean(mountVideo && isActive));
   const thumbCandidates = useMemo(
     () => getPostFeedThumbnailCandidates(post),
     [post],
@@ -258,7 +258,7 @@ function FeedPostCardInner({
   }
 
   return (
-    <article ref={ref} className="border-b border-border bg-background">
+    <article className="border-b border-border bg-background">
       {/* Header */}
       <div className="flex items-center gap-2.5 px-3 py-2">
         <Link
@@ -316,7 +316,10 @@ function FeedPostCardInner({
       {/* Media */}
       {video ? (
         <div className="relative w-full bg-black">
-          <div className={`relative ${FEED_VIDEO_ASPECT_CLASS} w-full overflow-hidden bg-black`}>
+          <div
+            ref={ref}
+            className={`relative ${FEED_VIDEO_ASPECT_CLASS} w-full overflow-hidden bg-black`}
+          >
             {/* Poster always visible until video plays */}
             <div
               className={`absolute inset-0 z-[4] transition-opacity duration-150 ${
@@ -332,7 +335,7 @@ function FeedPostCardInner({
             {mountVideo && videoSrc && (
             <video
               ref={videoRef}
-              key={post.id}
+              key={`${post.id}-${videoSrc}`}
               data-feed-video-id={post.id}
               src={videoSrc}
               loop
@@ -342,6 +345,18 @@ function FeedPostCardInner({
               className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
                 showPoster ? "opacity-0" : "opacity-100"
               }`}
+              onCanPlay={() => {
+                const el = videoRef.current;
+                if (isActive && el?.paused) {
+                  el.play().catch(() => {});
+                }
+              }}
+              onLoadedData={() => {
+                const el = videoRef.current;
+                if (isActive && el?.paused) {
+                  el.play().catch(() => {});
+                }
+              }}
               onPlaying={() => {
                 handleAdaptivePlaying();
                 const el = videoRef.current;

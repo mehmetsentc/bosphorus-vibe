@@ -80,9 +80,7 @@ export function VideoPlayer({
   }, []);
 
   const isReels = playbackContext === "reels";
-  const shouldLoad = isReels
-    ? isActive || isNext
-    : isActive || isNext || isNear;
+  const shouldLoad = isActive || isNext || isNear;
 
   const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive, isNext);
   const adaptiveVideo = useAdaptiveVideoSrc(

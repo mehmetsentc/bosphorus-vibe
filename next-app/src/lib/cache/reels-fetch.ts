@@ -36,7 +36,16 @@ async function loadInitialReelsPosts(): Promise<ReelsFirstPageResult> {
   let lastDoc = recentPage.lastDoc;
   let popularOffset = 0;
 
-  if (!recentPage.hasMore && enriched.length === 0) {
+  if (!recentPage.hasMore) {
+    phase = "popular";
+    const slice = await sliceReelsPopularCatalog(0, REELS_PAGE_SIZE);
+    const existingIds = new Set(enriched.map((p) => p.id));
+    const freshPopular = slice.posts.filter((p) => !existingIds.has(p.id));
+    enriched = [...enriched, ...freshPopular];
+    popularOffset = slice.nextOffset;
+    hasMore = slice.hasMore;
+    lastDoc = null;
+  } else if (enriched.length === 0) {
     phase = "popular";
     const slice = await sliceReelsPopularCatalog(0, REELS_PAGE_SIZE);
     enriched = slice.posts;
@@ -62,13 +71,17 @@ export async function fetchReelsFirstPage(
   const { reels, lastFetched } = store;
 
   if (!force && reels && !isCacheExpired(lastFetched.reels)) {
-    return {
-      posts: reels.posts,
-      hasMore: reels.hasMore,
-      lastDoc: null,
-      phase: "recent",
-      popularOffset: 0,
-    };
+    const stalePartial =
+      !reels.hasMore && reels.posts.length > 0 && reels.posts.length < REELS_PAGE_SIZE;
+    if (!stalePartial) {
+      return {
+        posts: reels.posts,
+        hasMore: reels.hasMore,
+        lastDoc: null,
+        phase: reels.phase ?? "recent",
+        popularOffset: reels.popularOffset ?? 0,
+      };
+    }
   }
 
   if (!force && inFlight) return inFlight;
@@ -78,6 +91,8 @@ export async function fetchReelsFirstPage(
     useAppStore.getState().setReelsCache({
       posts: result.posts,
       hasMore: result.hasMore,
+      phase: result.phase,
+      popularOffset: result.popularOffset,
     });
     if (typeof window !== "undefined" && result.posts.length > 0) {
       prewarmReelsPosts([result.posts[0]!], "slow", false);

@@ -16,10 +16,10 @@ type FeedVideoState = {
 
 function pickActivePostId(ratios: Record<string, number>): string | null {
   let bestId: string | null = null;
-  let bestRatio = FEED_VIDEO_AUTOPLAY_MIN_RATIO;
+  let bestRatio = -1;
 
   for (const [id, ratio] of Object.entries(ratios)) {
-    if (ratio > bestRatio) {
+    if (ratio >= FEED_VIDEO_AUTOPLAY_MIN_RATIO && ratio > bestRatio) {
       bestRatio = ratio;
       bestId = id;
     }

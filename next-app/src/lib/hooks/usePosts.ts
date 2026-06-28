@@ -261,6 +261,8 @@ export function useReelsPosts() {
     const deduped = dedupePostsById(reelsCache.posts);
     postsRef.current = deduped;
     hasMoreRef.current = reelsCache.hasMore;
+    phaseRef.current = reelsCache.phase ?? "recent";
+    popularOffsetRef.current = reelsCache.popularOffset ?? 0;
     setLocalPosts(deduped);
     setHasMore(reelsCache.hasMore);
     cursorRef.current = null;
@@ -334,6 +336,12 @@ export function useReelsPosts() {
         hasMoreRef.current = page.hasMore;
         setLocalPosts(page.posts);
         setHasMore(page.hasMore);
+        useAppStore.getState().setReelsCache({
+          posts: page.posts,
+          hasMore: page.hasMore,
+          phase: page.phase,
+          popularOffset: page.popularOffset,
+        });
         setInitialized(true);
       } finally {
         if (requestId === fetchRef.current) {
@@ -361,12 +369,26 @@ export function useReelsPosts() {
 
     hasMoreRef.current = slice.hasMore;
     setHasMore(slice.hasMore);
-    if (!fresh.length) return;
+    if (!fresh.length) {
+      useAppStore.getState().setReelsCache({
+        posts: postsRef.current,
+        hasMore: slice.hasMore,
+        phase: "popular",
+        popularOffset: popularOffsetRef.current,
+      });
+      return;
+    }
 
     const next = dedupePostsById([...postsRef.current, ...fresh]);
     postsRef.current = next;
     setLocalPosts(next);
     appendReelsPosts(fresh, slice.hasMore);
+    useAppStore.getState().setReelsCache({
+      posts: next,
+      hasMore: slice.hasMore,
+      phase: "popular",
+      popularOffset: popularOffsetRef.current,
+    });
   }, [appendReelsPosts]);
 
   const switchToPopularPhase = useCallback(() => {
@@ -422,6 +444,36 @@ export function useReelsPosts() {
       setLoadingMore(false);
     }
   }, [hasMore, loadingMore, appendReelsPosts, appendPopularPage, switchToPopularPhase]);
+
+  // Prefetch more when list is short; recover stale partial cache
+  useEffect(() => {
+    if (!initialized || loadingMore || fetching) return;
+
+    const stuckRecent =
+      !hasMore &&
+      localPosts.length > 0 &&
+      localPosts.length < REELS_PAGE_SIZE &&
+      phaseRef.current === "recent";
+
+    if (stuckRecent) {
+      switchToPopularPhase();
+      void appendPopularPage();
+      return;
+    }
+
+    if (hasMore && localPosts.length < REELS_PAGE_SIZE) {
+      void loadMore();
+    }
+  }, [
+    initialized,
+    hasMore,
+    localPosts.length,
+    loadingMore,
+    fetching,
+    loadMore,
+    appendPopularPage,
+    switchToPopularPhase,
+  ]);
 
   const refresh = useCallback(async () => {
     clearReelsCache();

@@ -12,11 +12,13 @@ import {
 import { probeVideoUrlsInBackground } from "@/lib/utils/video-url-probe";
 import {
   getCachedVideoBlobUrl,
+  isVideoBlobUrlValid,
   prefetchVideoBlob,
 } from "@/lib/utils/video-blob-cache";
 import {
   getReelsImmediatePlayback,
   getReelsPlaybackLadder,
+  getTrustedVideoUrls,
   hasDownloadToken,
   hasPostVideo,
   orderUrlsTokenizedFirst,
@@ -32,8 +34,10 @@ function buildInstantReelsUrls(
   );
   if (trusted.length) return trusted;
 
-  const ladder = getReelsPlaybackLadder(post);
-  return ladder.length ? ladder : [playback.src].filter(Boolean);
+  const { primary, original } = getTrustedVideoUrls(post);
+  return orderUrlsTokenizedFirst(
+    [primary, original, post.postVideo].filter((u): u is string => Boolean(u)),
+  );
 }
 
 /**
@@ -109,7 +113,10 @@ export function useReelsVideoSrc(
   const playbackSrc = shouldLoad ? (activeUrls[srcIndex] ?? activeUrls[0] ?? "") : "";
 
   const cachedBlob = playbackSrc ? getCachedVideoBlobUrl(playbackSrc) : null;
-  const effectiveSrc = cachedBlob ?? playbackSrc;
+  const effectiveSrc =
+    cachedBlob && isVideoBlobUrlValid(playbackSrc, cachedBlob)
+      ? cachedBlob
+      : playbackSrc;
 
   // Background blob for next slide only — never compete with active stream
   useEffect(() => {

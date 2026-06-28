@@ -7,7 +7,6 @@ import { getPostVideoUrl } from "@/lib/services/firestore";
 import { getPostVideoPoster } from "@/lib/utils/video-sources";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { VideoFeedSideActions } from "@/components/video/VideoFeedSideActions";
-import { useIntersectionActive } from "@/lib/hooks/useIntersectionActive";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
@@ -61,7 +60,6 @@ const ReelItem = memo(function ReelItem({
   isNext,
   isNear,
   mountVideo,
-  onBecameActive,
   onPostDeleted,
   onCommentClick,
 }: {
@@ -70,15 +68,9 @@ const ReelItem = memo(function ReelItem({
   isNext: boolean;
   isNear: boolean;
   mountVideo: boolean;
-  onBecameActive: () => void;
   onPostDeleted: () => void;
   onCommentClick: () => void;
 }) {
-  const { ref } = useIntersectionActive<HTMLDivElement>({
-    threshold: 0.55,
-    onVisible: onBecameActive,
-  });
-
   if (!getPostVideoUrl(post)) return null;
 
   const slidePoster = getPostVideoPoster(post) ?? post.postVideothumbnail;
@@ -92,7 +84,7 @@ const ReelItem = memo(function ReelItem({
   );
 
   return (
-    <div ref={ref} className="reels-slide bg-black">
+    <div className="reels-slide bg-black">
       {slidePoster && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -264,11 +256,6 @@ export function ReelFeed({
   const handleActiveRef = useRef<(index: number) => void>(() => {});
   handleActiveRef.current = handleActive;
 
-  const makeActiveHandler = useCallback(
-    (index: number) => () => handleActiveRef.current(index),
-    [],
-  );
-
   // Scroll-based load-more (intersection alone can miss fast swipes)
   useEffect(() => {
     const el = containerRef.current;
@@ -305,6 +292,8 @@ export function ReelFeed({
 
     if (current) prewarmReelsPosts([current], networkTier, false);
     if (next) prewarmReelsPosts([next], networkTier, true);
+
+    return () => setReelPrefetchScope(null, null);
   }, [activeIndex, visiblePosts, networkTier]);
 
   // Jump to tapped post before paint when opening from feed
@@ -349,13 +338,24 @@ export function ReelFeed({
         const itemKey = postKeys?.[i] ?? post.id;
 
         if (!inDomWindow) {
+          const thumb = post.postVideothumbnail ?? getPostVideoPoster(post);
           return (
             <div
               key={itemKey}
               className="reels-slide bg-black"
               aria-hidden
               data-reel-spacer={post.id}
-            />
+            >
+              {thumb && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={thumb}
+                  alt=""
+                  aria-hidden
+                  className="absolute inset-0 h-full w-full object-cover opacity-40"
+                />
+              )}
+            </div>
           );
         }
 
@@ -367,7 +367,6 @@ export function ReelFeed({
             isNext={i === activeIndex + 1}
             isNear={Math.abs(i - activeIndex) === 1}
             mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
-            onBecameActive={makeActiveHandler(i)}
             onPostDeleted={() => handlePostDeleted(post.id)}
             onCommentClick={() => openComment(post.id)}
           />

@@ -25,7 +25,7 @@ export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 620;
 export const FEED_VIDEO_ASPECT_CLASS = "aspect-[4/5]";
 
 /** Min visible fraction before a feed video may autoplay (single winner) */
-export const FEED_VIDEO_AUTOPLAY_MIN_RATIO = 0.55;
+export const FEED_VIDEO_AUTOPLAY_MIN_RATIO = 0.4;
 
 /** Reels phase-1: show uploads from the last N days (newest first) */
 export const REELS_RECENT_DAYS = 7;
