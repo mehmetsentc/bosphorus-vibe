@@ -1,17 +1,11 @@
 #!/usr/bin/env node
 /**
- * Tüm Firebase Storage video katmanlarını otomatik yapılandırır:
- * 1. Storage CORS (Range istekleri — hızlı akış)
- * 2. Storage'daki mevcut preview/low → Firestore URL sync
- * 3. Eksik encode kuyruğu
- * 4. FFmpeg transcode batch (TRANSCODE_BACKFILL_SECRET veya Cloud scheduler)
+ * Tüm Firebase Storage video katmanlarını otomatik yapılandırır.
  *
- * Kullanım:
  *   npm run storage:configure
- *   node scripts/storage-video-pipeline.mjs --cors-only
+ *   node scripts/storage-video-pipeline.mjs --max-rounds=10
  *
  * Gerekli: bosphorusvibe-dbd93-firebase-adminsdk-*.json (repo kökü)
- * Opsiyonel: TRANSCODE_BACKFILL_SECRET in next-app/.env.local
  */
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { createRequire } from "module";
@@ -24,9 +18,9 @@ const PROJECT = "bosphorusvibe-dbd93";
 const BUCKET = "bosphorusvibe-dbd93.firebasestorage.app";
 const CF_URL = `https://europe-central2-${PROJECT}.cloudfunctions.net/configureAllVideoStorage`;
 
-const requireFunctions = createRequire(
-  join(ROOT, "firebase/functions/package.json"),
-);
+const FUNCTIONS_DIR = join(ROOT, "firebase/functions");
+const requireFunctions = createRequire(join(FUNCTIONS_DIR, "package.json"));
+
 const admin = requireFunctions("firebase-admin");
 const { syncStorageBatch, enqueueTranscodeBatch, initFirebaseAdmin } =
   requireFunctions("./storage-video-sync.js");
@@ -62,9 +56,7 @@ function loadServiceAccount() {
   );
 }
 
-/** Same firebase-admin instance as storage-video-sync.js (functions/node_modules). */
 function ensureAdminInitialized() {
-  if (admin.apps.length > 0) return;
   const sa = loadServiceAccount();
   initFirebaseAdmin({
     credential: admin.credential.cert(sa),
@@ -78,18 +70,30 @@ function parseArgs() {
   return {
     corsOnly: args.includes("--cors-only"),
     maxRounds: Number(
-      args.find((a) => a.startsWith("--max-rounds="))?.split("=")[1] || 50,
+      args.find((a) => a.startsWith("--max-rounds="))?.split("=")[1] || 20,
     ),
     syncLimit: Number(
-      args.find((a) => a.startsWith("--sync="))?.split("=")[1] || 100,
+      args.find((a) => a.startsWith("--sync="))?.split("=")[1] || 50,
     ),
     enqueueLimit: Number(
-      args.find((a) => a.startsWith("--enqueue="))?.split("=")[1] || 500,
+      args.find((a) => a.startsWith("--enqueue="))?.split("=")[1] || 200,
     ),
     transcodeLimit: Number(
       args.find((a) => a.startsWith("--transcode="))?.split("=")[1] || 5,
     ),
   };
+}
+
+function logProgress({ phase, scanned, synced, skipped, marked, alreadyQueued }) {
+  if (phase === "sync") {
+    process.stdout.write(
+      `\r  sync… ${scanned} tarandı, ${synced} güncellendi, ${skipped ?? 0} atlandı   `,
+    );
+  } else if (phase === "enqueue") {
+    process.stdout.write(
+      `\r  kuyruk… ${scanned} tarandı, ${marked} eklendi, ${alreadyQueued} zaten sırada   `,
+    );
+  }
 }
 
 async function applyStorageCors() {
@@ -103,19 +107,26 @@ async function applyStorageCors() {
 async function runLocalBatch(opts) {
   ensureAdminInitialized();
 
-  const sync = await syncStorageBatch(opts.syncLimit);
-  const enqueue = await enqueueTranscodeBatch(opts.enqueueLimit);
+  console.log(`  Firestore ↔ Storage sync (max ${opts.syncLimit})…`);
+  const sync = await syncStorageBatch(opts.syncLimit, logProgress);
+  process.stdout.write("\n");
+
+  console.log(`  Encode kuyruğu (max ${opts.enqueueLimit})…`);
+  const enqueue = await enqueueTranscodeBatch(opts.enqueueLimit, logProgress);
+  process.stdout.write("\n");
+
   console.log("  sync:", sync);
   console.log("  enqueue:", enqueue);
 
   const secret = process.env.TRANSCODE_BACKFILL_SECRET?.trim();
   if (!secret) {
     console.warn(
-      "⚠ TRANSCODE_BACKFILL_SECRET yok — encode batch atlandı (kuyruk 10 dk scheduler ile işlenecek)",
+      "⚠ TRANSCODE_BACKFILL_SECRET yok — encode batch atlandı (10 dk scheduler devam eder)",
     );
     return { hasMore: Boolean(sync.hasMore || enqueue.hasMore), transcode: null };
   }
 
+  console.log("  Cloud Function encode batch…");
   const res = await fetch(CF_URL, {
     method: "POST",
     headers: {
@@ -149,6 +160,7 @@ async function runCloudConfigureAll(opts) {
     return runLocalBatch(opts);
   }
 
+  console.log("  Cloud Function configureAll…");
   const res = await fetch(CF_URL, {
     method: "POST",
     headers: {
@@ -199,15 +211,18 @@ async function main() {
     console.log(`\n→ Tur ${round}/${opts.maxRounds}`);
     const result = await runCloudConfigureAll(opts);
     hasMore = result.hasMore;
-    if (hasMore) await sleep(3000);
+    if (hasMore) {
+      console.log("  (devam ediyor, 3 sn bekleniyor…)");
+      await sleep(3000);
+    }
   }
 
   if (hasMore) {
     console.log(
-      `\n⚠ ${opts.maxRounds} tur tamamlandı — kalan işler var. Tekrar çalıştırın veya admin panelden devam edin.`,
+      `\n⚠ ${opts.maxRounds} tur bitti — kalan iş var. Tekrar çalıştırın veya admin panel.`,
     );
   } else {
-    console.log("\n✓ Tüm Storage video katmanları yapılandırıldı (veya kuyruk boş).");
+    console.log("\n✓ Tamamlandı (veya kuyruk boş).");
   }
 }
 

@@ -10,10 +10,19 @@ const {
 
 const STORAGE_MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
-/** CLI + Cloud Functions — single admin app for this module's firebase-admin copy. */
+/** CLI + Cloud Functions — initialize the module's firebase-admin singleton. */
 function initFirebaseAdmin(options) {
-  if (admin.apps.length > 0) return;
-  admin.initializeApp(options);
+  if (admin.apps.length > 0) return admin.app();
+  return admin.initializeApp(options);
+}
+
+function requireAdminApp() {
+  if (admin.apps.length === 0) {
+    throw new Error(
+      "Firebase Admin başlatılmadı — önce initFirebaseAdmin() çağırın",
+    );
+  }
+  return admin.app();
 }
 
 function getPostUserId(data) {
@@ -140,7 +149,8 @@ async function scanPostsPage(db, lastId, pageSize) {
   return query.get();
 }
 
-async function syncStorageBatch(limit = 50) {
+async function syncStorageBatch(limit = 50, onProgress) {
+  requireAdminApp();
   const db = admin.firestore();
   let lastId;
   let scanned = 0;
@@ -153,6 +163,10 @@ async function syncStorageBatch(limit = 50) {
 
     for (const doc of snap.docs) {
       scanned += 1;
+      if (onProgress && scanned % 25 === 0) {
+        onProgress({ phase: "sync", scanned, synced, skipped });
+      }
+
       const data = doc.data();
       if (!postNeedsStorageSync(data, doc.id)) {
         skipped += 1;
@@ -171,7 +185,8 @@ async function syncStorageBatch(limit = 50) {
   return { scanned, synced, skipped, hasMore: Boolean(lastId && synced >= limit) };
 }
 
-async function enqueueTranscodeBatch(limit = 100) {
+async function enqueueTranscodeBatch(limit = 100, onProgress) {
+  requireAdminApp();
   const db = admin.firestore();
   let lastId;
   let scanned = 0;
@@ -187,6 +202,10 @@ async function enqueueTranscodeBatch(limit = 100) {
 
     for (const doc of snap.docs) {
       scanned += 1;
+      if (onProgress && scanned % 50 === 0) {
+        onProgress({ phase: "enqueue", scanned, marked, alreadyQueued });
+      }
+
       const data = doc.data();
       if (!postNeedsVideoTranscode(data, doc.id)) continue;
 
