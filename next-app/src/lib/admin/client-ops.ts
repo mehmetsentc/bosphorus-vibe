@@ -458,3 +458,62 @@ export async function runTranscodeBatchClient(idToken: string, batchLimit = 5) {
   );
   return batchResult(data);
 }
+
+export type StorageConfigureRound = {
+  sync: { scanned?: number; synced?: number; skipped?: number };
+  enqueue: { scanned?: number; marked?: number; alreadyQueued?: number };
+  transcode: { processed?: number; succeeded?: number; failed?: number };
+  hasMore: boolean;
+};
+
+export async function configureAllVideoStorageClient(
+  idToken: string,
+  options?: {
+    syncLimit?: number;
+    enqueueLimit?: number;
+    transcodeLimit?: number;
+  },
+): Promise<StorageConfigureRound> {
+  const data = await postAdminApi("/api/admin/storage/configure-all", idToken, {
+    syncLimit: options?.syncLimit ?? 50,
+    enqueueLimit: options?.enqueueLimit ?? 100,
+    transcodeLimit: options?.transcodeLimit ?? 5,
+  });
+
+  return {
+    sync: (data.sync as StorageConfigureRound["sync"]) ?? {},
+    enqueue: (data.enqueue as StorageConfigureRound["enqueue"]) ?? {},
+    transcode: (data.transcode as StorageConfigureRound["transcode"]) ?? {},
+    hasMore: Boolean(data.hasMore),
+  };
+}
+
+/** Otomatik tur — sync + kuyruk + encode; hasMore false olana kadar. */
+export async function configureAllVideoStorageUntilDone(
+  idToken: string,
+  maxRounds = 30,
+  onProgress?: (round: number, result: StorageConfigureRound) => void,
+): Promise<{ rounds: number; last: StorageConfigureRound }> {
+  let round = 0;
+  let last: StorageConfigureRound = {
+    sync: {},
+    enqueue: {},
+    transcode: {},
+    hasMore: true,
+  };
+
+  while (last.hasMore && round < maxRounds) {
+    round += 1;
+    last = await configureAllVideoStorageClient(idToken, {
+      syncLimit: 100,
+      enqueueLimit: 500,
+      transcodeLimit: 5,
+    });
+    onProgress?.(round, last);
+    if (last.hasMore) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  return { rounds: round, last };
+}

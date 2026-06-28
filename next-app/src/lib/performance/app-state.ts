@@ -36,9 +36,6 @@ export const REELS_LIKE_SCORE_WEIGHT = 12;
 /** Preload video metadata when card is this fraction visible */
 export const FEED_VIDEO_PRELOAD_MIN_RATIO = 0.08;
 
-/** Defer mounting feed video until after poster paints (LCP) */
-export const FEED_VIDEO_MOUNT_DEFER_MS = 80;
-
 /** Delay before MessagesDock opens a realtime chat subscription */
 export const MESSAGES_DOCK_DEFER_MS = 5_000;
 
@@ -54,12 +51,3 @@ export const REELS_PAGE_SIZE = 20;
 
 /** Trigger load-more / catalog cycle this many items before the end */
 export const INFINITE_SCROLL_NEAR_END = 3;
-
-/** Buffering longer than this → switch to lower-quality URL if available */
-export const VIDEO_STALL_DOWNGRADE_MS = 800;
-
-/** Reels: downgrade after sustained stall — not on normal mobile buffering */
-export const VIDEO_STALL_DOWNGRADE_REELS_MS = 1_200;
-
-/** Reels: switch URL if first frame not reached within this window */
-export const REELS_FIRST_FRAME_TIMEOUT_MS = 2_500;

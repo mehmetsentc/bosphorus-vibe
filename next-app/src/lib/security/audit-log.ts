@@ -12,6 +12,7 @@ export type AuditAction =
   | "admin_update_user_role"
   | "admin_transcode_enqueue"
   | "admin_transcode_run"
+  | "admin_storage_configure_all"
   | "admin_thumbnail_enqueue"
   | "admin_thumbnail_run"
   | "api_error";

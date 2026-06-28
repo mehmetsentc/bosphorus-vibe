@@ -1,7 +1,6 @@
 import type { UserPostDoc } from "@/types";
 import type { NetworkTier } from "@/lib/hooks/useNetworkQuality";
 import { prefetchVideoLeadingBytesManaged } from "@/lib/performance/video-prefetch-manager";
-import { warmNextReelBlob } from "@/lib/utils/video-blob-cache";
 
 function uniqueUrls(...urls: (string | undefined)[]): string[] {
   const seen = new Set<string>();
@@ -182,16 +181,6 @@ function inferSiblingAssetUrl(
   return videoUrl.replace(/original\.[a-z0-9]+/i, filename);
 }
 
-/** Activity uploads: users/.../activities/{id}/low.mp4 beside original.mov */
-export function inferActivityLowUrl(videoUrl: string): string | undefined {
-  if (!videoUrl.includes("/activities/")) return undefined;
-  const lowMp4 = inferSiblingAssetUrl(videoUrl, "low.mp4");
-  if (lowMp4) return lowMp4;
-  const m = videoUrl.match(/original\.([a-z0-9]+)/i);
-  if (m) return videoUrl.replace(/original\.[a-z0-9]+/i, `low.${m[1]}`);
-  return undefined;
-}
-
 /** Client-uploaded preview.mp4 beside original — smallest, fastest start. */
 export function inferPreviewUrlFromVideo(videoUrl: string): string | undefined {
   const fromOriginal = inferSiblingAssetUrl(videoUrl, "preview.mp4");
@@ -347,106 +336,6 @@ function decodeStoragePathFromUrl(url: string): string | null {
   }
 }
 
-/** Smaller transcodes / previews — preferred for feed & reels playback. */
-export function getFastPlaybackCandidates(post: UserPostDoc): string[] {
-  const { original, preview, medium, low, high } = getPostVideoVariants(post);
-  const candidates: string[] = [];
-
-  const distinctPreview =
-    preview && preview !== original ? preview : "";
-  if (distinctPreview) {
-    candidates.push(distinctPreview);
-  }
-
-  const uploadPreview = inferPreviewUrlFromVideo(original);
-  if (uploadPreview && uploadPreview !== distinctPreview) {
-    candidates.push(uploadPreview);
-  }
-
-  const serverPreview = inferTranscodedPreviewUrl(post);
-  if (serverPreview && !candidates.includes(serverPreview)) {
-    candidates.push(serverPreview);
-  }
-
-  const distinctMedium =
-    medium && medium !== original && medium !== distinctPreview ? medium : "";
-  if (distinctMedium) {
-    candidates.push(distinctMedium);
-  }
-
-  const transcodedMedium = inferTranscodedMediumUrl(post);
-  if (transcodedMedium && !candidates.includes(transcodedMedium)) {
-    candidates.push(transcodedMedium);
-  }
-
-  const distinctLow = low && low !== original && low !== distinctPreview ? low : "";
-  if (distinctLow) {
-    candidates.push(distinctLow);
-  }
-
-  const activityLow = inferActivityLowUrl(original);
-  if (activityLow && !candidates.includes(activityLow)) {
-    candidates.push(activityLow);
-  }
-
-  const transcodedLow = inferTranscodedLowUrl(post);
-  if (transcodedLow && !candidates.includes(transcodedLow)) {
-    candidates.push(transcodedLow);
-  }
-
-  const distinctHigh = high && high !== original && high !== distinctLow ? high : "";
-  if (distinctHigh) {
-    candidates.push(distinctHigh);
-  }
-
-  const transcodedHigh = inferTranscodedHighUrl(post);
-  if (transcodedHigh && !candidates.includes(transcodedHigh)) {
-    candidates.push(transcodedHigh);
-  }
-
-  return uniqueUrls(...candidates).filter((url) => url !== original);
-}
-
-/**
- * Reels fallback ladder — smallest → largest (used only on playback errors).
- */
-export function getReelsPlaybackLadder(post: UserPostDoc): string[] {
-  const { original, low, preview, high } = getPostVideoVariants(post);
-  const fast = getFastPlaybackCandidates(post);
-
-  const previews = fast.filter(
-    (u) => u.includes("/preview.mp4") || (preview && u === preview),
-  );
-  const lows = fast.filter(
-    (u) =>
-      u.includes("/low.mp4") ||
-      (low && u === low && u !== original),
-  );
-  const highs = fast.filter(
-    (u) =>
-      u.includes("/high.mp4") ||
-      (high && u === high && u !== original),
-  );
-
-  return uniqueUrls(...previews, ...lows, ...highs, low, high, original);
-}
-
-/** Server FFmpeg finished — only trust encode tiers when transcode succeeded. */
-export function isServerTranscodeReady(post: UserPostDoc): boolean {
-  if (!post.id) return false;
-  if (post.videoTranscodeStatus === "done") return true;
-  if (
-    post.videoTranscodeStatus === "processing" ||
-    post.videoTranscodeStatus === "failed" ||
-    post.videoTranscodeStatus === "skipped"
-  ) {
-    return false;
-  }
-  const low = post.postVideoURL_low || "";
-  const marker = `/videos/${post.id}/`;
-  return low.includes(marker) && hasDownloadToken(low);
-}
-
 /** Firestore-backed URLs only — tokenized, no inference (instant playback). */
 export function getTrustedVideoUrls(post: UserPostDoc): {
   original: string;
@@ -480,10 +369,6 @@ export function getTrustedVideoUrls(post: UserPostDoc): {
     primary,
   };
 }
-
-type ReelsPlaybackOptions = {
-  preferHighQuality?: boolean;
-};
 
 /** Canonical playable URL from Firestore — fallback when no tier list applies. */
 export function getCanonicalVideoPlaybackUrl(post: UserPostDoc): string {
@@ -526,69 +411,7 @@ export function getFastFlowPlaybackUrl(post: UserPostDoc): string {
   return pickPlayableSrc(urls) || getCanonicalVideoPlaybackUrl(post);
 }
 
-/** @deprecated alias — same as getFastFlowPlaybackUrls */
-export function getReelsTrustedFirestoreUrls(post: UserPostDoc): string[] {
-  return getFastFlowPlaybackUrls(post);
-}
-
-/**
- * Ordered reels candidates — canonical Firestore URL first.
- */
-export function getReelsPlaybackUrlOrder(
-  post: UserPostDoc,
-  _tier: NetworkTier,
-  _options?: ReelsPlaybackOptions,
-): string[] {
-  return getReelsTrustedFirestoreUrls(post);
-}
-
-/**
- * Instant reels playback — tokenized Firestore URLs first; preview before heavy tiers.
- */
-export function getReelsImmediatePlayback(
-  post: UserPostDoc,
-  _tier: NetworkTier,
-  _options?: ReelsPlaybackOptions,
-): { src: string; fallbacks: string[]; poster?: string } {
-  const poster = getPostVideoPoster(post);
-  const urls = getFastFlowPlaybackUrls(post);
-  const src = getFastFlowPlaybackUrl(post);
-  return { src, fallbacks: urls.filter((u) => u !== src), poster };
-}
-
-/** Lightweight prewarm — preview/low URL + leading bytes only (no extra decoders). */
-export function getReelsPrewarmUrl(
-  post: UserPostDoc,
-  tier: NetworkTier,
-): string {
-  return getReelsImmediatePlayback(post, tier).src;
-}
-
-/** @deprecated Use getReelsImmediatePlayback — kept for ladder ordering */
-export function getReelsStartIndex(
-  urls: string[],
-  tier: NetworkTier,
-  original?: string,
-): number {
-  if (!urls.length) return 0;
-  const previewIdx = urls.findIndex((u) => u.includes("/preview.mp4"));
-  if (previewIdx >= 0) return previewIdx;
-  if (tier === "slow") return 0;
-  const lowIdx = urls.findIndex((u) => u.includes("/low.mp4"));
-  if (lowIdx >= 0) return lowIdx;
-  if (original) {
-    const origIdx = urls.indexOf(original);
-    if (origIdx >= 0) return origIdx;
-  }
-  return 0;
-}
-
 export type VideoPlaybackContext = "feed" | "detail" | "reels";
-
-export function hasDistinctLowQuality(post: UserPostDoc): boolean {
-  const { original, low } = getPostVideoVariants(post);
-  return Boolean(low && original && low !== original);
-}
 
 type PickVideoSourceOptions = {
   /** User chose "Yüksek kalite" in settings — prefer original when available. */
@@ -606,102 +429,31 @@ type PickVideoSourceOptions = {
  */
 export function pickVideoSource(
   post: UserPostDoc,
-  tier: NetworkTier,
+  _tier: NetworkTier,
   context: VideoPlaybackContext = "feed",
   options?: PickVideoSourceOptions,
 ): { src: string; poster?: string; fallbacks: string[] } {
-  const { original, low, poster } = getPostVideoVariants(post);
-  const fast = getFastPlaybackCandidates(post);
-
-  // Separate preview (tiny, sub-480p) from higher-quality low.mp4
-  const previews = fast.filter(
-    (u) => u.includes("/preview.mp4") || u.includes("preview.mp4"),
-  );
-  const lows = fast.filter((u) => !previews.includes(u));
+  const poster = getPostVideoPoster(post);
+  const urls = getFastFlowPlaybackUrls(post);
+  const original = getCanonicalVideoPlaybackUrl(post);
 
   let ordered: string[];
-  if (context === "reels" || context === "feed") {
-    ordered = getFastFlowPlaybackUrls(post);
-  } else if (options?.preferHighQuality && original) {
-    const { high: trustedHigh, low: trustedLow } = getTrustedVideoUrls(post);
-    ordered = uniqueUrls(trustedHigh, trustedLow, ...fast, original);
-  } else if (tier === "slow") {
-    ordered = fast.length ? [...fast, original] : uniqueUrls(original, low);
-  } else if (fast.length) {
-    ordered = [...fast, original];
+  if (options?.preferHighQuality && original && context === "detail") {
+    ordered = uniqueUrls(original, ...urls);
   } else {
-    ordered = uniqueUrls(low, original);
+    ordered = urls;
   }
 
-  const candidates = uniqueUrls(...ordered);
-  const src = pickPlayableSrc(candidates);
-  const fallbacks = candidates.filter((url) => url !== src);
-
-  return { src, poster, fallbacks };
+  const src = pickPlayableSrc(ordered) || original;
+  return { src, poster, fallbacks: ordered.filter((url) => url !== src) };
 }
 
-const prewarmedUrls = new Set<string>();
 const prefetchedImages = new Set<string>();
 const MAX_PREFETCH_IMAGES = 48;
-const prewarmElements: HTMLVideoElement[] = [];
-/** Hidden prewarm videos also consume iOS decoders — keep tiny. */
-const MAX_PREWARM_ELEMENTS = 1;
 
 /** Warm first ~512KB (moov + initial mdat) for faster first frame on +faststart MP4. */
 export function prefetchVideoLeadingBytes(url: string, postId?: string): void {
   prefetchVideoLeadingBytesManaged(url, postId);
-}
-
-function disposePrewarmVideo(video: HTMLVideoElement): void {
-  video.pause();
-  video.removeAttribute("src");
-  video.load();
-  video.remove();
-}
-
-/** Hint the browser to fetch the next clip (desktop / Android). */
-export function prefetchVideoUrl(url: string): void {
-  if (!url || typeof document === "undefined") return;
-  const existing = document.querySelector(
-    `link[rel="prefetch"][as="video"][href="${CSS.escape(url)}"]`,
-  );
-  if (existing) return;
-  const link = document.createElement("link");
-  link.rel = "prefetch";
-  link.as = "video";
-  link.href = url;
-  document.head.appendChild(link);
-}
-
-/**
- * Warm the HTTP cache via a hidden <video> — iOS Safari ignores link prefetch.
- */
-export function prewarmVideoUrl(url: string): void {
-  if (!url || typeof document === "undefined" || prewarmedUrls.has(url)) return;
-  prewarmedUrls.add(url);
-  prefetchVideoUrl(url);
-
-  const video = document.createElement("video");
-  video.preload = "auto";
-  video.muted = true;
-  video.playsInline = true;
-  video.setAttribute("playsinline", "");
-  video.src = url;
-  video.style.cssText =
-    "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px";
-  document.body.appendChild(video);
-  video.load();
-
-  prewarmElements.push(video);
-  while (prewarmElements.length > MAX_PREWARM_ELEMENTS) {
-    const old = prewarmElements.shift();
-    if (old) disposePrewarmVideo(old);
-  }
-}
-
-export function prewarmVideoUrls(urls: string[]): void {
-  const first = urls[0];
-  if (first) prewarmVideoUrl(first);
 }
 
 /** Warm poster/thumbnail HTTP cache for faster LCP. */
@@ -725,40 +477,18 @@ export function getVideoReelsPath(postId: string): string {
   return `/feed/${postId}`;
 }
 
-/** Warm video + poster before opening reels from feed tap. */
-export function prewarmPostVideo(
-  post: UserPostDoc,
-  tier: NetworkTier,
-  context: VideoPlaybackContext = "feed",
-): void {
-  const { src, poster } = pickVideoSource(post, tier, context);
-  if (src) prewarmVideoUrl(src);
-  if (poster) prefetchImageUrl(poster);
-}
-
-/** Prewarm reels — current + next clip (leading bytes + blob for next). */
-export function prewarmReelsPost(
-  post: UserPostDoc,
-  tier: NetworkTier,
-  withBlob = false,
-): void {
-  const src = getReelsPrewarmUrl(post, tier);
+/** Prewarm next clip — first 512KB only (no extra decoders or full downloads). */
+export function prewarmReelsPost(post: UserPostDoc, _tier: NetworkTier): void {
+  const src = getFastFlowPlaybackUrl(post);
   const poster = getPostVideoPoster(post);
-  if (src) {
-    prefetchVideoLeadingBytes(src, post.id);
-    if (withBlob) warmNextReelBlob(src, post.id);
-  }
+  if (src) prefetchVideoLeadingBytes(src, post.id);
   if (poster) prefetchImageUrl(poster);
 }
 
-export function prewarmReelsPosts(
-  posts: UserPostDoc[],
-  tier: NetworkTier,
-  withBlobForFirst = false,
-): void {
-  posts.forEach((post, index) => {
-    prewarmReelsPost(post, tier, withBlobForFirst && index === 0);
-  });
+export function prewarmReelsPosts(posts: UserPostDoc[], tier: NetworkTier): void {
+  for (const post of posts) {
+    prewarmReelsPost(post, tier);
+  }
 }
 
 /**
@@ -806,10 +536,4 @@ export function hasPostVideo(post: UserPostDoc): boolean {
 /** Guess thumb.jpg beside original.mov/mp4 in Firebase Storage URLs. */
 export function inferThumbUrlFromVideo(videoUrl: string): string | undefined {
   return inferSiblingAssetUrl(videoUrl, "thumb.jpg");
-}
-
-/** Best video URL for grid frame fallback (iOS-safe). */
-export function pickGridVideoPreviewUrl(post: UserPostDoc): string {
-  const { original, low } = getPostVideoVariants(post);
-  return pickPlayableSrc([original, low]);
 }

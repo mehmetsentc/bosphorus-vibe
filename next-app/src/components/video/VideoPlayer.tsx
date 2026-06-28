@@ -83,25 +83,18 @@ export function VideoPlayer({
   const isReels = playbackContext === "reels";
   const shouldLoad = isActive || isNext || isNear;
 
-  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad, isActive);
-  const adaptiveVideo = useAdaptiveVideoSrc(
-    post,
-    playbackContext,
-    !isReels && shouldLoad,
-  );
+  const reelsVideo = useReelsVideoSrc(post, isReels && shouldLoad);
+  const adaptiveVideo = useAdaptiveVideoSrc(post, playbackContext);
 
   const {
     src: hookSrc,
     poster,
-    onWaiting: handleAdaptiveWaiting,
-    onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
   } = isReels ? reelsVideo : adaptiveVideo;
 
   const videoSrc =
     hookSrc || (isReels ? getFastFlowPlaybackUrl(post) : hookSrc);
 
-  const resolving = isReels && reelsVideo.resolving;
   const preload = isReels
     ? isActive || isNext
       ? "auto"
@@ -300,7 +293,7 @@ export function VideoPlayer({
     );
   }, []);
 
-  if (!videoSrc && !resolving && !poster) return null;
+  if (!videoSrc && !poster) return null;
 
   const videoKey = isReels ? post.id : `${post.id}-${videoSrc || "pending"}`;
 
@@ -312,7 +305,7 @@ export function VideoPlayer({
           : "absolute inset-0 flex items-center justify-center overflow-hidden bg-black"
       }
     >
-      {(showPoster || resolving || !videoSrc) && poster && (
+      {(showPoster || !videoSrc) && poster && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={poster}
@@ -355,11 +348,9 @@ export function VideoPlayer({
           onWaiting={() => {
             clearLoadingTimer();
             loadingTimerRef.current = setTimeout(() => setLoading(true), 400);
-            handleAdaptiveWaiting();
           }}
           onPlaying={() => {
             clearLoadingTimer();
-            handleAdaptivePlaying();
             hasPlayedRef.current = true;
             setLoading(false);
             setShowPoster(false);

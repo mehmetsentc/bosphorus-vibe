@@ -2,7 +2,6 @@
 
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useRef, type ReactNode } from "react";
-import { startFeedFpsMonitor } from "@/lib/performance/video-metrics";
 
 type VirtualFeedListProps<T> = {
   items: T[];
@@ -34,10 +33,6 @@ export function VirtualFeedList<T>({
     overscan,
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
-
-  useEffect(() => {
-    return startFeedFpsMonitor();
-  }, []);
 
   useEffect(() => {
     virtualizer.measure();

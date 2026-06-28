@@ -5,11 +5,11 @@ import {
   getFeedPostsPage,
 } from "@/lib/services/firestore";
 import {
-  hasPostVideo,
-  pickVideoSource,
-  prewarmVideoUrls,
+  getFastFlowPlaybackUrl,
   getPostVideoPoster,
+  hasPostVideo,
   prefetchImageUrls,
+  prefetchVideoLeadingBytes,
 } from "@/lib/utils/video-sources";
 import { useAppStore } from "@/store/appStore";
 
@@ -31,12 +31,10 @@ export function prefetchFeedFirstPage(): Promise<void> {
         hasMore: page.hasMore,
       });
       if (typeof window !== "undefined") {
-        const videoUrls = enriched
-          .filter(hasPostVideo)
-          .slice(0, 2)
-          .map((post) => pickVideoSource(post, "slow", "feed").src)
-          .filter(Boolean);
-        prewarmVideoUrls(videoUrls);
+        for (const post of enriched.filter(hasPostVideo).slice(0, 2)) {
+          const src = getFastFlowPlaybackUrl(post);
+          if (src) prefetchVideoLeadingBytes(src, post.id);
+        }
         const posterUrls = enriched
           .slice(0, 2)
           .map((post) => getPostVideoPoster(post))

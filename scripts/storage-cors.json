@@ -1,0 +1,18 @@
+[
+  {
+    "origin": [
+      "https://www.bosphorusvibe.com",
+      "https://bosphorusvibe.com",
+      "http://localhost:3000"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Accept-Ranges",
+      "Content-Range",
+      "Access-Control-Allow-Origin"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

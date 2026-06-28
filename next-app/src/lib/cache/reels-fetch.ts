@@ -95,8 +95,8 @@ export async function fetchReelsFirstPage(
       popularOffset: result.popularOffset,
     });
     if (typeof window !== "undefined" && result.posts.length > 0) {
-      prewarmReelsPosts([result.posts[0]!], "slow", true);
-      if (result.posts[1]) prewarmReelsPosts([result.posts[1]], "slow", true);
+      prewarmReelsPosts([result.posts[0]!], "slow");
+      if (result.posts[1]) prewarmReelsPosts([result.posts[1]], "slow");
     }
     return result;
   })();

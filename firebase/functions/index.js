@@ -13,6 +13,10 @@ const {
   buildFirebaseDownloadUrl,
   runFfmpegEncode,
 } = require("./video-encode");
+const {
+  syncStorageBatch,
+  enqueueTranscodeBatch,
+} = require("./storage-video-sync");
 
 admin.initializeApp();
 
@@ -342,6 +346,31 @@ exports.transcodeVideoPost = functions
     return null;
   });
 
+/** Video replace / manual re-queue — transcode immediately when status → pending. */
+exports.transcodeVideoPostOnUpdate = functions
+  .region(REGION)
+  .runWith(TRANSCODE_RUN_OPTS)
+  .firestore.document("userPosts/{postId}")
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    const postId = context.params.postId;
+
+    const becamePending =
+      after.videoTranscodeStatus === "pending" &&
+      before.videoTranscodeStatus !== "pending";
+    const videoChanged =
+      getOriginalVideoUrl(before) !== getOriginalVideoUrl(after);
+
+    if (!becamePending && !(after.videoTranscodeStatus === "pending" && videoChanged)) {
+      return null;
+    }
+    if (!needsVideoTranscode(after, postId)) return null;
+
+    await transcodeVideoForPost(postId, after, change.after.ref);
+    return null;
+  });
+
 /** Every 5 minutes — process queued video encodes. */
 exports.processPendingVideoTranscodes = functions
   .region(REGION)
@@ -393,6 +422,116 @@ exports.adminRunTranscodeBatch = functions
       MAX_BATCH_LIMIT,
     );
     return processPendingBatch(limit);
+  });
+
+/** Sync Firestore tier URLs from files already in Storage (no re-encode). */
+exports.runStorageVideoSyncBatch = functions
+  .region(REGION)
+  .runWith({ memory: "1GB", timeoutSeconds: 300 })
+  .https.onRequest(async (req, res) => {
+    if (handleCorsPreflight(req, res)) return;
+    applyCors(req, res);
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    try {
+      await assertBackfillOrAdminAuth(req);
+      const limit = Math.min(
+        Math.max(parseInt(req.body?.limit, 10) || 50, 1),
+        100,
+      );
+      const summary = await syncStorageBatch(limit);
+      res.json(summary);
+    } catch (err) {
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err instanceof Error ? err.message : "Internal error",
+      });
+    }
+  });
+
+exports.adminRunStorageVideoSync = functions
+  .region(REGION)
+  .runWith({ memory: "1GB", timeoutSeconds: 300 })
+  .https.onCall(async (data, context) => {
+    await assertCallableAdmin(context);
+    const limit = Math.min(Math.max(parseInt(data?.limit, 10) || 50, 1), 100);
+    return syncStorageBatch(limit);
+  });
+
+/** One-shot maintenance: sync Storage → Firestore, enqueue missing, run encode batch. */
+exports.configureAllVideoStorage = functions
+  .region(REGION)
+  .runWith(TRANSCODE_RUN_OPTS)
+  .https.onRequest(async (req, res) => {
+    if (handleCorsPreflight(req, res)) return;
+    applyCors(req, res);
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    try {
+      await assertBackfillOrAdminAuth(req);
+      const syncLimit = Math.min(
+        Math.max(parseInt(req.body?.syncLimit, 10) || 50, 1),
+        100,
+      );
+      const enqueueLimit = Math.min(
+        Math.max(parseInt(req.body?.enqueueLimit, 10) || 100, 1),
+        500,
+      );
+      const transcodeLimit = Math.min(
+        Math.max(parseInt(req.body?.transcodeLimit, 10) || 5, 1),
+        MAX_BATCH_LIMIT,
+      );
+
+      const sync =
+        syncLimit > 0
+          ? await syncStorageBatch(syncLimit)
+          : { scanned: 0, synced: 0, skipped: 0, hasMore: false };
+      const enqueue =
+        enqueueLimit > 0
+          ? await enqueueTranscodeBatch(enqueueLimit)
+          : { scanned: 0, marked: 0, alreadyQueued: 0, hasMore: false };
+      const transcode =
+        transcodeLimit > 0
+          ? await processPendingBatch(transcodeLimit)
+          : { processed: 0, succeeded: 0, failed: 0, results: [] };
+
+      res.json({
+        sync,
+        enqueue,
+        transcode,
+        hasMore: Boolean(
+          sync.hasMore ||
+            enqueue.hasMore ||
+            (transcodeLimit > 0 && transcode.processed >= transcodeLimit),
+        ),
+      });
+    } catch (err) {
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err instanceof Error ? err.message : "Internal error",
+      });
+    }
+  });
+
+/** Every 10 minutes — sync tiers, enqueue stragglers, process a small encode batch. */
+exports.autoMaintainVideoStorage = functions
+  .region(REGION)
+  .runWith(TRANSCODE_RUN_OPTS)
+  .pubsub.schedule("every 10 minutes")
+  .onRun(async () => {
+    const sync = await syncStorageBatch(20);
+    const enqueue = await enqueueTranscodeBatch(30);
+    const transcode = await processPendingBatch(3);
+    functions.logger.info("autoMaintainVideoStorage", { sync, enqueue, transcode });
+    return null;
   });
 
 // --- Video thumbnail backfill (cover frame from video) ---

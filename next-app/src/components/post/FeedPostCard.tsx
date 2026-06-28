@@ -115,10 +115,8 @@ function FeedPostCardInner({
 
   const {
     src: videoSrc,
-    onWaiting: handleAdaptiveWaiting,
-    onPlaying: handleAdaptivePlaying,
     onError: handleAdaptiveError,
-  } = useAdaptiveVideoSrc(post, "feed", Boolean(mountVideo && isActive));
+  } = useAdaptiveVideoSrc(post, "feed");
 
   const videoSrcResolved =
     videoSrc ||
@@ -364,7 +362,6 @@ function FeedPostCardInner({
                 }
               }}
               onPlaying={() => {
-                handleAdaptivePlaying();
                 const el = videoRef.current;
                 if (el && el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
                   setShowPoster(false);
@@ -378,9 +375,7 @@ function FeedPostCardInner({
               onPause={() => {
                 if (!isActive) setShowPoster(true);
               }}
-              onWaiting={() => {
-                handleAdaptiveWaiting();
-              }}
+              onWaiting={() => {}}
               onError={() => {
                 if (handleAdaptiveError()) setShowPoster(true);
               }}

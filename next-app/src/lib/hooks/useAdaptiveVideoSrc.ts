@@ -10,14 +10,10 @@ import {
 } from "@/lib/utils/video-sources";
 import type { UserPostDoc } from "@/types";
 
-/**
- * Picks an initial video URL from network tier + user quality prefs, then
- * downgrades on playback errors or prolonged buffering (waiting).
- */
+/** Firestore tier ladder; switches URL only on media element error. */
 export function useAdaptiveVideoSrc(
   post: UserPostDoc,
   context: VideoPlaybackContext,
-  isActive = true,
 ) {
   const tier = useEffectiveNetworkTier();
   const settings = useSettingsOptional();
@@ -50,7 +46,7 @@ export function useAdaptiveVideoSrc(
     srcIndexRef.current = srcIndex;
   }, [srcIndex]);
 
-  const downgrade = useCallback((): boolean => {
+  const onError = useCallback((): boolean => {
     const next = srcIndexRef.current + 1;
     if (next < sourcesRef.current.length) {
       srcIndexRef.current = next;
@@ -60,20 +56,10 @@ export function useAdaptiveVideoSrc(
     return false;
   }, []);
 
-  const onWaiting = useCallback(() => {
-    /* Only switch URLs on hard media errors — not on buffering */
-  }, []);
-
-  const onPlaying = useCallback(() => {}, []);
-
-  const onError = useCallback((): boolean => downgrade(), [downgrade]);
-
   return {
     src,
     poster: picked.poster,
     tier,
-    onWaiting,
-    onPlaying,
     onError,
   };
 }

@@ -10,7 +10,7 @@ import { VideoFeedSideActions } from "@/components/video/VideoFeedSideActions";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
-import { prewarmReelsPosts, getReelsPrewarmUrl } from "@/lib/utils/video-sources";
+import { prewarmReelsPosts, getFastFlowPlaybackUrl } from "@/lib/utils/video-sources";
 import {
   REELS_VIDEO_WINDOW_RADIUS,
   REELS_DOM_WINDOW_RADIUS,
@@ -286,12 +286,12 @@ export function ReelFeed({
     setReelPrefetchScope(current?.id ?? null, next?.id ?? null);
 
     const keepUrls: string[] = [];
-    if (current) keepUrls.push(getReelsPrewarmUrl(current, networkTier));
-    if (next) keepUrls.push(getReelsPrewarmUrl(next, networkTier));
+    if (current) keepUrls.push(getFastFlowPlaybackUrl(current));
+    if (next) keepUrls.push(getFastFlowPlaybackUrl(next));
     cancelVideoPrefetchesExcept(keepUrls);
 
-    if (current) prewarmReelsPosts([current], networkTier, true);
-    if (next) prewarmReelsPosts([next], networkTier, true);
+    if (current) prewarmReelsPosts([current], networkTier);
+    if (next) prewarmReelsPosts([next], networkTier);
 
     return () => setReelPrefetchScope(null, null);
   }, [activeIndex, visiblePosts, networkTier]);

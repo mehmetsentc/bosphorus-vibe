@@ -25,14 +25,7 @@ export function AdaptiveVideo({
   playsInline = true,
   isActive = false,
 }: AdaptiveVideoProps) {
-  const {
-    src,
-    poster,
-    tier,
-    onWaiting,
-    onPlaying: handleAdaptivePlaying,
-    onError,
-  } = useAdaptiveVideoSrc(post, "feed", isActive);
+  const { src, poster, tier, onError } = useAdaptiveVideoSrc(post, "feed");
   const preload = getPreloadStrategy(tier, isActive);
   const videoRef = useRef<HTMLVideoElement>(null);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
@@ -44,7 +37,6 @@ export function AdaptiveVideo({
     setShowPoster(true);
   }, [src, post.id]);
 
-  // Global singleton: pause when another video starts
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
@@ -96,12 +88,10 @@ export function AdaptiveVideo({
           showPoster ? "opacity-0" : "opacity-100"
         }`}
         onPlaying={() => {
-          handleAdaptivePlaying();
           setShowPoster(false);
           requestPlay(post.id);
         }}
         onPause={() => setShowPoster(true)}
-        onWaiting={onWaiting}
         onError={() => {
           if (onError()) setShowPoster(true);
         }}
