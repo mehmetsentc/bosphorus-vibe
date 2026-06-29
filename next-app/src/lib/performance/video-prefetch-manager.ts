@@ -7,12 +7,9 @@ const activeLeadBytePrefetches = new Map<string, AbortController>();
 
 let allowedPrefetchPostIds = new Set<string>();
 
-export function setReelPrefetchScope(
-  currentPostId: string | null,
-  nextPostId: string | null,
-): void {
+export function setReelPrefetchScope(...postIds: (string | null | undefined)[]): void {
   allowedPrefetchPostIds = new Set(
-    [currentPostId, nextPostId].filter(Boolean) as string[],
+    postIds.filter(Boolean) as string[],
   );
 }
 

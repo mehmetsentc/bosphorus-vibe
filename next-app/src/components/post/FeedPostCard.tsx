@@ -44,7 +44,10 @@ import { FeedVideoPoster } from "@/components/post/FeedVideoPoster";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
 import { useI18n, useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
-import { useVideoPlayStore } from "@/store/videoPlayStore";
+import {
+  pauseAllFeedVideosExcept,
+  useVideoPlayStore,
+} from "@/store/videoPlayStore";
 import type { UserPostDoc } from "@/types";
 
 // Heavy modals — lazy loaded only when opened
@@ -100,16 +103,24 @@ const FeedMountedVideo = forwardRef<HTMLVideoElement, FeedMountedVideoProps>(
     useEffect(() => {
       const el = typeof ref === "function" ? null : ref?.current;
       if (!el) return;
+      if (isActive) return;
       if (playingId !== null && playingId !== post.id) {
         el.pause();
       }
-    }, [playingId, post.id, ref]);
+    }, [playingId, post.id, isActive, ref]);
+
+    useEffect(() => {
+      return () => {
+        releasePlay(post.id);
+      };
+    }, [post.id, releasePlay]);
 
     useEffect(() => {
       const el = typeof ref === "function" ? null : ref?.current;
       if (!el || !videoSrcResolved) return;
 
       if (isActive) {
+        requestPlay(post.id);
         el.muted = feedMuted;
         if (feedMuted) el.setAttribute("muted", "");
         else el.removeAttribute("muted");
@@ -124,7 +135,6 @@ const FeedMountedVideo = forwardRef<HTMLVideoElement, FeedMountedVideoProps>(
             el.addEventListener("canplay", onCanPlay, { once: true });
           });
         });
-        requestPlay(post.id);
         return;
       }
 
@@ -247,8 +257,6 @@ function FeedPostCardInner({
   useEffect(() => {
     if (priority || isNear || isActive) {
       setMountVideo(true);
-    } else {
-      setMountVideo(false);
     }
   }, [priority, isNear, isActive]);
 
@@ -296,16 +304,23 @@ function FeedPostCardInner({
     wasActiveRef.current = isActive;
   }, [isActive, post.id, onPostSeen]);
 
-  // Prewarm + prefetch reels route while video is visible in feed
+  // Prewarm video bytes before card is active (scroll-ahead)
+  useEffect(() => {
+    if (!video || (!isNear && !isActive && !priority)) return;
+    prewarmReelsPost(post, networkTier);
+  }, [isNear, isActive, priority, video, post, networkTier]);
+
+  // Prefetch reels route when active
   useEffect(() => {
     if (!isActive || !video) return;
-    prewarmReelsPost(post, networkTier);
     router.prefetch(getVideoReelsPath(post.id));
-  }, [isActive, video, post, networkTier, router]);
+  }, [isActive, video, post.id, router]);
 
   const openReels = useCallback(() => {
     if (!video) return;
     setReelsMuted(false);
+    pauseAllFeedVideosExcept(null);
+    useVideoPlayStore.getState().releasePlay(post.id);
     prewarmReelsPost(post, networkTier);
     router.push(getVideoReelsPath(post.id));
   }, [video, post, networkTier, router, setReelsMuted]);

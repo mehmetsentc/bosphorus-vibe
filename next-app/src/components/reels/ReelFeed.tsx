@@ -12,8 +12,9 @@ import { useT } from "@/components/providers/I18nProvider";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
 import { prewarmReelsPosts, getFastFlowPlaybackUrl } from "@/lib/utils/video-sources";
 import {
-  REELS_VIDEO_WINDOW_RADIUS,
   REELS_DOM_WINDOW_RADIUS,
+  REELS_DECODE_TIMEOUT_MS,
+  getReelsVideoWindowRadius,
   INFINITE_SCROLL_NEAR_END,
 } from "@/lib/performance/app-state";
 import {
@@ -270,21 +271,27 @@ export function ReelFeed({
     }
   }, [visiblePosts.length]);
 
-  // Prewarm active reel + next reel leading bytes
+  const videoWindowRadius = getReelsVideoWindowRadius();
+
+  // Prewarm active reel + next two clips
   useLayoutEffect(() => {
     const current = visiblePosts[activeIndex];
     const next = visiblePosts[activeIndex + 1];
-    setReelPrefetchScope(current?.id ?? null, next?.id ?? null);
+    const nextNext = visiblePosts[activeIndex + 2];
+    setReelPrefetchScope(current?.id, next?.id, nextNext?.id);
 
     const keepUrls: string[] = [];
-    if (current) keepUrls.push(getFastFlowPlaybackUrl(current));
-    if (next) keepUrls.push(getFastFlowPlaybackUrl(next));
+    for (const post of [current, next, nextNext]) {
+      if (post) keepUrls.push(getFastFlowPlaybackUrl(post));
+    }
     cancelVideoPrefetchesExcept(keepUrls);
 
-    if (current) prewarmReelsPosts([current], networkTier);
-    if (next) prewarmReelsPosts([next], networkTier);
+    prewarmReelsPosts(
+      [current, next, nextNext].filter(Boolean) as EnrichedPost[],
+      networkTier,
+    );
 
-    return () => setReelPrefetchScope(null, null);
+    return () => setReelPrefetchScope();
   }, [activeIndex, visiblePosts, networkTier]);
 
   // Jump to tapped post before paint when opening from feed
@@ -310,8 +317,7 @@ export function ReelFeed({
     if (!initialPostId) return;
     const idx = visiblePosts.findIndex((p) => p.id === initialPostId);
     if (idx < 0) return;
-    const toWarm = visiblePosts.slice(idx + 1, idx + 2);
-    prewarmReelsPosts(toWarm, networkTier);
+    prewarmReelsPosts(visiblePosts.slice(idx, idx + 3), networkTier);
   }, [initialPostId, visiblePosts, networkTier]);
 
   const openComment = useCallback((postId: string) => setCommentPostId(postId), []);
@@ -332,7 +338,8 @@ export function ReelFeed({
   return (
     <div ref={setContainerRef} className="reels-shell-scroll">
       {visiblePosts.map((post, i) => {
-        const inDomWindow = Math.abs(i - activeIndex) <= REELS_DOM_WINDOW_RADIUS;
+        const dist = Math.abs(i - activeIndex);
+        const inDomWindow = dist <= REELS_DOM_WINDOW_RADIUS;
         const itemKey = postKeys?.[i] ?? post.id;
 
         if (!inDomWindow) {
@@ -363,8 +370,8 @@ export function ReelFeed({
             post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments }}
             isActive={i === activeIndex}
             isNext={i === activeIndex + 1}
-            isNear={Math.abs(i - activeIndex) === 1}
-            mountVideo={Math.abs(i - activeIndex) <= REELS_VIDEO_WINDOW_RADIUS}
+            isNear={dist <= videoWindowRadius && i !== activeIndex}
+            mountVideo={dist <= videoWindowRadius}
             onPostDeleted={() => handlePostDeleted(post.id)}
             onCommentClick={() => openComment(post.id)}
           />

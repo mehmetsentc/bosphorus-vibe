@@ -26,7 +26,7 @@ export function useFeedVideoVisibility<T extends HTMLElement>(postId: string) {
       },
       {
         threshold: [0, 0.15, 0.35, 0.55, 0.75, 1],
-        rootMargin: "0px",
+        rootMargin: "400px 0px",
       },
     );
 

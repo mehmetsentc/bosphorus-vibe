@@ -68,6 +68,7 @@ function postNeedsVideoTranscode(data, postId) {
   const originalUrl = getOriginalVideoUrl(data);
   if (!originalUrl) return false;
   if (data.videoTranscodeStatus === "skipped") return false;
+  if (data.videoTranscodeStatus === "failed") return false;
   if (data.videoTranscodeStatus === "processing") return false;
   if (hasServerEncodedVariants(data, postId)) return false;
   if (data.videoTranscodeStatus === "done") return false;

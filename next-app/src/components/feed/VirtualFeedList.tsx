@@ -1,11 +1,17 @@
 "use client";
 
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 type VirtualFeedListProps<T> = {
   items: T[];
-  estimateSize?: number;
+  estimateSize?: number | ((index: number) => number);
   overscan?: number;
   getItemKey: (item: T, index: number) => string;
   renderItem: (item: T, index: number) => ReactNode;
@@ -26,20 +32,54 @@ export function VirtualFeedList<T>({
   footer,
 }: VirtualFeedListProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const resolveEstimateSize = useCallback(
+    (index: number) =>
+      typeof estimateSize === "function" ? estimateSize(index) : estimateSize,
+    [estimateSize],
+  );
+
+  const itemKeyFn = useCallback(
+    (index: number) => {
+      const item = items[index];
+      return item ? getItemKey(item, index) : String(index);
+    },
+    [items, getItemKey],
+  );
 
   const virtualizer = useWindowVirtualizer({
     count: items.length,
-    estimateSize: () => estimateSize,
+    estimateSize: resolveEstimateSize,
     overscan,
-    scrollMargin: listRef.current?.offsetTop ?? 0,
+    scrollMargin,
+    getItemKey: itemKeyFn,
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const syncScrollMargin = () => {
+      setScrollMargin(el.offsetTop);
+    };
+
+    syncScrollMargin();
+    const observer = new ResizeObserver(syncScrollMargin);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
     virtualizer.measure();
-  }, [items.length, virtualizer]);
+  }, [items, virtualizer]);
 
   return (
-    <div ref={listRef} className="relative w-full">
+    <div
+      ref={listRef}
+      className="relative w-full"
+      style={{ overflowAnchor: "none" }}
+    >
       <div
         style={{
           height: `${virtualizer.getTotalSize()}px`,
@@ -52,7 +92,7 @@ export function VirtualFeedList<T>({
           if (!item) return null;
           return (
             <div
-              key={getItemKey(item, virtualRow.index)}
+              key={itemKeyFn(virtualRow.index)}
               data-index={virtualRow.index}
               ref={virtualizer.measureElement}
               style={{

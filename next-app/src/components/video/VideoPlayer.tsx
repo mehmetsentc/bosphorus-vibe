@@ -17,6 +17,7 @@ import {
 import { useVideoSoundStore } from "@/store/videoSoundStore";
 import { useVideoPlayStore } from "@/store/videoPlayStore";
 import { getFastFlowPlaybackUrl } from "@/lib/utils/video-sources";
+import { REELS_DECODE_TIMEOUT_MS } from "@/lib/performance/app-state";
 import type { UserPostDoc } from "@/types";
 
 const SEEK_STEP = 10;
@@ -136,7 +137,7 @@ function VideoPlayerCore({
   const handleAdaptiveError = onPlaybackError;
 
   const preload = isReelsContext
-    ? isActive || isNext
+    ? shouldLoad
       ? "auto"
       : "none"
     : isActive
@@ -169,10 +170,11 @@ function VideoPlayerCore({
       const muted = isReelsContext ? true : reelsMuted;
       setIsMuted(muted);
       applyMuted(video, muted);
+      if (isActive) {
+        requestPlay(post.id);
+      }
       const tryPlay = () => {
-        void video.play().then(() => {
-          requestPlay(post.id);
-        }).catch(() => {
+        void video.play().catch(() => {
           applyMuted(video, true);
           setIsMuted(true);
           void video.play().catch(() => {});
@@ -222,11 +224,12 @@ function VideoPlayerCore({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    if (isActive) return;
     if (playingId !== null && playingId !== post.id) {
       video.pause();
       applyMuted(video, true);
     }
-  }, [playingId, post.id]);
+  }, [playingId, post.id, isActive]);
 
   useEffect(() => {
     if (isReelsContext || !isActive) return;
@@ -270,22 +273,26 @@ function VideoPlayerCore({
 
   useEffect(() => () => clearLoadingTimer(), [clearLoadingTimer]);
 
-  // Reels: if first URL never decodes, try next tier after a short wait (not during normal buffer)
+  const tryTierFallback = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || hasPlayedRef.current) return false;
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return false;
+    const downgraded = handleAdaptiveError();
+    if (downgraded) {
+      setShowPoster(true);
+      setLoading(true);
+    }
+    return downgraded;
+  }, [handleAdaptiveError]);
+
+  // Reels: if first URL never decodes, try next tier quickly
   useEffect(() => {
     if (!isReelsContext || !isActive || !videoSrc) return;
-    const timeoutMs = 5000;
     const timeout = window.setTimeout(() => {
-      const video = videoRef.current;
-      if (!video || hasPlayedRef.current) return;
-      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
-      const downgraded = handleAdaptiveError();
-      if (downgraded) {
-        setShowPoster(true);
-        setLoading(true);
-      }
-    }, timeoutMs);
+      tryTierFallback();
+    }, REELS_DECODE_TIMEOUT_MS);
     return () => window.clearTimeout(timeout);
-  }, [isActive, videoSrc, playbackSrcIndex, isReelsContext, handleAdaptiveError]);
+  }, [isActive, videoSrc, playbackSrcIndex, isReelsContext, tryTierFallback]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -310,6 +317,7 @@ function VideoPlayerCore({
     if (!video) return;
 
     if (video.paused) {
+      requestPlay(post.id);
       setIsMuted(false);
       setReelsMuted(false);
       applyMuted(video, false);
@@ -318,7 +326,7 @@ function VideoPlayerCore({
     }
 
     video.pause();
-  }, [setReelsMuted]);
+  }, [setReelsMuted, requestPlay, post.id]);
 
   const handleVideoError = useCallback(() => {
     const downgraded = handleAdaptiveError();
@@ -400,8 +408,15 @@ function VideoPlayerCore({
             const video = videoRef.current;
             if (!video || !isReelsContext || !isActive) return;
             window.setTimeout(() => {
+              if (hasPlayedRef.current) return;
+              if (
+                video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA &&
+                tryTierFallback()
+              ) {
+                return;
+              }
               if (video.paused && isActive) void video.play().catch(() => {});
-            }, 300);
+            }, 800);
           }}
           onWaiting={() => {
             clearLoadingTimer();

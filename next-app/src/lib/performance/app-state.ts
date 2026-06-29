@@ -9,6 +9,15 @@ export const PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
 /** How many reel slides keep a mounted <video> (active ± radius). iOS caps ~4 decoders. */
 export const REELS_VIDEO_WINDOW_RADIUS = 1;
 
+/** Reels: switch to next URL tier if first URL has not decoded by this time. */
+export const REELS_DECODE_TIMEOUT_MS = 1_500;
+
+/** iOS keeps radius 1; Android/desktop preloads one slide further ahead. */
+export function getReelsVideoWindowRadius(): number {
+  if (typeof navigator === "undefined") return REELS_VIDEO_WINDOW_RADIUS;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ? 1 : 2;
+}
+
 /** Reel DOM shells rendered outside the video window (poster-only buffer). */
 export const REELS_DOM_WINDOW_RADIUS = 2;
 
@@ -18,8 +27,8 @@ export const SESSION_POSTS_MAX = 120;
 /** Max concurrent poster prefetches per feed card */
 export const FEED_POSTER_PREFETCH_MAX = 2;
 
-/** Virtual feed row height estimate (px) — remeasured on mount */
-export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 620;
+/** Virtual feed row height estimate (px) — remeasured on mount; ~470px-wide 4:5 video + chrome */
+export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 780;
 
 /** Instagram feed portrait ratio (4:5) — width:height */
 export const FEED_VIDEO_ASPECT_CLASS = "aspect-[4/5]";

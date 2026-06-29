@@ -149,7 +149,17 @@ function inferSiblingAssetUrl(
   return videoUrl.replace(/original\.[a-z0-9]+/i, filename);
 }
 
-/** Firestore-backed URLs only — tokenized, no inference (instant playback). */
+function inferTranscodedTierUrl(
+  original: string,
+  filename: string,
+  firestoreUrl: string | undefined,
+): string {
+  if (firestoreUrl) return firestoreUrl;
+  if (!original) return "";
+  return inferSiblingAssetUrl(original, filename) || "";
+}
+
+/** Firestore URLs first; sibling-path inference when transcode tiers missing. */
 export function getTrustedVideoUrls(post: UserPostDoc): {
   original: string;
   preview: string;
@@ -162,19 +172,34 @@ export function getTrustedVideoUrls(post: UserPostDoc): {
     post.postVideoURL_original ||
     post.postVideo ||
     "";
-  const preview = post.postVideoURL_preview || "";
-  const medium = post.postVideoURL_medium || "";
-  const low =
-    post.postVideoURL_low && post.postVideoURL_low !== original
-      ? post.postVideoURL_low
-      : "";
-  const high =
-    post.postVideoURL_high && post.postVideoURL_high !== original
-      ? post.postVideoURL_high
-      : "";
   const primary = post.postVideoURL || "";
+  const canonicalOriginal = original || primary;
+  const preview = inferTranscodedTierUrl(
+    canonicalOriginal,
+    "preview.mp4",
+    post.postVideoURL_preview,
+  );
+  const medium = inferTranscodedTierUrl(
+    canonicalOriginal,
+    "medium.mp4",
+    post.postVideoURL_medium,
+  );
+  const lowRaw = inferTranscodedTierUrl(
+    canonicalOriginal,
+    "low.mp4",
+    post.postVideoURL_low,
+  );
+  const low =
+    lowRaw && lowRaw !== canonicalOriginal ? lowRaw : "";
+  const highRaw = inferTranscodedTierUrl(
+    canonicalOriginal,
+    "high.mp4",
+    post.postVideoURL_high,
+  );
+  const high =
+    highRaw && highRaw !== canonicalOriginal ? highRaw : "";
   return {
-    original: original || primary,
+    original: canonicalOriginal,
     preview,
     medium,
     low,

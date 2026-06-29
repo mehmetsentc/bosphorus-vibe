@@ -257,6 +257,21 @@ export function FeedInfinite() {
     [items, availability],
   );
 
+  const estimateFeedRowSize = useCallback(
+    (index: number) => {
+      const row = feedRows[index];
+      if (!row || row.kind === "post") return FEED_VIRTUAL_ROW_ESTIMATE_PX;
+      if (row.kind === "friends") return 320;
+      if (row.kind === "videos") return 300;
+      return 280;
+    },
+    [feedRows],
+  );
+
+  const getFeedRowKey = useCallback((row: FeedRow, index: number) => {
+    return row.kind === "post" ? row.itemKey : `${row.kind}-${index}`;
+  }, []);
+
   // Prefetch posters for first visible cards only
   useEffect(() => {
     const upcoming = displayPostsFiltered.slice(0, 8);
@@ -307,10 +322,8 @@ export function FeedInfinite() {
       <section>
         <VirtualFeedList
           items={feedRows}
-          estimateSize={FEED_VIRTUAL_ROW_ESTIMATE_PX}
-          getItemKey={(row, index) =>
-            row.kind === "post" ? row.itemKey : `${row.kind}-${index}`
-          }
+          estimateSize={estimateFeedRowSize}
+          getItemKey={getFeedRowKey}
           renderItem={(row, index) => {
             if (row.kind === "post") {
               return (

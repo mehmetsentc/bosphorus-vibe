@@ -127,30 +127,24 @@ async function runLocalBatch(opts) {
   }
 
   console.log("  Cloud Function encode batch…");
-  const res = await fetch(CF_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      syncLimit: 0,
-      enqueueLimit: 0,
-      transcodeLimit: opts.transcodeLimit,
-    }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    console.warn("⚠ Cloud Function transcode:", data.error || res.status);
+  try {
+    const data = await postConfigureAll(
+      {
+        syncLimit: 0,
+        enqueueLimit: 0,
+        transcodeLimit: opts.transcodeLimit,
+      },
+      secret,
+    );
+    console.log("  transcode:", data.transcode);
+    return {
+      hasMore: Boolean(sync.hasMore || enqueue.hasMore || data.hasMore),
+      transcode: data.transcode,
+    };
+  } catch (err) {
+    console.warn(`  ⚠ encode batch atlandı: ${err.message || err}`);
     return { hasMore: Boolean(sync.hasMore || enqueue.hasMore), transcode: null };
   }
-
-  console.log("  transcode:", data.transcode);
-  return {
-    hasMore: Boolean(sync.hasMore || enqueue.hasMore || data.hasMore),
-    transcode: data.transcode,
-  };
 }
 
 async function runCloudConfigureAll(opts) {
@@ -160,33 +154,49 @@ async function runCloudConfigureAll(opts) {
     return runLocalBatch(opts);
   }
 
-  console.log("  Cloud Function configureAll…");
-  const res = await fetch(CF_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      syncLimit: opts.syncLimit,
-      enqueueLimit: opts.enqueueLimit,
-      transcodeLimit: opts.transcodeLimit,
-    }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || `HTTP ${res.status}`);
-  }
-
-  console.log("  sync:", data.sync);
-  console.log("  enqueue:", data.enqueue);
-  console.log("  transcode:", data.transcode);
-  return { hasMore: Boolean(data.hasMore) };
+  // Sync/enqueue locally (stable); encode via Cloud Function only (shorter HTTP call).
+  console.log("→ Yerel sync/enqueue + Cloud Function encode…");
+  return runLocalBatch(opts);
 }
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+const CF_FETCH_TIMEOUT_MS = 600_000;
+
+async function postConfigureAll(body, secret) {
+  const maxAttempts = 4;
+  let lastErr;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(CF_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(CF_FETCH_TIMEOUT_MS),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= maxAttempts) break;
+      console.warn(
+        `  ⚠ Cloud Function isteği başarısız (${attempt}/${maxAttempts}): ${err.message || err}`,
+      );
+      console.warn("  10 sn sonra tekrar denenecek…");
+      await sleep(10_000);
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 async function main() {
@@ -209,8 +219,13 @@ async function main() {
   while (hasMore && round < opts.maxRounds) {
     round += 1;
     console.log(`\n→ Tur ${round}/${opts.maxRounds}`);
-    const result = await runCloudConfigureAll(opts);
-    hasMore = result.hasMore;
+    try {
+      const result = await runCloudConfigureAll(opts);
+      hasMore = result.hasMore;
+    } catch (err) {
+      console.warn(`  ⚠ tur atlandı: ${err.message || err}`);
+      hasMore = true;
+    }
     if (hasMore) {
       console.log("  (devam ediyor, 3 sn bekleniyor…)");
       await sleep(3000);

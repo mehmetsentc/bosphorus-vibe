@@ -19,6 +19,12 @@ let inflight: Promise<void> | null = null;
 export function prefetchFeedFirstPage(): Promise<void> {
   const { posts, lastFetched } = useAppStore.getState();
   if (posts && !isCacheExpired(lastFetched.posts)) {
+    if (typeof window !== "undefined") {
+      for (const post of posts.posts.filter(hasPostVideo).slice(0, 3)) {
+        const src = getFastFlowPlaybackUrl(post);
+        if (src) prefetchVideoLeadingBytes(src, post.id);
+      }
+    }
     return Promise.resolve();
   }
 
@@ -31,7 +37,7 @@ export function prefetchFeedFirstPage(): Promise<void> {
         hasMore: page.hasMore,
       });
       if (typeof window !== "undefined") {
-        for (const post of enriched.filter(hasPostVideo).slice(0, 2)) {
+        for (const post of enriched.filter(hasPostVideo).slice(0, 3)) {
           const src = getFastFlowPlaybackUrl(post);
           if (src) prefetchVideoLeadingBytes(src, post.id);
         }

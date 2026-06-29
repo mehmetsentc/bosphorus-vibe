@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { useT } from "@/components/providers/I18nProvider";
+import {
+  pauseAllFeedVideosExcept,
+  useVideoPlayStore,
+} from "@/store/videoPlayStore";
 
 type ReelsShellProps = {
   children: React.ReactNode;
@@ -15,6 +20,16 @@ export function ReelsShell({
   showBack = true,
 }: ReelsShellProps) {
   const t = useT();
+
+  // Feed → reels: stale playingId from home feed blocks every reel (pause loop).
+  useEffect(() => {
+    pauseAllFeedVideosExcept(null);
+    useVideoPlayStore.setState({ playingId: null });
+    return () => {
+      pauseAllFeedVideosExcept(null);
+      useVideoPlayStore.setState({ playingId: null });
+    };
+  }, []);
 
   return (
     <div className="reels-shell">

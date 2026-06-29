@@ -9,7 +9,7 @@ import {
   getRecentWeekVideoPostsPage,
   type PostsPage,
 } from "@/lib/services/firestore";
-import { prewarmReelsPosts } from "@/lib/utils/video-sources";
+import { prewarmReelsPosts, hasPostVideo } from "@/lib/utils/video-sources";
 import { useAppStore, type EnrichedPost } from "@/store/appStore";
 import { REELS_PAGE_SIZE } from "@/lib/performance/app-state";
 
@@ -65,8 +65,7 @@ async function loadInitialReelsPosts(): Promise<ReelsFirstPageResult> {
 
 function prewarmLeadingReelsPosts(posts: EnrichedPost[]): void {
   if (typeof window === "undefined" || posts.length === 0) return;
-  prewarmReelsPosts([posts[0]!], "slow");
-  if (posts[1]) prewarmReelsPosts([posts[1]], "slow");
+  prewarmReelsPosts(posts.filter(hasPostVideo).slice(0, 3), "slow");
 }
 
 /** Single shared reels first-page fetch — newest from last 7 days first. */
