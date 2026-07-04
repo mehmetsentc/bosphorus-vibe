@@ -3,7 +3,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, forwardRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
@@ -15,42 +14,27 @@ import {
   getPostVideoUrl,
   incrementPostViews,
 } from "@/lib/services/firestore";
-import {
-  followUser,
-  unfollowUser,
-} from "@/lib/services/friends";
+import { followUser, unfollowUser } from "@/lib/services/friends";
 import {
   getPostFeedImageCandidates,
   getPostFeedThumbnailCandidates,
   getFastFlowPlaybackUrl,
-  getVideoReelsPath,
   pickImageSource,
   prewarmReelsPost,
   prefetchImageUrl,
 } from "@/lib/utils/video-sources";
-import {
-  FEED_POSTER_PREFETCH_MAX,
-  FEED_VIDEO_ASPECT_CLASS,
-} from "@/lib/performance/app-state";
+import { FEED_POSTER_PREFETCH_MAX } from "@/lib/performance/app-state";
 import { formatTimeAgo } from "@/lib/utils/time";
-import {
-  IconPlay,
-  IconVolumeOff,
-  IconVolumeOn,
-} from "@/components/icons/Icons";
+import { IconPlay, IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
 import { PostActionsBar } from "@/components/post/PostActionsBar";
 import { FeedMediaImage } from "@/components/post/FeedMediaImage";
 import { FeedVideoPoster } from "@/components/post/FeedVideoPoster";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
 import { useI18n, useT } from "@/components/providers/I18nProvider";
 import { useVideoSoundStore } from "@/store/videoSoundStore";
-import {
-  pauseAllFeedVideosExcept,
-  useVideoPlayStore,
-} from "@/store/videoPlayStore";
+import { pauseAllFeedVideosExcept, useVideoPlayStore } from "@/store/videoPlayStore";
 import type { UserPostDoc } from "@/types";
 
-// Heavy modals — lazy loaded only when opened
 const PostCommentModal = dynamic(
   () => import("@/components/post/PostCommentModal").then((m) => ({ default: m.PostCommentModal })),
   { ssr: false },
@@ -69,50 +53,32 @@ type FeedMountedVideoProps = {
   releasePlay: (id: string) => void;
   showPoster: boolean;
   setShowPoster: (value: boolean) => void;
+  onAspectRatio?: (w: number, h: number) => void;
 };
 
-/** Video hook + element — only mounted when card is near viewport. */
 const FeedMountedVideo = forwardRef<HTMLVideoElement, FeedMountedVideoProps>(
   function FeedMountedVideo(
     {
-      post,
-      isActive,
-      isNear,
-      isMuted,
-      feedMuted,
-      playingId,
-      requestPlay,
-      releasePlay,
-      showPoster,
-      setShowPoster,
+      post, isActive, isNear, isMuted, feedMuted, playingId,
+      requestPlay, releasePlay, showPoster, setShowPoster, onAspectRatio,
     },
     ref,
   ) {
-    const { src: videoSrc, onError: handleAdaptiveError } = useAdaptiveVideoSrc(
-      post,
-      "feed",
-    );
-    const videoSrcResolved =
-      videoSrc || (isActive ? getFastFlowPlaybackUrl(post) : "");
+    const { src: videoSrc, onError: handleAdaptiveError } = useAdaptiveVideoSrc(post, "feed");
+    const videoSrcResolved = videoSrc || (isActive ? getFastFlowPlaybackUrl(post) : "");
     const videoPreload = isActive || isNear ? "auto" : "none";
 
-    useEffect(() => {
-      setShowPoster(true);
-    }, [videoSrcResolved, post.id, setShowPoster]);
+    useEffect(() => { setShowPoster(true); }, [videoSrcResolved, post.id, setShowPoster]);
 
     useEffect(() => {
       const el = typeof ref === "function" ? null : ref?.current;
       if (!el) return;
       if (isActive) return;
-      if (playingId !== null && playingId !== post.id) {
-        el.pause();
-      }
+      if (playingId !== null && playingId !== post.id) el.pause();
     }, [playingId, post.id, isActive, ref]);
 
     useEffect(() => {
-      return () => {
-        releasePlay(post.id);
-      };
+      return () => { releasePlay(post.id); };
     }, [post.id, releasePlay]);
 
     useEffect(() => {
@@ -122,14 +88,10 @@ const FeedMountedVideo = forwardRef<HTMLVideoElement, FeedMountedVideoProps>(
       if (isActive) {
         requestPlay(post.id);
         el.muted = feedMuted;
-        if (feedMuted) el.setAttribute("muted", "");
-        else el.removeAttribute("muted");
+        if (feedMuted) el.setAttribute("muted", ""); else el.removeAttribute("muted");
         if (el.readyState === 0) el.load();
         el.play().catch(() => {
-          if (!feedMuted) {
-            el.muted = true;
-            el.setAttribute("muted", "");
-          }
+          if (!feedMuted) { el.muted = true; el.setAttribute("muted", ""); }
           el.play().catch(() => {
             const onCanPlay = () => el.play().catch(() => {});
             el.addEventListener("canplay", onCanPlay, { once: true });
@@ -137,21 +99,11 @@ const FeedMountedVideo = forwardRef<HTMLVideoElement, FeedMountedVideoProps>(
         });
         return;
       }
-
       el.pause();
       el.currentTime = 0;
       releasePlay(post.id);
       setShowPoster(true);
-    }, [
-      isActive,
-      videoSrcResolved,
-      feedMuted,
-      post.id,
-      requestPlay,
-      releasePlay,
-      ref,
-      setShowPoster,
-    ]);
+    }, [isActive, videoSrcResolved, feedMuted, post.id, requestPlay, releasePlay, ref, setShowPoster]);
 
     if (!videoSrcResolved) return null;
 
@@ -169,36 +121,27 @@ const FeedMountedVideo = forwardRef<HTMLVideoElement, FeedMountedVideoProps>(
         className={`absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-150 ${
           showPoster ? "opacity-0" : "opacity-100"
         }`}
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          if (v.videoWidth && v.videoHeight) onAspectRatio?.(v.videoWidth, v.videoHeight);
+        }}
         onCanPlay={() => {
           const el = typeof ref === "function" ? null : ref?.current;
-          if (isActive && el?.paused) {
-            el.play().catch(() => {});
-          }
+          if (isActive && el?.paused) el.play().catch(() => {});
         }}
         onLoadedData={() => {
           const el = typeof ref === "function" ? null : ref?.current;
-          if (isActive && el?.paused) {
-            el.play().catch(() => {});
-          }
+          if (isActive && el?.paused) el.play().catch(() => {});
         }}
         onPlaying={() => {
           const el = typeof ref === "function" ? null : ref?.current;
-          if (el && el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-            setShowPoster(false);
-          }
+          if (el && el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) setShowPoster(false);
         }}
         onTimeUpdate={(e) => {
-          if (showPoster && e.currentTarget.currentTime > 0.05) {
-            setShowPoster(false);
-          }
+          if (showPoster && e.currentTarget.currentTime > 0.05) setShowPoster(false);
         }}
-        onPause={() => {
-          if (!isActive) setShowPoster(true);
-        }}
-        onWaiting={() => {}}
-        onError={() => {
-          if (handleAdaptiveError()) setShowPoster(true);
-        }}
+        onPause={() => { if (!isActive) setShowPoster(true); }}
+        onError={() => { if (handleAdaptiveError()) setShowPoster(true); }}
       />
     );
   },
@@ -208,22 +151,15 @@ type FeedPostCardProps = {
   post: EnrichedPost;
   followingIds?: Set<string>;
   onFollowChange?: (uid: string, following: boolean) => void;
-  /** First visible card — eager-load poster for better LCP */
   priority?: boolean;
-  /** Called once when the post leaves the viewport after being viewed */
   onPostSeen?: (postId: string) => void;
 };
 
 function FeedPostCardInner({
-  post,
-  followingIds,
-  onFollowChange,
-  priority = false,
-  onPostSeen,
+  post, followingIds, onFollowChange, priority = false, onPostSeen,
 }: FeedPostCardProps) {
   const t = useT();
   const { locale } = useI18n();
-  const router = useRouter();
   const networkTier = useEffectiveNetworkTier();
   const { user } = useAuth();
   const { canLike } = useAccess();
@@ -231,7 +167,6 @@ function FeedPostCardInner({
   const viewedRef = useRef(false);
   const wasActiveRef = useRef(false);
   const feedMuted = useVideoSoundStore((s) => s.feedMuted);
-  const setReelsMuted = useVideoSoundStore((s) => s.setReelsMuted);
   const [isMuted, setIsMuted] = useState(feedMuted);
   const [mountVideo, setMountVideo] = useState(priority);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
@@ -246,49 +181,37 @@ function FeedPostCardInner({
   const hideLikeCounts = useHideLikeCounts();
   const { ref, isActive, isNear } = useFeedVideoVisibility<HTMLDivElement>(post.id);
 
+  // Orijinal video boyutu — metadata yüklenince güncellenir (varsayılan: 9:16 portrait)
+  const [videoAspect, setVideoAspect] = useState("9/16");
+  const handleAspectRatio = useCallback((w: number, h: number) => {
+    if (w > 0 && h > 0) setVideoAspect(`${w}/${h}`);
+  }, []);
+
   const video = getPostVideoUrl(post);
-  const imageCandidates = useMemo(
-    () => getPostFeedImageCandidates(post),
-    [post],
-  );
-  const image = video ? "" : pickImageSource(post, "feed");
+  const imageCandidates = useMemo(() => getPostFeedImageCandidates(post), [post]);
   const caption = getPostCaption(post, locale);
 
   useEffect(() => {
-    if (priority || isNear || isActive) {
-      setMountVideo(true);
-    }
+    if (priority || isNear || isActive) setMountVideo(true);
   }, [priority, isNear, isActive]);
 
-  const thumbCandidates = useMemo(
-    () => getPostFeedThumbnailCandidates(post),
-    [post],
-  );
+  const thumbCandidates = useMemo(() => getPostFeedThumbnailCandidates(post), [post]);
 
-  // Prefetch poster early so feed never flashes black
   useEffect(() => {
-    if (!video || !isNear && !isActive && !priority) return;
-    for (const url of thumbCandidates.slice(0, FEED_POSTER_PREFETCH_MAX)) {
-      prefetchImageUrl(url);
-    }
+    if (!video || (!isNear && !isActive && !priority)) return;
+    for (const url of thumbCandidates.slice(0, FEED_POSTER_PREFETCH_MAX)) prefetchImageUrl(url);
   }, [video, thumbCandidates, post.id, isNear, isActive, priority]);
 
   useEffect(() => {
     if (!video) return;
-    for (const url of imageCandidates.slice(0, 3)) {
-      prefetchImageUrl(url);
-    }
+    for (const url of imageCandidates.slice(0, 3)) prefetchImageUrl(url);
   }, [video, imageCandidates, post.id]);
 
-  useEffect(() => {
-    setIsMuted(feedMuted);
-  }, [feedMuted]);
-  const isOwn = user?.uid === post.postUserId;
-  const isFollowing = post.postUserId
-    ? followingIds?.has(post.postUserId)
-    : false;
+  useEffect(() => { setIsMuted(feedMuted); }, [feedMuted]);
 
-  // Increment view count once when post first enters viewport
+  const isOwn = user?.uid === post.postUserId;
+  const isFollowing = post.postUserId ? followingIds?.has(post.postUserId) : false;
+
   useEffect(() => {
     if (isActive && !viewedRef.current) {
       viewedRef.current = true;
@@ -296,34 +219,29 @@ function FeedPostCardInner({
     }
   }, [isActive, post.id]);
 
-  // Mark as seen when user scrolls away (Instagram / TikTok-style)
   useEffect(() => {
-    if (wasActiveRef.current && !isActive) {
-      onPostSeen?.(post.id);
-    }
+    if (wasActiveRef.current && !isActive) onPostSeen?.(post.id);
     wasActiveRef.current = isActive;
   }, [isActive, post.id, onPostSeen]);
 
-  // Prewarm video bytes before card is active (scroll-ahead)
   useEffect(() => {
     if (!video || (!isNear && !isActive && !priority)) return;
     prewarmReelsPost(post, networkTier);
   }, [isNear, isActive, priority, video, post, networkTier]);
 
-  // Prefetch reels route when active
-  useEffect(() => {
-    if (!isActive || !video) return;
-    router.prefetch(getVideoReelsPath(post.id));
-  }, [isActive, video, post.id, router]);
-
-  const openReels = useCallback(() => {
-    if (!video) return;
-    setReelsMuted(false);
-    pauseAllFeedVideosExcept(null);
-    useVideoPlayStore.getState().releasePlay(post.id);
-    prewarmReelsPost(post, networkTier);
-    router.push(getVideoReelsPath(post.id));
-  }, [video, post, networkTier, router, setReelsMuted]);
+  // Tap on video: toggle play/pause (no longer opens reels)
+  const handleVideoTap = useCallback(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.paused) {
+      pauseAllFeedVideosExcept(post.id);
+      requestPlay(post.id);
+      el.play().catch(() => {});
+    } else {
+      el.pause();
+      releasePlay(post.id);
+    }
+  }, [post.id, requestPlay, releasePlay]);
 
   const handleMuteToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -363,20 +281,14 @@ function FeedPostCardInner({
         >
           {post.userPhoto ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={post.userPhoto}
-              alt=""
-              className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border"
-            />
+            <img src={post.userPhoto} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" />
           ) : (
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-bold text-gold">
               {(post.userName ?? "?")[0]?.toUpperCase()}
             </div>
           )}
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold leading-tight">
-              {post.userName ?? "user"}
-            </p>
+            <p className="truncate text-[13px] font-semibold leading-tight">{post.userName ?? "user"}</p>
             <p className="truncate text-xs text-muted">
               {post.activityName
                 ? `${post.activityName} · ${formatTimeAgo(post.timePosted)}`
@@ -391,111 +303,97 @@ function FeedPostCardInner({
             disabled={followBusy}
             onClick={handleFollow}
             className={`shrink-0 rounded-lg px-3 py-1 text-xs font-semibold transition ${
-              isFollowing
-                ? "bg-surface-overlay text-muted"
-                : "bg-surface-overlay text-foreground hover:bg-surface-card"
+              isFollowing ? "bg-surface-overlay text-muted" : "bg-surface-overlay text-foreground hover:bg-surface-card"
             }`}
           >
             {isFollowing ? t("unfollow") : t("follow")}
           </button>
         )}
 
-        <Link
-          href={`/post/${post.id}`}
-          className="shrink-0 p-1 text-lg leading-none text-muted"
-          aria-label={t("menu")}
-        >
+        <Link href={`/post/${post.id}`} className="shrink-0 p-1 text-lg leading-none text-muted" aria-label={t("menu")}>
           ···
         </Link>
       </div>
 
       {/* Media */}
       {video ? (
-        <div className="relative w-full bg-black">
+        /* ── VIDEO ── orijinal en/boy oranı */
+        <div
+          ref={ref}
+          className="relative w-full overflow-hidden bg-black"
+          style={{ aspectRatio: videoAspect }}
+        >
+          {/* Poster */}
           <div
-            ref={ref}
-            className={`relative ${FEED_VIDEO_ASPECT_CLASS} w-full overflow-hidden bg-black`}
+            className={`absolute inset-0 z-[4] transition-opacity duration-150 ${
+              showPoster ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
           >
-            {/* Poster always visible until video plays */}
-            <div
-              className={`absolute inset-0 z-[4] transition-opacity duration-150 ${
-                showPoster ? "opacity-100" : "pointer-events-none opacity-0"
-              }`}
-            >
-              <FeedVideoPoster
-                post={post}
-                priority={priority || isActive}
-              />
-            </div>
-
-            {mountVideo && (
-              <FeedMountedVideo
-                ref={videoRef}
-                post={post}
-                isActive={isActive}
-                isNear={isNear}
-                isMuted={isMuted}
-                feedMuted={feedMuted}
-                playingId={playingId}
-                requestPlay={requestPlay}
-                releasePlay={releasePlay}
-                showPoster={showPoster}
-                setShowPoster={setShowPoster}
-              />
-            )}
-
-            {/* Tap opens full-screen reels flow (Instagram-style) */}
-            <button
-              type="button"
-              onClick={openReels}
-              className="absolute inset-0 z-[5] bg-transparent"
-              aria-label={t("navReels")}
-            />
-
-            {/* Play icon — only when scrolled away / paused (not during autoplay load) */}
-            {showPoster && !isActive && (
-              <div className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
-                  <IconPlay size={22} className="translate-x-0.5 text-white" />
-                </div>
-              </div>
-            )}
-
-            {/* Mute — bottom-right (Instagram feed) */}
-            <button
-              type="button"
-              onClick={handleMuteToggle}
-              className="absolute bottom-3 right-3 z-[10] flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm"
-              aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
-            >
-              {isMuted
-                ? <IconVolumeOff size={18} className="text-white" />
-                : <IconVolumeOn  size={18} className="text-white" />
-              }
-            </button>
-
-            {/* Mute flash feedback */}
-            {muteFlash !== null && (
-              <div className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/60">
-                  {muteFlash
-                    ? <IconVolumeOn  size={28} className="text-white" />
-                    : <IconVolumeOff size={28} className="text-white" />
-                  }
-                </div>
-              </div>
-            )}
+            <FeedVideoPoster post={post} priority={priority || isActive} />
           </div>
+
+          {mountVideo && (
+            <FeedMountedVideo
+              ref={videoRef}
+              post={post}
+              isActive={isActive}
+              isNear={isNear}
+              isMuted={isMuted}
+              feedMuted={feedMuted}
+              playingId={playingId}
+              requestPlay={requestPlay}
+              releasePlay={releasePlay}
+              showPoster={showPoster}
+              setShowPoster={setShowPoster}
+              onAspectRatio={handleAspectRatio}
+            />
+          )}
+
+          {/* Tap = play/pause */}
+          <button
+            type="button"
+            onClick={handleVideoTap}
+            className="absolute inset-0 z-[5] bg-transparent"
+            aria-label="Oynat / Durdur"
+          />
+
+          {/* Play icon — paused state */}
+          {showPoster && !isActive && (
+            <div className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+                <IconPlay size={22} className="translate-x-0.5 text-white" />
+              </div>
+            </div>
+          )}
+
+          {/* Mute button */}
+          <button
+            type="button"
+            onClick={handleMuteToggle}
+            className="absolute bottom-3 right-3 z-[10] flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm"
+            aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
+          >
+            {isMuted ? <IconVolumeOff size={18} className="text-white" /> : <IconVolumeOn size={18} className="text-white" />}
+          </button>
+
+          {/* Mute flash */}
+          {muteFlash !== null && (
+            <div className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/60">
+                {muteFlash ? <IconVolumeOn size={28} className="text-white" /> : <IconVolumeOff size={28} className="text-white" />}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        <Link href={`/post/${post.id}`} className="relative block w-full bg-surface-overlay">
-          <div className="relative aspect-square w-full overflow-hidden">
-            <FeedMediaImage
-              candidates={imageCandidates.length ? imageCandidates : image ? [image] : []}
-              alt={caption}
-              priority={priority}
-            />
-          </div>
+        /* ── FOTOĞRAF ── orijinal en/boy oranı */
+        <Link href={`/post/${post.id}`} className="block w-full bg-black">
+          <FeedMediaImage
+            candidates={imageCandidates.length ? imageCandidates : [pickImageSource(post, "feed")].filter(Boolean) as string[]}
+            alt={caption}
+            priority={priority}
+            mode="auto"
+          />
         </Link>
       )}
 
@@ -508,17 +406,14 @@ function FeedPostCardInner({
         hideCommentPreview
       />
 
+      {/* Description — her zaman görünür */}
       <div className="space-y-1 px-3 pb-4">
         <div className="flex items-center gap-3">
           {likeCount > 0 && !hideLikeCounts && (
-            <p className="text-[13px] font-semibold">
-              {likeCount} {t("likes")}
-            </p>
+            <p className="text-[13px] font-semibold">{likeCount} {t("likes")}</p>
           )}
           {(post.numViews ?? 0) > 0 && (
-            <p className="text-[12px] text-muted">
-              {(post.numViews ?? 0).toLocaleString()} görüntülenme
-            </p>
+            <p className="text-[12px] text-muted">{(post.numViews ?? 0).toLocaleString()} görüntülenme</p>
           )}
         </div>
         {caption && (
@@ -533,17 +428,10 @@ function FeedPostCardInner({
           </p>
         )}
         {post.taggedPeople && post.taggedPeople.length > 0 && (
-          <PostTaggedPeople
-            tags={post.taggedPeople}
-            className="text-[13px] leading-snug"
-          />
+          <PostTaggedPeople tags={post.taggedPeople} className="text-[13px] leading-snug" />
         )}
         {commentCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setCommentOpen(true)}
-            className="text-[13px] text-muted hover:text-foreground"
-          >
+          <button type="button" onClick={() => setCommentOpen(true)} className="text-[13px] text-muted hover:text-foreground">
             {t("viewAllComments", { count: String(commentCount) })}
           </button>
         )}
