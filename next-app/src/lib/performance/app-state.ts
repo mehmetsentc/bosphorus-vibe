@@ -27,8 +27,8 @@ export const SESSION_POSTS_MAX = 120;
 /** Max concurrent poster prefetches per feed card */
 export const FEED_POSTER_PREFETCH_MAX = 2;
 
-/** Virtual feed row height estimate (px) — remeasured on mount; ~470px-wide 4:5 video + chrome */
-export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 780;
+/** Virtual feed row height estimate (px) — remeasured on mount; mobile ~560px, desktop ~650px */
+export const FEED_VIRTUAL_ROW_ESTIMATE_PX = 600;
 
 /** Instagram feed portrait ratio (4:5) — width:height */
 export const FEED_VIDEO_ASPECT_CLASS = "aspect-[4/5]";
