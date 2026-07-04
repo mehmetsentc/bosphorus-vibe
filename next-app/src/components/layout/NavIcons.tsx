@@ -112,11 +112,10 @@ export function MessagesIcon({ active }: { active: boolean }) {
   );
 }
 
+// index 0=Home, 1=Events, 2=Team, 3=Profile
 const ICONS = [
   HomeIcon,
   CalendarIcon,
-  ReelsIcon,
-  MessagesIcon,
   TeamIcon,
   ProfileIcon,
 ] as const;

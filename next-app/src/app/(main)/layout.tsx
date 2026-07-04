@@ -4,7 +4,6 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { MainContentArea } from "@/components/layout/MainContentArea";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { RoutePrefetcher } from "@/components/layout/RoutePrefetcher";
-import { ReelsPrefetcher } from "@/components/layout/ReelsPrefetcher";
 import { FeedPrefetcher } from "@/components/layout/FeedPrefetcher";
 import { StoriesPrefetcher } from "@/components/layout/StoriesPrefetcher";
 import { ProfilePrefetcher } from "@/components/layout/ProfilePrefetcher";
@@ -41,7 +40,6 @@ export default function MainLayout({
     <>
       <RoutePrefetcher />
       <FeedPrefetcher />
-      <ReelsPrefetcher />
       <StoriesPrefetcher />
       <ProfilePrefetcher />
       <NavigationProgress />
