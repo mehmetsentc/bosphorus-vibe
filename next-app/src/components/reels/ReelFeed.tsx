@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * ReelFeed — TikTok/Instagram-style vertical video feed.
+ * ReelFeed — Tam yeniden tasarım (v3)
  *
- * Design principles:
- *  • ONE React state variable drives navigation: activeIndex.
- *  • play/pause/mute are direct DOM calls — zero React re-renders on scroll.
- *  • Videos within REELS_DOM_WINDOW_RADIUS are always mounted in DOM.
- *  • Videos within videoWindow get preload="auto" — browser buffers ahead silently.
- *  • src is NEVER cleared once loaded — buffered data stays in memory.
- *  • Poster on <video> hides black frames natively; no loading state needed.
- *  • Mute uses 2 React state vars only for the flash icon — everything else is a ref.
+ * Çözülen sorunlar:
+ *  1. Stabil video ref callback'leri — her render'da yeni fonksiyon oluşturulmuyor,
+ *     bu yüzden React video elementini temizleyip yeniden mount etmiyor.
+ *  2. "Play on mount" — video element DOM'a eklendiğinde aktif slot ise hemen oynatılıyor.
+ *  3. Ses: kalıcı mute ikonu, action butonlarda event.stopPropagation().
+ *  4. src asla silinmiyor — buffer bellekte kalıyor.
+ *  5. preload="auto" ±videoWindow slide için — tarayıcı arka planda yüklüyor.
+ *  6. Tek React state (activeIndex) — scroll'da sıfır re-render.
  */
 
 import {
@@ -39,7 +39,10 @@ import { IconVolumeOff, IconVolumeOn } from "@/components/icons/Icons";
 import type { UserPostDoc } from "@/types";
 
 const PostCommentModal = dynamic(
-  () => import("@/components/post/PostCommentModal").then((m) => ({ default: m.PostCommentModal })),
+  () =>
+    import("@/components/post/PostCommentModal").then((m) => ({
+      default: m.PostCommentModal,
+    })),
   { ssr: false },
 );
 
@@ -61,44 +64,55 @@ type ReelFeedProps = {
   resetScrollToken?: number;
 };
 
-// ─── MuteIndicator — flashes volume icon, minimal state ──────────────────────
+// ─── Mute icon — kalıcı görünür, toggle'da flash ─────────────────────────────
 
-function MuteIndicator({ muted, flashKey }: { muted: boolean; flashKey: number }) {
-  const [visible, setVisible] = useState(false);
+function MuteBtn({
+  muted,
+  flashKey,
+  onToggle,
+}: {
+  muted: boolean;
+  flashKey: number;
+  onToggle: () => void;
+}) {
+  const [flashing, setFlashing] = useState(false);
 
   useEffect(() => {
     if (flashKey === 0) return;
-    setVisible(true);
-    const t = setTimeout(() => setVisible(false), 800);
+    setFlashing(true);
+    const t = setTimeout(() => setFlashing(false), 700);
     return () => clearTimeout(t);
   }, [flashKey]);
 
   return (
-    <div
-      className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
-        visible ? "opacity-100" : "opacity-0"
-      }`}
+    <button
+      type="button"
+      aria-label={muted ? "Sesi aç" : "Sesi kapat"}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className={`absolute right-4 top-4 z-20 rounded-full p-2 transition-all duration-300
+        ${flashing ? "scale-125 bg-white/20" : "bg-black/30 hover:bg-black/50"}`}
     >
-      <div className="rounded-full bg-black/50 p-4">
-        {muted ? (
-          <IconVolumeOff size={36} className="text-white" />
-        ) : (
-          <IconVolumeOn size={36} className="text-white" />
-        )}
-      </div>
-    </div>
+      {muted ? (
+        <IconVolumeOff size={20} className="text-white" />
+      ) : (
+        <IconVolumeOn size={20} className="text-white" />
+      )}
+    </button>
   );
 }
 
-// ─── Per-slide — re-renders only when isActive/dist/mute changes ──────────────
+// ─── Per-slide — memo: sadece props değişince render ─────────────────────────
 
 type ReelSlideProps = {
   post: EnrichedPost;
   isActive: boolean;
   dist: number;
-  /** Radius within which video element is mounted with preload="auto" */
   videoWindow: number;
-  videoRefCallback: (el: HTMLVideoElement | null) => void;
+  /** Stabil ref callback — her render'da DEĞİŞMEMELİ */
+  videoRef: (el: HTMLVideoElement | null) => void;
   onCommentClick: () => void;
   onPostDeleted: () => void;
   onMuteToggle: () => void;
@@ -111,7 +125,7 @@ const ReelSlide = memo(function ReelSlide({
   isActive,
   dist,
   videoWindow,
-  videoRefCallback,
+  videoRef,
   onCommentClick,
   onPostDeleted,
   onMuteToggle,
@@ -121,15 +135,16 @@ const ReelSlide = memo(function ReelSlide({
   const src = getFastFlowPlaybackUrl(post);
   const poster = getPostVideoPoster(post) ?? post.postVideothumbnail ?? undefined;
 
-  // Within DOM_WINDOW_RADIUS: always render slide shell
-  // Within videoWindow: mount <video> with preload="auto"
   const mountVideo = dist <= videoWindow && !!src;
-  // Show poster only within DOM_WINDOW_RADIUS — distant slides stay as black placeholders
-  const showPoster = poster && !mountVideo && dist <= REELS_DOM_WINDOW_RADIUS;
+  const showPoster = !mountVideo && dist <= REELS_DOM_WINDOW_RADIUS && !!poster;
 
   return (
-    <div className="reels-slide relative bg-black" onClick={onMuteToggle}>
-      {/* Static poster — shown for nearby non-video slides */}
+    // Tüm slidelarda div her zaman DOM'da — scroll-snap için zorunlu
+    <div
+      className="reels-slide relative bg-black"
+      onClick={isActive ? onMuteToggle : undefined}
+    >
+      {/* Poster — video monte edilmeden önce gösterilir */}
       {showPoster && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -140,11 +155,11 @@ const ReelSlide = memo(function ReelSlide({
         />
       )}
 
-      {/* Video — stays mounted within videoWindow, browser handles poster natively */}
+      {/* Video — ±videoWindow içinde her zaman monte, src asla silinmez */}
       {mountVideo && (
         // eslint-disable-next-line jsx-a11y/media-has-caption
         <video
-          ref={videoRefCallback}
+          ref={videoRef}
           src={src}
           poster={poster}
           preload="auto"
@@ -155,22 +170,31 @@ const ReelSlide = memo(function ReelSlide({
         />
       )}
 
-      {/* Overlays — active slide only */}
+      {/* Aktif slide overlayleri */}
       {isActive && (
         <>
-          <VideoFeedSideActions
-            post={post}
-            onCommentClick={onCommentClick}
-            onPostDeleted={onPostDeleted}
+          {/* Action butonları — stopPropagation içerde, mute toggle etkilemiyor */}
+          <div onClick={(e) => e.stopPropagation()}>
+            <VideoFeedSideActions
+              post={post}
+              onCommentClick={onCommentClick}
+              onPostDeleted={onPostDeleted}
+            />
+          </div>
+
+          {/* Ses butonu — her zaman görünür, toggle'da flash */}
+          <MuteBtn
+            muted={isMuted}
+            flashKey={muteFlashKey}
+            onToggle={onMuteToggle}
           />
-          <MuteIndicator muted={isMuted} flashKey={muteFlashKey} />
         </>
       )}
     </div>
   );
 });
 
-// ─── Main Feed ────────────────────────────────────────────────────────────────
+// ─── Ana Feed ─────────────────────────────────────────────────────────────────
 
 export function ReelFeed({
   posts: initialPosts,
@@ -190,32 +214,42 @@ export function ReelFeed({
   const t = useT();
   const router = useRouter();
 
-  // Device-aware video window (iOS: 1, Android/desktop: 2)
+  // Cihaz tipine göre video window (iOS: 1, Android/desktop: 2)
   const videoWindow = useMemo(() => {
-    if (typeof window === "undefined") return REELS_DOM_WINDOW_RADIUS;
+    if (typeof window === "undefined") return 1;
     return getReelsVideoWindowRadius();
   }, []);
 
   // ─── Container ref ───────────────────────────────────────────────────────
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null) as MutableRefObject<HTMLDivElement | null>;
   const setContainerRef = useCallback(
     (el: HTMLDivElement | null) => {
-      (containerRef as MutableRefObject<HTMLDivElement | null>).current = el;
-      if (scrollContainerRef)
-        (scrollContainerRef as MutableRefObject<HTMLDivElement | null>).current = el;
+      containerRef.current = el;
+      if (scrollContainerRef) scrollContainerRef.current = el;
     },
     [scrollContainerRef],
   );
   useReelsViewportHeight(containerRef);
 
-  // ─── Posts state ─────────────────────────────────────────────────────────
+  // ─── Posts ───────────────────────────────────────────────────────────────
   const [posts, setPosts] = useState(initialPosts);
-  useEffect(() => setPosts(initialPosts), [initialPosts]);
+  useEffect(() => {
+    setPosts(initialPosts);
+    setCommentCounts((prev) => {
+      const next = { ...prev };
+      initialPosts.forEach((p) => {
+        if (!(p.id in next)) next[p.id] = p.numComments ?? 0;
+      });
+      return next;
+    });
+  }, [initialPosts]);
 
   const videoPosts = useMemo(() => posts.filter((p) => getPostVideoUrl(p)), [posts]);
   const visiblePosts = guestPreview ? videoPosts.slice(0, 6) : videoPosts;
+  const visiblePostsRef = useRef(visiblePosts);
+  visiblePostsRef.current = visiblePosts;
 
-  // ─── Active slide index — the ONE React navigation state ─────────────────
+  // ─── Tek React state: aktif slide indeksi ────────────────────────────────
   const [activeIndex, setActiveIndex] = useState(() => {
     if (!initialPostId) return 0;
     const vp = initialPosts.filter((p) => getPostVideoUrl(p));
@@ -224,29 +258,15 @@ export function ReelFeed({
   });
   const activeIndexRef = useRef(activeIndex);
 
-  // ─── Video DOM refs ───────────────────────────────────────────────────────
+  // ─── Video DOM map ────────────────────────────────────────────────────────
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
-  const isMutedRef = useRef(true); // always start muted (iOS autoplay requirement)
 
-  const makeVideoRef = useCallback(
-    (index: number) => (el: HTMLVideoElement | null) => {
-      if (el) {
-        videoRefs.current.set(index, el);
-        // iOS Safari: muted attribute must be on the element, not just the property
-        el.muted = true;
-        el.setAttribute("muted", "");
-      } else {
-        videoRefs.current.delete(index);
-      }
-    },
-    [],
-  );
-
-  // ─── Mute state — 2 state vars for the flash icon only ───────────────────
+  // ─── Mute — ref (DOM) + state (ikon için) ────────────────────────────────
+  const isMutedRef = useRef(true);
   const [isMutedState, setIsMutedState] = useState(true);
   const [muteFlashKey, setMuteFlashKey] = useState(0);
 
-  // ─── Imperative play ─────────────────────────────────────────────────────
+  // ─── playVideo — stabil, ref ile erişilir ────────────────────────────────
   const playVideo = useCallback((idx: number) => {
     const video = videoRefs.current.get(idx);
     if (!video) return;
@@ -260,12 +280,12 @@ export function ReelFeed({
       const p = video.play();
       if (p) {
         p.catch(() => {
-          // Autoplay policy blocked — fallback to muted
+          // Autoplay politikası engelledi — muted'a geri dön
           video.muted = true;
           video.setAttribute("muted", "");
           isMutedRef.current = true;
           setIsMutedState(true);
-          void video.play().catch(() => {});
+          void video.play().catch(() => {/* tamamen başarısız */});
         });
       }
     };
@@ -273,15 +293,21 @@ export function ReelFeed({
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       tryPlay();
     } else {
-      const onReady = () => { tryPlay(); video.removeEventListener("canplay", onReady); };
-      video.addEventListener("canplay", onReady);
-      // Fallback: try anyway after 1.5s
+      const handler = () => {
+        tryPlay();
+        video.removeEventListener("canplay", handler);
+      };
+      video.addEventListener("canplay", handler);
+      // 2 saniye fallback
       setTimeout(() => {
-        video.removeEventListener("canplay", onReady);
+        video.removeEventListener("canplay", handler);
         if (video.paused) tryPlay();
-      }, 1500);
+      }, 2000);
     }
   }, []);
+
+  const playVideoRef = useRef(playVideo);
+  playVideoRef.current = playVideo;
 
   const pauseAllExcept = useCallback((exceptIdx: number) => {
     videoRefs.current.forEach((video, idx) => {
@@ -292,9 +318,34 @@ export function ReelFeed({
     });
   }, []);
 
-  // ─── Stable callback refs ─────────────────────────────────────────────────
-  const visiblePostsRef = useRef(visiblePosts);
-  visiblePostsRef.current = visiblePosts;
+  // ─── STABİL video ref callback'leri — her index için bir kez oluşturulur ─
+  //     Bu kritik: callback değişirse React null → element sırası ile çağırır
+  //     ve video elementi yeniden monte edilir (buffered data kaybolur).
+  const stableVideoCallbacks = useRef<Map<number, (el: HTMLVideoElement | null) => void>>(
+    new Map(),
+  );
+
+  const getVideoRef = useCallback((index: number) => {
+    if (!stableVideoCallbacks.current.has(index)) {
+      stableVideoCallbacks.current.set(index, (el: HTMLVideoElement | null) => {
+        if (el) {
+          videoRefs.current.set(index, el);
+          // iOS Safari: muted attribute HTML'de olmalı
+          el.muted = true;
+          el.setAttribute("muted", "");
+          // Bu video aktif slotsa, hemen oynat
+          if (index === activeIndexRef.current) {
+            playVideoRef.current(index);
+          }
+        } else {
+          videoRefs.current.delete(index);
+        }
+      });
+    }
+    return stableVideoCallbacks.current.get(index)!;
+  }, []);
+
+  // ─── activeIndex değişince: durdur / oynat ───────────────────────────────
   const prevActiveRef = useRef(activeIndex);
   const onPostSeenRef = useRef(onPostSeen);
   onPostSeenRef.current = onPostSeen;
@@ -306,7 +357,6 @@ export function ReelFeed({
   hasMoreRef.current = hasMore;
   const catalogCycleAtLengthRef = useRef(0);
 
-  // ─── React to activeIndex change ──────────────────────────────────────────
   useEffect(() => {
     const prev = prevActiveRef.current;
     if (prev !== activeIndex) {
@@ -320,7 +370,7 @@ export function ReelFeed({
     playVideo(activeIndex);
     onActiveChange?.(activeIndex);
 
-    // Infinite scroll / catalog cycle
+    // Infinite scroll
     const len = visiblePostsRef.current.length;
     if (activeIndex >= len - INFINITE_SCROLL_NEAR_END) {
       if (hasMoreRef.current) {
@@ -332,7 +382,6 @@ export function ReelFeed({
     }
   }, [activeIndex, pauseAllExcept, playVideo, onActiveChange]);
 
-  // Mark current post seen on unmount
   useEffect(() => {
     return () => {
       const post = visiblePostsRef.current[prevActiveRef.current];
@@ -340,12 +389,12 @@ export function ReelFeed({
     };
   }, []);
 
-  // ─── Scroll → update activeIndex ─────────────────────────────────────────
+  // ─── Scroll → activeIndex ─────────────────────────────────────────────────
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-
     let raf = 0;
+
     const onScroll = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
@@ -360,10 +409,13 @@ export function ReelFeed({
     };
 
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => { el.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); };
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
-  // ─── Initial scroll to specific post ─────────────────────────────────────
+  // ─── initialPostId → scroll ───────────────────────────────────────────────
   const initialScrollDone = useRef(false);
   useLayoutEffect(() => {
     if (initialScrollDone.current || !initialPostId || !containerRef.current) return;
@@ -378,11 +430,14 @@ export function ReelFeed({
     initialScrollDone.current = true;
   }, [visiblePosts, initialPostId]);
 
-  // ─── Reset scroll token ───────────────────────────────────────────────────
+  // ─── Reset token ──────────────────────────────────────────────────────────
   const resetTokenRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (resetScrollToken === undefined) return;
-    if (resetTokenRef.current === undefined) { resetTokenRef.current = resetScrollToken; return; }
+    if (resetTokenRef.current === undefined) {
+      resetTokenRef.current = resetScrollToken;
+      return;
+    }
     if (resetTokenRef.current === resetScrollToken) return;
     resetTokenRef.current = resetScrollToken;
     initialScrollDone.current = false;
@@ -406,7 +461,7 @@ export function ReelFeed({
     setMuteFlashKey((k) => k + 1);
   }, []);
 
-  // ─── Post management ──────────────────────────────────────────────────────
+  // ─── Post silme ───────────────────────────────────────────────────────────
   const handlePostDeleted = useCallback(
     (postId: string) => {
       setPosts((prev) => prev.filter((p) => p.id !== postId));
@@ -415,7 +470,7 @@ export function ReelFeed({
     [onPostDeleted],
   );
 
-  // ─── Comment modal ────────────────────────────────────────────────────────
+  // ─── Yorum modal ──────────────────────────────────────────────────────────
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>(() =>
     Object.fromEntries(initialPosts.map((p) => [p.id, p.numComments ?? 0])),
@@ -439,25 +494,26 @@ export function ReelFeed({
       {visiblePosts.map((post, i) => {
         const dist = Math.abs(i - activeIndex);
         const key = postKeys?.[i] ?? post.id;
+        const isActive = i === activeIndex;
 
         return (
           <ReelSlide
             key={key}
             post={{ ...post, numComments: commentCounts[post.id] ?? post.numComments ?? 0 }}
-            isActive={i === activeIndex}
+            isActive={isActive}
             dist={dist}
             videoWindow={videoWindow}
-            videoRefCallback={makeVideoRef(i)}
+            videoRef={getVideoRef(i)}
             onCommentClick={() => setCommentPostId(post.id)}
             onPostDeleted={() => handlePostDeleted(post.id)}
             onMuteToggle={handleMuteToggle}
-            muteFlashKey={i === activeIndex ? muteFlashKey : 0}
+            muteFlashKey={isActive ? muteFlashKey : 0}
             isMuted={isMutedState}
           />
         );
       })}
 
-      {/* Guest upsell slide */}
+      {/* Guest upsell */}
       {guestPreview && videoPosts.length > 6 && (
         <div className="reels-slide flex flex-col items-center justify-center gap-4 px-8 text-center">
           <p className="text-lg font-semibold text-foreground">{t("guestReelsPreviewTitle")}</p>
@@ -472,14 +528,14 @@ export function ReelFeed({
         </div>
       )}
 
-      {/* Load-more spinner */}
+      {/* Load-more göstergesi */}
       {loadingMore && (
         <div className="reels-slide flex items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-gold border-t-transparent" />
         </div>
       )}
 
-      {/* Comment modal */}
+      {/* Yorum modal */}
       {activeCommentPost && (
         <PostCommentModal
           postId={activeCommentPost.id}
