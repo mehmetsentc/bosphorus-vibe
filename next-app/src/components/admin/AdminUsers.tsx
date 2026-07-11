@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   fetchAdminUsersClient,
+  fetchAdminStatsClient,
   updateUserRoleClient,
   type AdminUserRow,
 } from "@/lib/admin/client-ops";
@@ -30,6 +31,7 @@ const FILTERS: { id: AdminUserRoleFilter; label: string }[] = [
 export function AdminUsers() {
   const { user } = useAuth();
   const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
@@ -40,9 +42,15 @@ export function AdminUsers() {
     if (!user) return;
     setLoading(true);
     try {
-      setUsers(await fetchAdminUsersClient());
+      const [rows, stats] = await Promise.all([
+        fetchAdminUsersClient(),
+        fetchAdminStatsClient(),
+      ]);
+      setUsers(rows);
+      setTotalCount(stats.users);
     } catch {
       setUsers([]);
+      setTotalCount(null);
     } finally {
       setLoading(false);
     }
@@ -90,13 +98,13 @@ export function AdminUsers() {
 
   const stats = useMemo(
     () => ({
-      total: users.length,
+      total: totalCount ?? users.length,
       admin: users.filter((u) => isAdminRole(u.role)).length,
       animation: users.filter((u) => isAnimationTeamRole(u.role)).length,
       guest: users.filter((u) => u.role === "Hotel Guest").length,
       anonymous: users.filter((u) => u.isAnonymous).length,
     }),
-    [users],
+    [users, totalCount],
   );
 
   return (

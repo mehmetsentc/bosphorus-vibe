@@ -15,6 +15,7 @@ import {
   updateDoc,
   writeBatch,
   type DocumentSnapshot,
+  type QueryConstraint,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
@@ -26,6 +27,8 @@ import { clientApiUrl } from "@/lib/client-api-url";
 import { getFirebaseEnv } from "@/lib/firebase/config";
 import { httpsCallable } from "firebase/functions";
 import { COLLECTIONS } from "@/types";
+import { isAnimationTeamRole } from "@/lib/utils/roles";
+import { useAppStore } from "@/store/appStore";
 
 const PAGE_SIZE = 100;
 
@@ -74,19 +77,45 @@ function mapUserDoc(d: QueryDocumentSnapshot): AdminUserRow {
 
 export async function fetchAdminUsersClient(): Promise<AdminUserRow[]> {
   const db = getFirebaseDb();
+  const users: AdminUserRow[] = [];
+
+  async function fetchPages(ordered: boolean): Promise<AdminUserRow[]> {
+    let lastDoc: QueryDocumentSnapshot | undefined;
+
+    while (true) {
+      const constraints: QueryConstraint[] = ordered
+        ? [orderBy("created_time", "desc"), limit(PAGE_SIZE)]
+        : [limit(PAGE_SIZE)];
+      if (lastDoc) {
+        constraints.push(startAfter(lastDoc));
+      }
+
+      const snap = await getDocs(
+        query(collection(db, COLLECTIONS.users), ...constraints),
+      );
+      if (snap.empty) break;
+
+      users.push(...snap.docs.map(mapUserDoc));
+      lastDoc = snap.docs[snap.docs.length - 1];
+      if (snap.size < PAGE_SIZE) break;
+    }
+
+    return users;
+  }
+
   try {
-    const snap = await getDocs(
-      query(collection(db, COLLECTIONS.users), orderBy("created_time", "desc"), limit(200)),
-    );
-    return snap.docs.map(mapUserDoc);
+    return await fetchPages(true);
   } catch {
-    const snap = await getDocs(query(collection(db, COLLECTIONS.users), limit(200)));
-    return snap.docs.map(mapUserDoc);
+    users.length = 0;
+    return fetchPages(false);
   }
 }
 
 export async function updateUserRoleClient(uid: string, role: string): Promise<void> {
   await updateDoc(doc(getFirebaseDb(), COLLECTIONS.users, uid), { role });
+  if (isAnimationTeamRole(role) || role === "Hotel Guest" || role === "Others" || role === "user") {
+    useAppStore.getState().clearTeamCache();
+  }
 }
 
 export async function fetchAdminEventsClient(): Promise<AdminEventRow[]> {

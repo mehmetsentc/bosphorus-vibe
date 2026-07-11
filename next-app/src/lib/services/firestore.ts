@@ -674,6 +674,31 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
   const results: TeamMemberDoc[] = [];
   const seen = new Set<string>();
 
+  function pushMember(d: QueryDocumentSnapshot<DocumentData>) {
+    if (seen.has(d.id)) return;
+    const data = d.data();
+    if (data.isAnonymous === true) return;
+    seen.add(d.id);
+    const lastActive = data.last_active_time
+      ? toDate(data.last_active_time)
+      : undefined;
+    const storedRole = (data.role as string) || "";
+    const legacyBioRole = inferLegacyProfileRole(
+      storedRole,
+      (data.bio as string) ?? "",
+      (data.title as string) ?? "",
+    );
+    results.push({
+      id: d.id,
+      name: (data.display_name as string) || (data.userName as string) || "",
+      role: legacyBioRole || storedRole,
+      photo: (data.photo_url as string) ?? "",
+      bio: (data.bio as string) ?? "",
+      title: (data.title as string) ?? "",
+      isActiveToday: lastActive ? isToday(lastActive) : false,
+    });
+  }
+
   for (const teamRole of TEAM_ROLES) {
     const snap = await getDocs(
       query(
@@ -681,25 +706,42 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
         where("role", "==", teamRole),
       ),
     );
-    for (const d of snap.docs) {
-      if (seen.has(d.id)) continue;
-      seen.add(d.id);
-      const data = d.data();
-      const lastActive = data.last_active_time
-        ? toDate(data.last_active_time)
-        : undefined;
-      results.push({
-        id: d.id,
-        name: (data.display_name as string) || (data.userName as string) || "",
-        role: (data.role as string) || "",
-        photo: (data.photo_url as string) ?? "",
-        bio: (data.bio as string) ?? "",
-        title: (data.title as string) ?? "",
-        isActiveToday: lastActive ? isToday(lastActive) : false,
-      });
-    }
+    for (const d of snap.docs) pushMember(d);
   }
+
+  // Legacy: role was sometimes stored in bio/title before dedicated role field worked.
+  for (const teamRole of TEAM_ROLES) {
+    const [bioSnap, titleSnap] = await Promise.all([
+      getDocs(
+        query(
+          collection(getFirebaseDb(), COLLECTIONS.users),
+          where("bio", "==", teamRole),
+        ),
+      ),
+      getDocs(
+        query(
+          collection(getFirebaseDb(), COLLECTIONS.users),
+          where("title", "==", teamRole),
+        ),
+      ),
+    ]);
+    for (const d of bioSnap.docs) pushMember(d);
+    for (const d of titleSnap.docs) pushMember(d);
+  }
+
   return results;
+}
+
+/** Old app builds stored profile role in bio/title when role field was locked. */
+function inferLegacyProfileRole(
+  role: string,
+  bio: string,
+  title: string,
+): string {
+  if (TEAM_ROLES.includes(role as (typeof TEAM_ROLES)[number])) return role;
+  if (TEAM_ROLES.includes(bio as (typeof TEAM_ROLES)[number])) return bio;
+  if (TEAM_ROLES.includes(title as (typeof TEAM_ROLES)[number])) return title;
+  return role;
 }
 
 const USER_BATCH_SIZE = 10;

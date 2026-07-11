@@ -1,5 +1,16 @@
 import { TEAM_ROLES } from "@/types";
 
+/** Profile roles users can self-select or admins can assign. */
+export const PROFILE_ROLES = [
+  "user",
+  "Animation Team",
+  "Hotel Guest",
+  "Others",
+  "Porty Club Animation Team",
+] as const;
+
+export type ProfileRole = (typeof PROFILE_ROLES)[number];
+
 /** Roles an admin can assign from the panel. */
 export const ASSIGNABLE_ROLES = [
   "user",
@@ -36,6 +47,11 @@ export function isAnimationTeamRole(role?: string | null): boolean {
 
 export function isAdminRole(role?: string | null): boolean {
   return role === "admin";
+}
+
+export function isProfileRole(role?: string | null): role is ProfileRole {
+  if (!role) return false;
+  return (PROFILE_ROLES as readonly string[]).includes(role);
 }
 
 export function getRoleDisplayLabel(

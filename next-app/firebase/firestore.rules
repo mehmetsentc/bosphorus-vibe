@@ -22,9 +22,21 @@ service cloud.firestore {
       return isSignedIn() && userDoc().data.role == 'admin';
     }
 
+    function isProfileRoleValue(role) {
+      return role in ['user', 'Animation Team', 'Hotel Guest', 'Others', 'Porty Club Animation Team'];
+    }
+
     function roleUnchanged() {
       return !('role' in request.resource.data)
         || request.resource.data.role == resource.data.role;
+    }
+
+    /** Owners may set profile role (not admin); admins can set any role. */
+    function ownerMayUpdateRole() {
+      return roleUnchanged()
+        || (resource.data.role != 'admin'
+            && request.resource.data.role != 'admin'
+            && isProfileRoleValue(request.resource.data.role));
     }
 
     function validUserCreate() {
@@ -85,7 +97,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId) && validUserCreate();
-      allow update: if isOwner(userId) && roleUnchanged() || isAdmin();
+      allow update: if isOwner(userId) && ownerMayUpdateRole() || isAdmin();
       allow delete: if isAdmin();
     }
 

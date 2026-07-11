@@ -29,7 +29,8 @@ import {
   getFirebaseDb,
   isFirebaseConfigured,
 } from "@/lib/firebase";
-import { resetAppStore } from "@/store/appStore";
+import { resetAppStore, useAppStore } from "@/store/appStore";
+import { isProfileRole } from "@/lib/utils/roles";
 import { clearAccessCookie, setAccessCookie } from "@/lib/session/cookies";
 import { toDate } from "@/lib/utils/firestore-helpers";
 import { COLLECTIONS, type MessagePrivacy, type UserDoc } from "@/types";
@@ -567,9 +568,14 @@ export async function updateUserProfile(
     userName: data.userName.trim(),
     bio: data.bio.trim(),
   };
-  if (data.role && data.role !== "admin") payload.role = data.role;
+  if (data.role && data.role !== "admin" && isProfileRole(data.role)) {
+    payload.role = data.role;
+  }
 
   await updateDoc(doc(getFirebaseDb(), COLLECTIONS.users, uid), payload);
+  if ("role" in payload) {
+    useAppStore.getState().clearTeamCache();
+  }
 
   const auth = getFirebaseAuth();
   if (auth.currentUser?.uid === uid) {
