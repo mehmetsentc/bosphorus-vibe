@@ -30,7 +30,7 @@ export function ReelsPreview({ posts }: { posts: EnrichedPost[] }) {
     <section>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold">{t("navReels")}</h2>
-        <Link href="/reels" className="text-sm font-medium text-gold">
+        <Link href="/home" className="text-sm font-medium text-gold">
           {t("seeAll")}
         </Link>
       </div>

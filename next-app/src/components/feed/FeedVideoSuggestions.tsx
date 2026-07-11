@@ -22,7 +22,7 @@ export function FeedVideoSuggestions({ posts }: FeedVideoSuggestionsProps) {
     <article className="border-b border-border bg-background py-4">
       <div className="mb-3 flex items-center justify-between px-3">
         <h3 className="text-sm font-semibold">{t("feedSuggestVideos")}</h3>
-        <Link href="/reels" className="text-xs font-semibold text-gold">
+        <Link href="/home" className="text-xs font-semibold text-gold">
           {t("seeAll")}
         </Link>
       </div>

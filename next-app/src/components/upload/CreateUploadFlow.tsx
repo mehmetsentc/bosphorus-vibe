@@ -29,6 +29,7 @@ import {
   markReelsRefreshPending,
 } from "@/lib/utils/invalidate-feed-cache";
 import { parseStoryCategory } from "@/lib/utils/story-categories";
+import { getVideoReelsPath } from "@/lib/utils/video-sources";
 import { BRAND_NAME } from "@/lib/brand";
 import { IconGrid, IconPlus, IconReels } from "@/components/icons/Icons";
 import type { PostTag, StoryCategory } from "@/types";
@@ -384,7 +385,7 @@ function CreateUploadFlowInner() {
 
       invalidateFeedCaches();
       if (kind === "reel") markReelsRefreshPending();
-      router.push(kind === "reel" ? "/reels" : "/home");
+      router.push(kind === "reel" ? getVideoReelsPath(postId) : "/home");
     } catch (err) {
       console.error("[CreateUpload]", err);
       const msg = err instanceof Error ? err.message : String(err);
