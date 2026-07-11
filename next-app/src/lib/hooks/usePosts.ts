@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isCacheExpired } from "@/lib/cache/constants";
+import { prefetchFeedFirstPage } from "@/lib/cache/feed-prefetch";
 import { fetchReelsFirstPage } from "@/lib/cache/reels-fetch";
 import {
   resetReelsPopularCatalog,
@@ -109,6 +110,31 @@ export function useFeedPosts() {
       emptyPageStreakRef.current = 0;
 
       try {
+        await prefetchFeedFirstPage();
+
+        const { posts: cachedPosts, lastFetched: cachedFetched } =
+          useAppStore.getState();
+        if (
+          !force &&
+          cachedPosts &&
+          !isCacheExpired(cachedFetched.posts) &&
+          requestId === fetchRef.current
+        ) {
+          const deduped = dedupePostsById(cachedPosts.posts);
+          postsRef.current = deduped;
+          hasMoreRef.current = cachedPosts.hasMore;
+          setLocalPosts(deduped);
+          setHasMore(cachedPosts.hasMore);
+          cursorRef.current = null;
+          const lastPost = deduped[deduped.length - 1];
+          fallbackCursorRef.current = lastPost
+            ? postPageCursorFromPost(lastPost)
+            : null;
+          setPostsCache({ posts: deduped, hasMore: cachedPosts.hasMore });
+          setInitialized(true);
+          return;
+        }
+
         const page = await getFeedPostsPage(FEED_PAGE_SIZE, null);
         const enriched = await enrichPostsWithUsers(page.posts);
         if (requestId !== fetchRef.current) return;

@@ -217,6 +217,9 @@ function CreateUploadFlowInner() {
       setFile(next);
       setPreview(url);
       setStep("edit");
+      if (isVideo) {
+        window.setTimeout(() => setDraftUploadEnabled(true), 400);
+      }
 
       setRecentItems((prev) => {
         const filtered = prev.filter((p) => p.file.name !== next.name);
@@ -236,7 +239,7 @@ function CreateUploadFlowInner() {
 
   function goToShareStep() {
     setStep("share");
-    window.setTimeout(() => setDraftUploadEnabled(true), 2000);
+    setDraftUploadEnabled(true);
   }
 
   const handleDurationKnown = useCallback(
@@ -307,12 +310,10 @@ function CreateUploadFlowInner() {
     const fullCaption = [textOverlay, sticker, caption].filter(Boolean).join("\n").trim();
 
     try {
-      if (file && isVideoFile(file)) {
+      if (file && isVideoFile(file) && !coverBlobRef.current) {
         try {
-          coverBlobRef.current = await ensureVideoCoverBlob(file, coverBlobRef.current);
+          coverBlobRef.current = await ensureVideoCoverBlob(file, null);
         } catch (thumbErr) {
-          // Frame extraction failed (e.g. iOS canvas.toBlob returned null).
-          // Keep whatever cover we already have (or null). Draft already has thumb.jpg.
           console.error("[CreateUpload] ensureVideoCoverBlob failed:", thumbErr);
         }
       }

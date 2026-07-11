@@ -7,6 +7,7 @@ import { RoutePrefetcher } from "@/components/layout/RoutePrefetcher";
 import { FeedPrefetcher } from "@/components/layout/FeedPrefetcher";
 import { StoriesPrefetcher } from "@/components/layout/StoriesPrefetcher";
 import { ProfilePrefetcher } from "@/components/layout/ProfilePrefetcher";
+import { ReelsPrefetcher } from "@/components/layout/ReelsPrefetcher";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { GuestBanner } from "@/components/onboarding/GuestBanner";
 import { LegalFooter } from "@/components/layout/LegalFooter";
@@ -42,6 +43,7 @@ export default function MainLayout({
       <FeedPrefetcher />
       <StoriesPrefetcher />
       <ProfilePrefetcher />
+      <ReelsPrefetcher />
       <NavigationProgress />
       <AuthGuard>
         <div className="min-h-screen md:pl-[244px]">

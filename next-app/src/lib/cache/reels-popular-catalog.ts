@@ -7,53 +7,79 @@ import {
   getReelsRecentWindowStart,
   sortPostsByReelsPopularity,
 } from "@/lib/reels/reels-feed-algorithm";
+import type { QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import type { UserPostDoc } from "@/types";
 
-let popularCatalogPromise: Promise<EnrichedPost[]> | null = null;
+const PAGE_FETCH_SIZE = 50;
+const MAX_CATALOG_SIZE = 2000;
+
+let rankedPosts: UserPostDoc[] = [];
+let fetchCursor: QueryDocumentSnapshot<DocumentData> | null = null;
+let fetchHasMore = true;
+let extendPromise: Promise<void> | null = null;
 
 export function resetReelsPopularCatalog(): void {
-  popularCatalogPromise = null;
+  rankedPosts = [];
+  fetchCursor = null;
+  fetchHasMore = true;
+  extendPromise = null;
 }
 
-/** Load all videos older than the recent window, sorted by views + likes. */
-export async function buildReelsPopularCatalog(): Promise<EnrichedPost[]> {
-  if (popularCatalogPromise) return popularCatalogPromise;
+async function extendCatalog(minLength: number): Promise<void> {
+  const windowStart = getReelsRecentWindowStart();
 
-  popularCatalogPromise = (async () => {
-    const windowStart = getReelsRecentWindowStart();
-    const collected: UserPostDoc[] = [];
-    let cursor = null;
-    let hasMore = true;
-
-    while (hasMore) {
-      const page = await getVideoPostsPage(50, cursor);
-      for (const post of page.posts) {
-        if (post.timePosted.getTime() < windowStart.getTime()) {
-          collected.push(post);
-        }
+  while (
+    rankedPosts.length < minLength &&
+    fetchHasMore &&
+    rankedPosts.length < MAX_CATALOG_SIZE
+  ) {
+    const page = await getVideoPostsPage(PAGE_FETCH_SIZE, fetchCursor);
+    for (const post of page.posts) {
+      if (post.timePosted.getTime() < windowStart.getTime()) {
+        rankedPosts.push(post);
       }
-      cursor = page.lastDoc;
-      hasMore = page.hasMore;
-      if (collected.length > 2000) break;
     }
+    fetchCursor = page.lastDoc;
+    fetchHasMore = page.hasMore;
+    if (!page.posts.length) break;
+  }
 
-    const ranked = sortPostsByReelsPopularity(collected);
-    return enrichPostsWithUsers(ranked);
-  })();
+  rankedPosts = sortPostsByReelsPopularity(rankedPosts);
+}
 
-  return popularCatalogPromise;
+async function ensureCatalogLength(minLength: number): Promise<void> {
+  if (rankedPosts.length >= minLength || !fetchHasMore) return;
+
+  if (!extendPromise) {
+    extendPromise = extendCatalog(minLength).finally(() => {
+      extendPromise = null;
+    });
+  }
+
+  await extendPromise;
+
+  if (rankedPosts.length < minLength && fetchHasMore) {
+    await extendCatalog(minLength);
+  }
 }
 
 export async function sliceReelsPopularCatalog(
   offset: number,
   pageSize: number,
 ): Promise<{ posts: EnrichedPost[]; hasMore: boolean; nextOffset: number }> {
-  const catalog = await buildReelsPopularCatalog();
-  const posts = catalog.slice(offset, offset + pageSize);
-  const nextOffset = offset + posts.length;
+  const needed = offset + pageSize;
+  await ensureCatalogLength(needed);
+
+  const slice = rankedPosts.slice(offset, offset + pageSize);
+  const posts = await enrichPostsWithUsers(slice);
+  const nextOffset = offset + slice.length;
+  const hasMore =
+    nextOffset < rankedPosts.length ||
+    (fetchHasMore && rankedPosts.length < MAX_CATALOG_SIZE);
+
   return {
     posts,
-    hasMore: nextOffset < catalog.length,
+    hasMore,
     nextOffset,
   };
 }

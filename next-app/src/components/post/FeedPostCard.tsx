@@ -167,6 +167,7 @@ function FeedPostCardInner({
   const viewedRef = useRef(false);
   const wasActiveRef = useRef(false);
   const feedMuted = useVideoSoundStore((s) => s.feedMuted);
+  const setFeedMuted = useVideoSoundStore((s) => s.setFeedMuted);
   const [isMuted, setIsMuted] = useState(feedMuted);
   const [mountVideo, setMountVideo] = useState(priority);
   const requestPlay = useVideoPlayStore((s) => s.requestPlay);
@@ -249,11 +250,12 @@ function FeedPostCardInner({
     if (!vid) return;
     const next = !isMuted;
     setIsMuted(next);
+    setFeedMuted(next);
     vid.muted = next;
     if (next) vid.setAttribute("muted", ""); else vid.removeAttribute("muted");
     setMuteFlash(!next);
     setTimeout(() => setMuteFlash(null), 700);
-  }, [isMuted]);
+  }, [isMuted, setFeedMuted]);
 
   async function handleFollow() {
     if (!canLike || !user || !post.postUserId || isOwn) return;

@@ -11,7 +11,7 @@ import type { PublicUser } from "@/lib/services/friends";
 type FeedFriendSuggestionsProps = {
   users: PublicUser[];
   following: Set<string>;
-  onFollowChange: (uid: string) => void;
+  onFollowChange: (uid: string, following?: boolean) => void;
 };
 
 export function FeedFriendSuggestions({
@@ -34,7 +34,7 @@ export function FeedFriendSuggestions({
     if (!user || following.has(uid)) return;
     try {
       await followUser(user.uid, uid);
-      onFollowChange(uid);
+      onFollowChange(uid, true);
     } catch {
       /* ignore */
     }

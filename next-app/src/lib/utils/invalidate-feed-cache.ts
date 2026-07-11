@@ -1,4 +1,5 @@
 import { useAppStore } from "@/store/appStore";
+import { invalidateReelsFetchCache } from "@/lib/cache/reels-fetch";
 
 const REELS_REFRESH_KEY = "bv-refresh-reels";
 
@@ -6,7 +7,10 @@ const REELS_REFRESH_KEY = "bv-refresh-reels";
 export function invalidateFeedCaches(opts?: { feed?: boolean; reels?: boolean }) {
   const store = useAppStore.getState();
   if (opts?.feed !== false) store.clearPostsCache();
-  if (opts?.reels !== false) store.clearReelsCache();
+  if (opts?.reels !== false) {
+    store.clearReelsCache();
+    invalidateReelsFetchCache();
+  }
 }
 
 /** Reels page reads this flag and forces a fresh fetch on next visit. */

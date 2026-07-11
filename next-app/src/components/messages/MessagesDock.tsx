@@ -13,6 +13,7 @@ import {
   subscribeChats,
   type ChatPreview,
 } from "@/lib/services/messages";
+import { isImmersiveVideoRoute } from "@/lib/utils/immersive-routes";
 
 export function MessagesDock() {
   const t = useT();
@@ -24,9 +25,8 @@ export function MessagesDock() {
 
   const hidden =
     pathname.startsWith("/messages") ||
-    pathname.startsWith("/reels") ||
-    pathname.startsWith("/welcome") ||
-    pathname.includes("/posts/");
+    isImmersiveVideoRoute(pathname) ||
+    pathname.startsWith("/welcome");
 
   useEffect(() => {
     if (open) setSubscribeReady(true);

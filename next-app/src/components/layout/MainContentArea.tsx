@@ -1,14 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-
-/** Full-screen reel routes — no bottom padding, lock page scroll on mobile */
-function isImmersiveVideoRoute(pathname: string): boolean {
-  return (
-    pathname.startsWith("/reels") ||
-    pathname.startsWith("/profile/posts/")
-  );
-}
+import { isImmersiveVideoRoute } from "@/lib/utils/immersive-routes";
 
 export function MainContentArea({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

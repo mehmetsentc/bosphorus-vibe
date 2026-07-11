@@ -26,7 +26,14 @@ import {
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { getPostVideoUrl } from "@/lib/services/firestore";
-import { getFastFlowPlaybackUrl, getPostVideoPoster } from "@/lib/utils/video-sources";
+import { getPostVideoPoster, prewarmReelsPosts } from "@/lib/utils/video-sources";
+import { ReelSlideVideo } from "@/components/reels/ReelSlideVideo";
+import { useEffectiveNetworkTier } from "@/lib/hooks/useSettingsEffects";
+import { useVideoSoundStore } from "@/store/videoSoundStore";
+import {
+  cancelVideoPrefetchesExcept,
+  setReelPrefetchScope,
+} from "@/lib/performance/video-prefetch-manager";
 import { VideoFeedSideActions } from "@/components/video/VideoFeedSideActions";
 import { useReelsViewportHeight } from "@/lib/hooks/useReelsViewportHeight";
 import { useT } from "@/components/providers/I18nProvider";
@@ -132,11 +139,15 @@ const ReelSlide = memo(function ReelSlide({
   muteFlashKey,
   isMuted,
 }: ReelSlideProps) {
-  const src = getFastFlowPlaybackUrl(post);
   const poster = getPostVideoPoster(post) ?? post.postVideothumbnail ?? undefined;
 
-  const mountVideo = dist <= videoWindow && !!src;
+  const mountVideo = dist <= videoWindow;
   const showPoster = !mountVideo && dist <= REELS_DOM_WINDOW_RADIUS && !!poster;
+  const preload: "auto" | "metadata" | "none" = !mountVideo
+    ? "none"
+    : isActive || dist === 1
+      ? "auto"
+      : "metadata";
 
   return (
     // Tüm slidelarda div her zaman DOM'da — scroll-snap için zorunlu
@@ -144,7 +155,6 @@ const ReelSlide = memo(function ReelSlide({
       className="reels-slide relative bg-black"
       onClick={isActive ? onMuteToggle : undefined}
     >
-      {/* Poster — video monte edilmeden önce gösterilir */}
       {showPoster && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -155,18 +165,13 @@ const ReelSlide = memo(function ReelSlide({
         />
       )}
 
-      {/* Video — ±videoWindow içinde her zaman monte, src asla silinmez */}
       {mountVideo && (
-        // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video
-          ref={videoRef}
-          src={src}
-          poster={poster}
-          preload="auto"
-          playsInline
-          loop
-          muted
-          className="absolute inset-0 h-full w-full object-cover"
+        <ReelSlideVideo
+          post={post}
+          shouldLoad={mountVideo}
+          isActive={isActive}
+          preload={preload}
+          videoRef={videoRef}
         />
       )}
 
@@ -213,6 +218,9 @@ export function ReelFeed({
 }: ReelFeedProps) {
   const t = useT();
   const router = useRouter();
+  const networkTier = useEffectiveNetworkTier();
+  const reelsMuted = useVideoSoundStore((s) => s.reelsMuted);
+  const setReelsMuted = useVideoSoundStore((s) => s.setReelsMuted);
 
   // Cihaz tipine göre video window (iOS: 1, Android/desktop: 2)
   const videoWindow = useMemo(() => {
@@ -261,10 +269,21 @@ export function ReelFeed({
   // ─── Video DOM map ────────────────────────────────────────────────────────
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
 
-  // ─── Mute — ref (DOM) + state (ikon için) ────────────────────────────────
-  const isMutedRef = useRef(true);
-  const [isMutedState, setIsMutedState] = useState(true);
+  // ─── Mute — store + ref (autoplay policy) ────────────────────────────────
+  const isMutedRef = useRef(reelsMuted);
+  const [isMutedState, setIsMutedState] = useState(reelsMuted);
   const [muteFlashKey, setMuteFlashKey] = useState(0);
+
+  useEffect(() => {
+    isMutedRef.current = reelsMuted;
+    setIsMutedState(reelsMuted);
+    const video = videoRefs.current.get(activeIndexRef.current);
+    if (video) {
+      video.muted = reelsMuted;
+      if (reelsMuted) video.setAttribute("muted", "");
+      else video.removeAttribute("muted");
+    }
+  }, [reelsMuted]);
 
   // ─── playVideo — stabil, ref ile erişilir ────────────────────────────────
   const playVideo = useCallback((idx: number) => {
@@ -330,9 +349,10 @@ export function ReelFeed({
       stableVideoCallbacks.current.set(index, (el: HTMLVideoElement | null) => {
         if (el) {
           videoRefs.current.set(index, el);
-          // iOS Safari: muted attribute HTML'de olmalı
-          el.muted = true;
-          el.setAttribute("muted", "");
+          const muted = isMutedRef.current;
+          el.muted = muted;
+          if (muted) el.setAttribute("muted", "");
+          else el.removeAttribute("muted");
           // Bu video aktif slotsa, hemen oynat
           if (index === activeIndexRef.current) {
             playVideoRef.current(index);
@@ -381,6 +401,20 @@ export function ReelFeed({
       }
     }
   }, [activeIndex, pauseAllExcept, playVideo, onActiveChange]);
+
+  // Scroll-ahead prewarm: active + next two clips
+  useLayoutEffect(() => {
+    const current = visiblePostsRef.current[activeIndex];
+    const next = visiblePostsRef.current[activeIndex + 1];
+    const nextNext = visiblePostsRef.current[activeIndex + 2];
+    setReelPrefetchScope(current?.id, next?.id, nextNext?.id);
+    cancelVideoPrefetchesExcept([]);
+    prewarmReelsPosts(
+      [current, next, nextNext].filter(Boolean) as typeof visiblePosts,
+      networkTier,
+    );
+    return () => setReelPrefetchScope();
+  }, [activeIndex, visiblePosts, networkTier]);
 
   useEffect(() => {
     return () => {
@@ -449,6 +483,7 @@ export function ReelFeed({
   const handleMuteToggle = useCallback(() => {
     const next = !isMutedRef.current;
     isMutedRef.current = next;
+    setReelsMuted(next);
 
     const video = videoRefs.current.get(activeIndexRef.current);
     if (video) {
@@ -459,7 +494,7 @@ export function ReelFeed({
 
     setIsMutedState(next);
     setMuteFlashKey((k) => k + 1);
-  }, []);
+  }, [setReelsMuted]);
 
   // ─── Post silme ───────────────────────────────────────────────────────────
   const handlePostDeleted = useCallback(

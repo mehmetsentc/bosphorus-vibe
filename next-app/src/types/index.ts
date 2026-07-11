@@ -58,6 +58,11 @@ export interface UserPostDoc {
   postVideothumbnail?: string;
   /** Cloud Function transcode queue state for low.mp4 generation */
   videoTranscodeStatus?: "pending" | "processing" | "done" | "failed" | "skipped";
+  /** Indexed flag for video-only queries (set on create). */
+  hasVideo?: boolean;
+  /** Optional stored dimensions for layout estimates. */
+  videoWidth?: number;
+  videoHeight?: number;
   timePosted: Date;
   numComments: number;
   numViews?: number;

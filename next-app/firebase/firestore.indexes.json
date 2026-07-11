@@ -82,6 +82,15 @@
       ]
     },
     {
+      "collectionGroup": "userPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hasVideo", "order": "ASCENDING" },
+        { "fieldPath": "timePosted", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [

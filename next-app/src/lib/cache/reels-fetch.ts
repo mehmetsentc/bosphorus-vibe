@@ -12,6 +12,7 @@ import {
 import { prewarmReelsPosts, hasPostVideo } from "@/lib/utils/video-sources";
 import { useAppStore, type EnrichedPost } from "@/store/appStore";
 import { REELS_PAGE_SIZE } from "@/lib/performance/app-state";
+import { consumeReelsRefreshPending } from "@/lib/utils/invalidate-feed-cache";
 
 type ReelsPageResult = {
   posts: EnrichedPost[];
@@ -72,10 +73,11 @@ function prewarmLeadingReelsPosts(posts: EnrichedPost[]): void {
 export async function fetchReelsFirstPage(
   force = false,
 ): Promise<ReelsFirstPageResult> {
+  const shouldForce = force || consumeReelsRefreshPending();
   const store = useAppStore.getState();
   const { reels, lastFetched } = store;
 
-  if (!force && reels && !isCacheExpired(lastFetched.reels)) {
+  if (!shouldForce && reels && !isCacheExpired(lastFetched.reels)) {
     const stalePartial =
       !reels.hasMore && reels.posts.length > 0 && reels.posts.length < REELS_PAGE_SIZE;
     if (!stalePartial) {
@@ -90,7 +92,7 @@ export async function fetchReelsFirstPage(
     }
   }
 
-  if (!force && inFlight) return inFlight;
+  if (!shouldForce && inFlight) return inFlight;
 
   const promise = (async (): Promise<ReelsFirstPageResult> => {
     const result = await loadInitialReelsPosts();
@@ -106,7 +108,7 @@ export async function fetchReelsFirstPage(
     return result;
   })();
 
-  if (!force) {
+  if (!shouldForce) {
     inFlight = promise;
     void promise.finally(() => {
       if (inFlight === promise) inFlight = null;

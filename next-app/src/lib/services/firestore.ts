@@ -113,6 +113,9 @@ function mapPost(id: string, data: Record<string, unknown>): UserPostDoc {
     postVideoURL_high: sanitizeMediaUrl(data.postVideoURL_high),
     postVideothumbnail: sanitizeMediaUrl(data.postVideothumbnail),
     videoTranscodeStatus: data.videoTranscodeStatus as UserPostDoc["videoTranscodeStatus"],
+    hasVideo: data.hasVideo === true || Boolean(sanitizeMediaUrl(data.postVideo)),
+    videoWidth: typeof data.videoWidth === "number" ? data.videoWidth : undefined,
+    videoHeight: typeof data.videoHeight === "number" ? data.videoHeight : undefined,
     timePosted: toDate(data.timePosted ?? data.createdAt),
     numComments: (data.numComments as number) ?? 0,
     numViews: (data.numViews as number) ?? 0,
@@ -365,9 +368,46 @@ export type VideoPostsPage = {
   hasMore: boolean;
 };
 
-/** Paginated video posts — indexed Firestore query (postVideo != ""). */
+/** Paginated video posts — prefers indexed hasVideo query; falls back for legacy docs. */
 export async function getVideoPostsPage(
   pageSize = 12,
+  cursor?: QueryDocumentSnapshot<DocumentData> | null,
+): Promise<VideoPostsPage> {
+  const indexed = await getVideoPostsPageIndexed(pageSize, cursor);
+  if (indexed.posts.length > 0 || cursor) return indexed;
+  return getVideoPostsPageLegacy(pageSize, cursor);
+}
+
+async function getVideoPostsPageIndexed(
+  pageSize: number,
+  cursor?: QueryDocumentSnapshot<DocumentData> | null,
+): Promise<VideoPostsPage> {
+  const constraints: QueryConstraint[] = [
+    where("hasVideo", "==", true),
+    orderBy("timePosted", "desc"),
+    limit(pageSize),
+  ];
+  if (cursor) {
+    constraints.push(startAfter(cursor));
+  }
+
+  const snap = await getDocs(
+    query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
+  );
+
+  const posts = snap.docs.map((d) => mapPost(d.id, d.data()));
+  const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
+
+  return {
+    posts,
+    lastDoc,
+    hasMore: snap.docs.length === pageSize,
+  };
+}
+
+/** Legacy query for posts created before hasVideo was indexed. */
+async function getVideoPostsPageLegacy(
+  pageSize: number,
   cursor?: QueryDocumentSnapshot<DocumentData> | null,
 ): Promise<VideoPostsPage> {
   const constraints: QueryConstraint[] = [
@@ -833,6 +873,7 @@ export async function createVideoPost(
   const playbackUrl = previewUrl || lowUrl;
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const docRef = await addDoc(collection(getFirebaseDb(), COLLECTIONS.userPosts), {
+    hasVideo: true,
     postVideo: originalUrl,
     postVideoURL: playbackUrl,
     postVideoURL_original: originalUrl,
@@ -909,6 +950,7 @@ export async function createImagePost(
 ): Promise<string> {
   const userRef = doc(getFirebaseDb(), COLLECTIONS.users, userId);
   const docRef = await addDoc(collection(getFirebaseDb(), COLLECTIONS.userPosts), {
+    hasVideo: false,
     postPhoto: originalUrl,
     postPhotoURL: lowUrl,
     postPhotoURL_original: originalUrl,

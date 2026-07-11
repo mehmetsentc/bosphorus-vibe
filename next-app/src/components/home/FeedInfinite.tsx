@@ -38,8 +38,8 @@ import { useInfiniteScrollPosts, type InfiniteScrollItem } from "@/lib/hooks/use
 import {
   FEED_SUGGESTIONS_DEFER_MS,
   FEED_POSTER_PREFETCH_MAX,
-  FEED_VIRTUAL_ROW_ESTIMATE_PX,
 } from "@/lib/performance/app-state";
+import { estimateFeedPostRowPx } from "@/lib/performance/feed-row-estimate";
 import {
   getPostFeedImageCandidates,
   getPostFeedThumbnailCandidates,
@@ -209,13 +209,16 @@ export function FeedInfinite() {
     catalogCycleAtLengthRef.current = 0;
   }, [hasMore]);
 
-  function handleFollowChange(uid: string) {
+  function handleFollowChange(uid: string, isFollowing = true) {
     setFollowing((prev) => {
       const next = new Set(prev);
-      next.add(uid);
+      if (isFollowing) next.add(uid);
+      else next.delete(uid);
       return next;
     });
-    setFriendSuggestions((prev) => prev.filter((u) => u.uid !== uid));
+    if (isFollowing) {
+      setFriendSuggestions((prev) => prev.filter((u) => u.uid !== uid));
+    }
   }
 
   const displayPostsFiltered = displayPosts;
@@ -260,7 +263,8 @@ export function FeedInfinite() {
   const estimateFeedRowSize = useCallback(
     (index: number) => {
       const row = feedRows[index];
-      if (!row || row.kind === "post") return FEED_VIRTUAL_ROW_ESTIMATE_PX;
+      if (!row) return estimateFeedPostRowPx();
+      if (row.kind === "post") return estimateFeedPostRowPx(row.post);
       if (row.kind === "friends") return 320;
       if (row.kind === "videos") return 300;
       return 280;
@@ -294,7 +298,7 @@ export function FeedInfinite() {
               <div className="h-8 w-8 animate-pulse rounded-full bg-surface-overlay" />
               <div className="h-3 w-28 animate-pulse rounded bg-surface-overlay" />
             </div>
-            <div className="aspect-[4/5] w-full animate-pulse bg-surface-overlay" />
+            <div className="aspect-[9/16] w-full animate-pulse bg-surface-overlay" />
           </div>
         ))}
       </section>

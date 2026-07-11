@@ -5,6 +5,7 @@ import { NavLink } from "@/components/layout/NavLink";
 import { useNavigationOptional } from "@/components/layout/NavigationProvider";
 import { NavIcon } from "@/components/layout/NavIcons";
 import { useAccess } from "@/lib/hooks/useAccess";
+import { isImmersiveVideoRoute } from "@/lib/utils/immersive-routes";
 
 function isNavActive(pathname: string, href: string, pendingHref: string | null) {
   const check = pendingHref ?? pathname;
@@ -26,6 +27,8 @@ export function BottomNav() {
 
   const active = (href: string) => isNavActive(pathname, href, pending);
   const profileHref = isGuest ? "/welcome?reason=auth-required" : "/profile";
+
+  if (isImmersiveVideoRoute(pathname)) return null;
 
   const items = [
     { href: "/home" },
