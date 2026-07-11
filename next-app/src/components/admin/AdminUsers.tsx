@@ -1,12 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   fetchAdminUsersClient,
   updateUserRoleClient,
   type AdminUserRow,
 } from "@/lib/admin/client-ops";
+import {
+  getRoleBadgeClass,
+  getRoleDisplayLabel,
+  isAdminRole,
+  isAnimationTeamRole,
+  matchesAdminRoleFilter,
+  roleSelectOptions,
+  type AdminUserRoleFilter,
+} from "@/lib/utils/roles";
+
+const FILTERS: { id: AdminUserRoleFilter; label: string }[] = [
+  { id: "all", label: "Tümü" },
+  { id: "admin", label: "Adminler" },
+  { id: "animation", label: "Animasyon" },
+  { id: "guest", label: "Otel Misafiri" },
+  { id: "member", label: "Üyeler" },
+  { id: "anonymous", label: "Anonim" },
+  { id: "others", label: "Diğer" },
+];
 
 export function AdminUsers() {
   const { user } = useAuth();
@@ -15,7 +34,7 @@ export function AdminUsers() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [roleFilter, setRoleFilter] = useState<AdminUserRoleFilter>("all");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -38,16 +57,20 @@ export function AdminUsers() {
     setTimeout(() => setMsg(""), 3000);
   };
 
-  const changeRole = async (uid: string, role: "user" | "admin") => {
-    if (uid === user?.uid && role === "user") {
+  const changeRole = async (uid: string, role: string) => {
+    const target = users.find((u) => u.uid === uid);
+    if (uid === user?.uid && target?.role === "admin" && role !== "admin") {
       flash("Kendi admin yetkini kaldıramazsın");
       return;
     }
+
     setBusy(uid);
     try {
       await updateUserRoleClient(uid, role);
-      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role } : u)));
-      flash(`Rol güncellendi → ${role === "admin" ? "Admin" : "Üye"} ✓`);
+      setUsers((prev) =>
+        prev.map((u) => (u.uid === uid ? { ...u, role } : u)),
+      );
+      flash(`Rol güncellendi → ${getRoleDisplayLabel(role)} ✓`);
     } catch {
       flash("Güncelleme başarısız");
     } finally {
@@ -61,24 +84,42 @@ export function AdminUsers() {
       u.display_name.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
       u.userName.toLowerCase().includes(q);
-    const matchesRole =
-      roleFilter === "all" ||
-      (roleFilter === "admin" && u.role === "admin") ||
-      (roleFilter === "user" && u.role !== "admin");
+    const matchesRole = matchesAdminRoleFilter(u.role, roleFilter, u.isAnonymous);
     return matchesSearch && matchesRole;
   });
 
-  const adminCount = users.filter((u) => u.role === "admin").length;
+  const stats = useMemo(
+    () => ({
+      total: users.length,
+      admin: users.filter((u) => isAdminRole(u.role)).length,
+      animation: users.filter((u) => isAnimationTeamRole(u.role)).length,
+      guest: users.filter((u) => u.role === "Hotel Guest").length,
+      anonymous: users.filter((u) => u.isAnonymous).length,
+    }),
+    [users],
+  );
 
   return (
     <div className="space-y-5">
-      <div className="admin-muted flex flex-wrap items-center gap-3 text-sm">
+      <div className="admin-muted flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span>
-          <strong className="text-white">{users.length}</strong> üye
+          <strong className="text-white">{stats.total}</strong> kayıt
         </span>
         <span>·</span>
         <span>
-          <strong className="text-gold">{adminCount}</strong> admin
+          <strong className="text-gold">{stats.admin}</strong> admin
+        </span>
+        <span>·</span>
+        <span>
+          <strong className="text-violet-300">{stats.animation}</strong> animasyon
+        </span>
+        <span>·</span>
+        <span>
+          <strong className="text-emerald-300">{stats.guest}</strong> otel misafiri
+        </span>
+        <span>·</span>
+        <span>
+          <strong className="text-sky-300">{stats.anonymous}</strong> anonim
         </span>
         <button
           type="button"
@@ -90,18 +131,18 @@ export function AdminUsers() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(["all", "admin", "user"] as const).map((f) => (
+        {FILTERS.map(({ id, label }) => (
           <button
-            key={f}
+            key={id}
             type="button"
-            onClick={() => setRoleFilter(f)}
+            onClick={() => setRoleFilter(id)}
             className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-              roleFilter === f
+              roleFilter === id
                 ? "bg-gold/20 text-gold"
                 : "admin-subtle bg-white/5 hover:text-white"
             }`}
           >
-            {f === "all" ? "Tümü" : f === "admin" ? "Adminler" : "Üyeler"}
+            {label}
           </button>
         ))}
       </div>
@@ -127,7 +168,7 @@ export function AdminUsers() {
                 <th className="px-4 py-3">Kullanıcı</th>
                 <th className="hidden px-4 py-3 md:table-cell">Email</th>
                 <th className="px-4 py-3">Rol</th>
-                <th className="px-4 py-3 text-right">İşlem</th>
+                <th className="px-4 py-3 text-right">Rol Ata</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -137,10 +178,14 @@ export function AdminUsers() {
                     <div className="flex items-center gap-3">
                       {u.photo_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={u.photo_url} alt="" className="h-9 w-9 rounded-full object-cover" />
+                        <img
+                          src={u.photo_url}
+                          alt=""
+                          className="h-9 w-9 rounded-full object-cover"
+                        />
                       ) : (
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-gold">
-                          {(u.display_name || "?")[0]?.toUpperCase()}
+                          {(u.display_name || u.userName || "?")[0]?.toUpperCase()}
                         </div>
                       )}
                       <div>
@@ -153,38 +198,43 @@ export function AdminUsers() {
                       </div>
                     </div>
                   </td>
-                  <td className="admin-muted hidden px-4 py-3 md:table-cell">{u.email || "—"}</td>
+                  <td className="admin-muted hidden px-4 py-3 md:table-cell">
+                    {u.email || "—"}
+                  </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        u.role === "admin"
-                          ? "bg-gold/20 text-gold"
-                          : "admin-muted bg-white/10"
-                      }`}
-                    >
-                      {u.role === "admin" ? "ADMIN" : "ÜYE"}
-                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${getRoleBadgeClass(
+                          u.role,
+                          { isAnonymous: u.isAnonymous },
+                        )}`}
+                      >
+                        {getRoleDisplayLabel(u.role, { isAnonymous: u.isAnonymous })}
+                      </span>
+                      {u.isAnonymous && u.role !== "user" && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${getRoleBadgeClass(
+                            u.role,
+                          )}`}
+                        >
+                          {getRoleDisplayLabel(u.role)}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {u.role === "admin" ? (
-                      <button
-                        type="button"
-                        disabled={busy === u.uid}
-                        onClick={() => void changeRole(u.uid, "user")}
-                        className="admin-muted rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-50"
-                      >
-                        {busy === u.uid ? "…" : "Yetkiyi Al"}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busy === u.uid}
-                        onClick={() => void changeRole(u.uid, "admin")}
-                        className="rounded-lg bg-gold/15 px-3 py-1.5 text-xs font-semibold text-gold hover:bg-gold/25 disabled:opacity-50"
-                      >
-                        {busy === u.uid ? "…" : "Admin Yap"}
-                      </button>
-                    )}
+                    <select
+                      value={u.role}
+                      disabled={busy === u.uid}
+                      onChange={(e) => void changeRole(u.uid, e.target.value)}
+                      className="rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none hover:bg-white/5 disabled:opacity-50"
+                    >
+                      {roleSelectOptions(u.role).map((role) => (
+                        <option key={role} value={role}>
+                          {getRoleDisplayLabel(role)}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                 </tr>
               ))}

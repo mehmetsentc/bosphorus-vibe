@@ -36,6 +36,7 @@ export type AdminUserRow = {
   email: string;
   photo_url: string;
   role: string;
+  isAnonymous: boolean;
   created_time: string | null;
 };
 
@@ -63,6 +64,7 @@ function mapUserDoc(d: QueryDocumentSnapshot): AdminUserRow {
     email: (data.email as string) ?? "",
     photo_url: (data.photo_url as string) ?? "",
     role: (data.role as string) ?? "user",
+    isAnonymous: data.isAnonymous === true,
     created_time:
       created && typeof created.toDate === "function"
         ? created.toDate().toISOString()
@@ -83,7 +85,7 @@ export async function fetchAdminUsersClient(): Promise<AdminUserRow[]> {
   }
 }
 
-export async function updateUserRoleClient(uid: string, role: "user" | "admin"): Promise<void> {
+export async function updateUserRoleClient(uid: string, role: string): Promise<void> {
   await updateDoc(doc(getFirebaseDb(), COLLECTIONS.users, uid), { role });
 }
 

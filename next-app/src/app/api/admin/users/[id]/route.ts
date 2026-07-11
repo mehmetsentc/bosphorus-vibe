@@ -4,13 +4,14 @@ import { requireAdmin } from "@/lib/api/auth";
 import { apiError, apiOk, GENERIC_ERROR } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/security/audit-log";
 import { rateLimit, rateLimitKey } from "@/lib/security/rate-limit";
+import { ASSIGNABLE_ROLES } from "@/lib/utils/roles";
 import { COLLECTIONS } from "@/types";
 import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 const userRoleSchema = z.object({
-  role: z.enum(["user", "admin"]),
+  role: z.enum([...ASSIGNABLE_ROLES, "Porty Club Animation Team"] as [string, ...string[]]),
 });
 
 /** PATCH /api/admin/users/[id] — update user role */
@@ -33,7 +34,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const limited = rateLimit(rateLimitKey(ip, adminUid));
   if (!limited.ok) return apiError(429, "RATE_LIMIT", "Too many requests.");
 
-  let role: "user" | "admin";
+  let role: string;
   try {
     const json = await request.json();
     role = userRoleSchema.parse(json).role;
