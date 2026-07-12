@@ -23,6 +23,7 @@ function buildTodayTimeline(
   showTimeEvents: EventDoc[],
   weeklyEvents: EventDoc[],
   today: Date,
+  nowMinutes: number,
 ): TimelineEntry[] {
   const isSun = today.getDay() === 0;
   const todayDow = today.getDay(); // 0=Sun … 6=Sat
@@ -65,6 +66,30 @@ function buildTodayTimeline(
     }
   }
 
+  // Gece yarısını geçen etkinlikler — dünden hâlâ devam edenler
+  // Örn: 23:30'da başlayan, 150dk süren etkinlik → sabah 02:00'ya kadar görünür
+  const yesterdayDow = (todayDow + 6) % 7;
+  for (const event of weeklyEvents) {
+    const days = event.eventDays ?? [];
+    const duration = eventDuration(event);
+    const startMin = parseEventTimeMinutes(event.eventTimeLabel);
+    const endMin = startMin + duration; // 24*60 = 1440'ı aşarsa gece yarısı geçiyor
+
+    if (days.includes(yesterdayDow) && endMin > 24 * 60) {
+      // Dünden hâlâ devam eden pencere içindeyse ekle
+      const overflowEnd = endMin - 24 * 60; // ör. 1560 - 1440 = 120 → 02:00
+      if (nowMinutes < overflowEnd) {
+        // timeMinutes'u negatif yaparak listenin en üstüne koy
+        entries.push({
+          event,
+          category: event.isSport ? "sports" : "show",
+          timeMinutes: startMin - 24 * 60, // negatif → sıralamada en üste
+          timeLabel: event.eventTimeLabel,
+        });
+      }
+    }
+  }
+
   entries.sort((a, b) => a.timeMinutes - b.timeMinutes);
   return entries;
 }
@@ -73,8 +98,12 @@ function getNowMinutes(now: Date): number {
   return now.getHours() * 60 + now.getMinutes();
 }
 
-/** Her aktivite maksimum bu kadar dakika sürer; bu süreden sonra "bitti" sayılır */
+/** Varsayılan aktivite süresi (dk) — üstüne yazılabilir */
 const ACTIVITY_DURATION_MINUTES = 30;
+
+function eventDuration(event: EventDoc): number {
+  return event.eventDurationMinutes ?? ACTIVITY_DURATION_MINUTES;
+}
 
 type Props = {
   dailyEvents: EventDoc[];
@@ -88,13 +117,13 @@ export function TodayTimeline({ dailyEvents, showTimeEvents, weeklyEvents, now =
   const nowMinutes = getNowMinutes(now);
 
   const entries = useMemo(
-    () => buildTodayTimeline(dailyEvents, showTimeEvents, weeklyEvents, today),
-    [dailyEvents, showTimeEvents, weeklyEvents, today],
+    () => buildTodayTimeline(dailyEvents, showTimeEvents, weeklyEvents, today, nowMinutes),
+    [dailyEvents, showTimeEvents, weeklyEvents, today, nowMinutes],
   );
 
-  // Biten aktiviteleri gizle (başlangıç + 30dk geçti ise)
+  // Biten aktiviteleri gizle (başlangıç + süre geçti ise)
   const visibleEntries = useMemo(
-    () => entries.filter((e) => e.timeMinutes + ACTIVITY_DURATION_MINUTES > nowMinutes),
+    () => entries.filter((e) => e.timeMinutes + eventDuration(e.event) > nowMinutes),
     [entries, nowMinutes],
   );
 
@@ -264,9 +293,12 @@ function TimelineRow({
               </div>
             )}
 
-            {entry.event.eventDescription && (
-              <p className="mt-1 line-clamp-1 text-xs text-muted-subtle">
-                {entry.event.eventDescription}
+            {entry.event.durationLabel && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-subtle">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+                  <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm.01 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
+                </svg>
+                {entry.event.durationLabel}
               </p>
             )}
           </div>

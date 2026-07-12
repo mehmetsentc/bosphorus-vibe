@@ -100,6 +100,10 @@ export interface EventDoc {
   eventDays?: number[];
   /** Weekly sport events (true) vs weekly show/entertainment events (false/undefined) */
   isSport?: boolean;
+  /** Duration in minutes; defaults to 30. Use for events that span midnight (e.g. 150 = 2.5h). */
+  eventDurationMinutes?: number;
+  /** Human-readable duration label shown on timeline cards (e.g. "45 dakika boyunca devam ediyor") */
+  durationLabel?: string;
 }
 
 export interface TeamMemberDoc {

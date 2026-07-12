@@ -77,6 +77,12 @@ function mapEvent(id: string, data: Record<string, unknown>): EventDoc {
     view: (data.view as number) ?? 0,
     ...(eventDays ? { eventDays } : {}),
     ...(data.isSport === true ? { isSport: true } : {}),
+    ...(typeof data.eventDurationMinutes === "number"
+      ? { eventDurationMinutes: data.eventDurationMinutes }
+      : {}),
+    ...(typeof data.durationLabel === "string" && data.durationLabel
+      ? { durationLabel: data.durationLabel }
+      : {}),
   };
 }
 
