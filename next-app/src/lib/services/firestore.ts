@@ -76,6 +76,7 @@ function mapEvent(id: string, data: Record<string, unknown>): EventDoc {
     isHighlight: false,
     view: (data.view as number) ?? 0,
     ...(eventDays ? { eventDays } : {}),
+    ...(data.isSport === true ? { isSport: true } : {}),
   };
 }
 

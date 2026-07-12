@@ -58,7 +58,7 @@ function buildTodayTimeline(
     if (days.includes(todayDow)) {
       entries.push({
         event,
-        category: "show",
+        category: event.isSport ? "sports" : "show",
         timeMinutes: parseEventTimeMinutes(event.eventTimeLabel),
         timeLabel: event.eventTimeLabel,
       });

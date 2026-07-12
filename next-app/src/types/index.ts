@@ -98,6 +98,8 @@ export interface EventDoc {
   view: number;
   /** Weekly events: JS day numbers (0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat) */
   eventDays?: number[];
+  /** Weekly sport events (true) vs weekly show/entertainment events (false/undefined) */
+  isSport?: boolean;
 }
 
 export interface TeamMemberDoc {
