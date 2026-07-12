@@ -6,25 +6,22 @@ import { IgFeedHeader } from "@/components/home/IgFeedHeader";
 import { FeedPageLayout } from "@/components/feed/FeedPageLayout";
 import { PageShell } from "@/components/layout/PageShell";
 
-const FeedInfinite = dynamic(
+const ExploreGrid = dynamic(
   () =>
-    import("@/components/home/FeedInfinite").then((m) => ({
-      default: m.FeedInfinite,
+    import("@/components/home/ExploreGrid").then((m) => ({
+      default: m.ExploreGrid,
     })),
   {
     ssr: false,
     loading: () => (
-      <section>
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="border-b border-border">
-            <div className="flex items-center gap-3 px-3 py-2.5">
-              <div className="h-8 w-8 animate-pulse rounded-full bg-surface-overlay" />
-              <div className="h-3 w-28 animate-pulse rounded bg-surface-overlay" />
-            </div>
-            <div className="aspect-[9/16] w-full animate-pulse bg-surface-overlay" />
-          </div>
+      <div className="grid grid-cols-3 gap-[1.5px]">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div
+            key={i}
+            className="aspect-square w-full animate-pulse bg-surface-overlay"
+          />
         ))}
-      </section>
+      </div>
     ),
   },
 );
@@ -35,7 +32,7 @@ export default function HomePage() {
       <FeedPageLayout>
         <IgFeedHeader />
         <StoriesStrip />
-        <FeedInfinite />
+        <ExploreGrid />
       </FeedPageLayout>
     </PageShell>
   );
