@@ -1,9 +1,25 @@
 import { TEAM_ROLES } from "@/types";
 
+/** Canonical English role stored in Firestore. */
+export const CANONICAL_ANIMATION_TEAM = "Animation Team";
+
+/**
+ * All known spellings that mean Animation Team (EN + TR + legacy brand).
+ * Queries and filters must accept every alias; writes normalize to canonical.
+ */
+export const ANIMATION_TEAM_ALIASES = [
+  CANONICAL_ANIMATION_TEAM,
+  "Porty Club Animation Team",
+  "Bosphorus Vibe Animation Team",
+  "Animasyon Takımı",
+  "Animasyon Ekibi",
+  "Animasyon Takimi",
+] as const;
+
 /** Profile roles users can self-select or admins can assign. */
 export const PROFILE_ROLES = [
   "user",
-  "Animation Team",
+  CANONICAL_ANIMATION_TEAM,
   "Hotel Guest",
   "Others",
   "Porty Club Animation Team",
@@ -11,11 +27,11 @@ export const PROFILE_ROLES = [
 
 export type ProfileRole = (typeof PROFILE_ROLES)[number];
 
-/** Roles an admin can assign from the panel. */
+/** Roles an admin can assign from the panel (canonical values only). */
 export const ASSIGNABLE_ROLES = [
   "user",
   "admin",
-  "Animation Team",
+  CANONICAL_ANIMATION_TEAM,
   "Hotel Guest",
   "Others",
 ] as const;
@@ -34,24 +50,46 @@ export type AdminUserRoleFilter =
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   user: "Üye",
-  "Animation Team": "Animasyon Takımı",
+  [CANONICAL_ANIMATION_TEAM]: "Animasyon Takımı",
   "Porty Club Animation Team": "Animasyon Takımı",
+  "Bosphorus Vibe Animation Team": "Animasyon Takımı",
+  "Animasyon Takımı": "Animasyon Takımı",
+  "Animasyon Ekibi": "Animasyon Takımı",
+  "Animasyon Takimi": "Animasyon Takımı",
   "Hotel Guest": "Otel Misafiri",
   Others: "Diğer",
 };
 
+const ALIAS_LOOKUP = new Map(
+  ANIMATION_TEAM_ALIASES.map((a) => [a.toLowerCase(), a] as const),
+);
+
 export function isAnimationTeamRole(role?: string | null): boolean {
   if (!role) return false;
-  return (TEAM_ROLES as readonly string[]).includes(role);
+  if ((TEAM_ROLES as readonly string[]).includes(role)) return true;
+  return ALIAS_LOOKUP.has(role.trim().toLowerCase());
+}
+
+/** Map any known alias to the canonical Firestore role value. */
+export function normalizeRole(role?: string | null): string {
+  if (!role) return "user";
+  const trimmed = role.trim();
+  if (isAnimationTeamRole(trimmed)) return CANONICAL_ANIMATION_TEAM;
+  if (trimmed === "Hotel Guest" || trimmed === "Otel Misafiri") return "Hotel Guest";
+  if (trimmed === "Others" || trimmed === "Diğer" || trimmed === "Diger") return "Others";
+  if (trimmed === "admin" || trimmed === "Admin") return "admin";
+  if (trimmed === "user" || trimmed === "Üye" || trimmed === "Uye") return "user";
+  return trimmed;
 }
 
 export function isAdminRole(role?: string | null): boolean {
-  return role === "admin";
+  return normalizeRole(role) === "admin";
 }
 
 export function isProfileRole(role?: string | null): role is ProfileRole {
   if (!role) return false;
-  return (PROFILE_ROLES as readonly string[]).includes(role);
+  const n = normalizeRole(role);
+  return (PROFILE_ROLES as readonly string[]).includes(n);
 }
 
 export function getRoleDisplayLabel(
@@ -60,7 +98,8 @@ export function getRoleDisplayLabel(
 ): string {
   if (opts?.isAnonymous) return "Anonim Misafir";
   if (!role || role === "user") return ROLE_LABELS.user;
-  return ROLE_LABELS[role] ?? role;
+  if (isAnimationTeamRole(role)) return ROLE_LABELS[CANONICAL_ANIMATION_TEAM];
+  return ROLE_LABELS[role] ?? ROLE_LABELS[normalizeRole(role)] ?? role;
 }
 
 export function getRoleBadgeClass(
@@ -68,10 +107,10 @@ export function getRoleBadgeClass(
   opts?: { isAnonymous?: boolean },
 ): string {
   if (opts?.isAnonymous) return "bg-sky-500/15 text-sky-300";
-  if (role === "admin") return "bg-gold/20 text-gold";
+  if (isAdminRole(role)) return "bg-gold/20 text-gold";
   if (isAnimationTeamRole(role)) return "bg-violet-500/15 text-violet-300";
-  if (role === "Hotel Guest") return "bg-emerald-500/15 text-emerald-300";
-  if (role === "Others") return "bg-white/10 text-white/70";
+  if (normalizeRole(role) === "Hotel Guest") return "bg-emerald-500/15 text-emerald-300";
+  if (normalizeRole(role) === "Others") return "bg-white/10 text-white/70";
   return "admin-muted bg-white/10";
 }
 
@@ -80,22 +119,38 @@ export function matchesAdminRoleFilter(
   filter: AdminUserRoleFilter,
   isAnonymous = false,
 ): boolean {
+  const n = normalizeRole(role);
   if (filter === "all") return true;
   if (filter === "anonymous") return isAnonymous;
-  if (filter === "admin") return role === "admin";
+  if (filter === "admin") return n === "admin";
   if (filter === "animation") return isAnimationTeamRole(role);
-  if (filter === "guest") return role === "Hotel Guest";
-  if (filter === "others") return role === "Others";
+  if (filter === "guest") return n === "Hotel Guest";
+  if (filter === "others") return n === "Others";
   if (filter === "member") {
-    return !isAnonymous && role !== "admin" && !isAnimationTeamRole(role) && role !== "Hotel Guest" && role !== "Others";
+    return (
+      !isAnonymous &&
+      n !== "admin" &&
+      !isAnimationTeamRole(role) &&
+      n !== "Hotel Guest" &&
+      n !== "Others"
+    );
   }
   return true;
 }
 
 export function roleSelectOptions(currentRole?: string | null): string[] {
   const options: string[] = [...ASSIGNABLE_ROLES];
-  if (currentRole && !options.includes(currentRole)) {
-    options.push(currentRole);
+  if (!currentRole) return options;
+  const n = normalizeRole(currentRole);
+  if (!options.includes(n) && !isAnimationTeamRole(currentRole)) {
+    options.push(n);
   }
   return options;
+}
+
+/** Select value for admin dropdown — always canonical English. */
+export function roleSelectValue(currentRole?: string | null): string {
+  if (!currentRole) return "user";
+  if (isAnimationTeamRole(currentRole)) return CANONICAL_ANIMATION_TEAM;
+  return normalizeRole(currentRole);
 }

@@ -11,7 +11,7 @@ import {
   type ProfilePhotoModalHandle,
 } from "@/components/profile/ProfilePhotoModal";
 import { useT } from "@/components/providers/I18nProvider";
-import { isAnimationTeamRole } from "@/lib/utils/roles";
+import { isAnimationTeamRole, normalizeRole } from "@/lib/utils/roles";
 
 function Field({
   id,
@@ -48,7 +48,9 @@ export function EditProfileForm() {
     () => profile?.userName || profile?.display_name || "",
   );
   const [bio, setBio] = useState(() => profile?.bio || "");
-  const [role, setRole] = useState(() => profile?.role || "Hotel Guest");
+  const [role, setRole] = useState(() =>
+    normalizeRole(profile?.role || "Hotel Guest"),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -57,7 +59,7 @@ export function EditProfileForm() {
     setDisplayName(profile?.display_name || user?.displayName || "");
     setUserName(profile?.userName || profile?.display_name || "");
     setBio(profile?.bio || "");
-    setRole(profile?.role || "Hotel Guest");
+    setRole(normalizeRole(profile?.role || "Hotel Guest"));
   }, [profile, user]);
 
   const photoUrl = profile?.photo_url || user?.photoURL || "";

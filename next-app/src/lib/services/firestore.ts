@@ -39,13 +39,17 @@ import { sortEventsForSuggestions, parseEventTimeMinutes } from "@/lib/utils/eve
 import { buildPostTagFields, parseTaggedPeople } from "@/lib/utils/post-tags";
 import {
   COLLECTIONS,
-  TEAM_ROLES,
   type EventDoc,
   type PostTag,
   type UserPostDoc,
   type TeamMemberDoc,
   type PostCommentDoc,
 } from "@/types";
+import {
+  ANIMATION_TEAM_ALIASES,
+  CANONICAL_ANIMATION_TEAM,
+  isAnimationTeamRole,
+} from "@/lib/utils/roles";
 
 function mapEvent(id: string, data: Record<string, unknown>): EventDoc {
   const eventDate = toDate(data.Event_Date);
@@ -695,10 +699,13 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
       (data.bio as string) ?? "",
       (data.title as string) ?? "",
     );
+    const resolved = legacyBioRole || storedRole;
     results.push({
       id: d.id,
       name: (data.display_name as string) || (data.userName as string) || "",
-      role: legacyBioRole || storedRole,
+      role: isAnimationTeamRole(resolved)
+        ? CANONICAL_ANIMATION_TEAM
+        : resolved,
       photo: (data.photo_url as string) ?? "",
       bio: (data.bio as string) ?? "",
       title: (data.title as string) ?? "",
@@ -706,35 +713,23 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
     });
   }
 
-  for (const teamRole of TEAM_ROLES) {
-    const snap = await getDocs(
-      query(
-        collection(getFirebaseDb(), COLLECTIONS.users),
-        where("role", "==", teamRole),
-      ),
-    );
-    for (const d of snap.docs) pushMember(d);
-  }
+  const db = getFirebaseDb();
+  const usersCol = collection(db, COLLECTIONS.users);
+  const aliasList = [...ANIMATION_TEAM_ALIASES];
+
+  // Single `in` query covers EN + TR + legacy spellings (max 30 values).
+  const roleSnap = await getDocs(
+    query(usersCol, where("role", "in", aliasList)),
+  );
+  for (const d of roleSnap.docs) pushMember(d);
 
   // Legacy: role was sometimes stored in bio/title before dedicated role field worked.
-  for (const teamRole of TEAM_ROLES) {
-    const [bioSnap, titleSnap] = await Promise.all([
-      getDocs(
-        query(
-          collection(getFirebaseDb(), COLLECTIONS.users),
-          where("bio", "==", teamRole),
-        ),
-      ),
-      getDocs(
-        query(
-          collection(getFirebaseDb(), COLLECTIONS.users),
-          where("title", "==", teamRole),
-        ),
-      ),
-    ]);
-    for (const d of bioSnap.docs) pushMember(d);
-    for (const d of titleSnap.docs) pushMember(d);
-  }
+  const [bioSnap, titleSnap] = await Promise.all([
+    getDocs(query(usersCol, where("bio", "in", aliasList))),
+    getDocs(query(usersCol, where("title", "in", aliasList))),
+  ]);
+  for (const d of bioSnap.docs) pushMember(d);
+  for (const d of titleSnap.docs) pushMember(d);
 
   return results;
 }
@@ -745,9 +740,9 @@ function inferLegacyProfileRole(
   bio: string,
   title: string,
 ): string {
-  if (TEAM_ROLES.includes(role as (typeof TEAM_ROLES)[number])) return role;
-  if (TEAM_ROLES.includes(bio as (typeof TEAM_ROLES)[number])) return bio;
-  if (TEAM_ROLES.includes(title as (typeof TEAM_ROLES)[number])) return title;
+  if (isAnimationTeamRole(role)) return CANONICAL_ANIMATION_TEAM;
+  if (isAnimationTeamRole(bio)) return CANONICAL_ANIMATION_TEAM;
+  if (isAnimationTeamRole(title)) return CANONICAL_ANIMATION_TEAM;
   return role;
 }
 

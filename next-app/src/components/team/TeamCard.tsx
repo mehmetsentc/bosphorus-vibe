@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import type { TeamMemberDoc } from "@/types";
 import { formatBrandText } from "@/lib/brand";
+import { isAnimationTeamRole } from "@/lib/utils/roles";
 import { useT } from "@/components/providers/I18nProvider";
 
 export function TeamCard({
@@ -14,6 +15,11 @@ export function TeamCard({
   index: number;
 }) {
   const t = useT();
+  const roleLabel = member.title
+    ? formatBrandText(member.title)
+    : isAnimationTeamRole(member.role)
+      ? t("roleAnimationTeam")
+      : formatBrandText(member.role);
 
   return (
     <Link href={`/user/${member.id}`}>
@@ -47,9 +53,7 @@ export function TeamCard({
         <h3 className="font-display text-base font-semibold text-white">
           {member.name}
         </h3>
-        <p className="text-sm font-medium text-gold">
-          {formatBrandText(member.title || member.role)}
-        </p>
+        <p className="text-sm font-medium text-gold">{roleLabel}</p>
         {member.bio && (
           <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-white/65">
             {member.bio}

@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/api/auth";
 import { apiError, apiOk, GENERIC_ERROR } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/security/audit-log";
 import { rateLimit, rateLimitKey } from "@/lib/security/rate-limit";
-import { ASSIGNABLE_ROLES } from "@/lib/utils/roles";
+import { ASSIGNABLE_ROLES, normalizeRole } from "@/lib/utils/roles";
 import { COLLECTIONS } from "@/types";
 import { z } from "zod";
 
@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   let role: string;
   try {
     const json = await request.json();
-    role = userRoleSchema.parse(json).role;
+    role = normalizeRole(userRoleSchema.parse(json).role);
   } catch {
     return apiError(400, "INVALID_BODY", "Invalid role.");
   }

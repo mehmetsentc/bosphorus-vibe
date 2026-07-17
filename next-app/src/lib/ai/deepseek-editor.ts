@@ -3,12 +3,12 @@
  * DeepSeek V3 ile magazin / sosyal medya editörü
  */
 
+import { isAnimationTeamRole } from "@/lib/utils/roles";
+
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEEPSEEK_MODEL = "deepseek-chat"; // DeepSeek V3
 const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-
-const ANIMATION_ROLES = ["Animation Team", "Porty Club Animation Team"];
 
 /** Returns true if string looks like raw GPS coordinates, e.g. "36.74940, 31.46794" */
 function isGpsCoordinates(loc: string): boolean {
@@ -155,7 +155,7 @@ The pool burst to life this morning with the aqua aerobics session — splashing
 // ─── User Prompt ─────────────────────────────────────────────────────────────
 
 function buildUserPrompt(input: AiCaptionInput, visualDescription?: string): string {
-  const isAnimationTeam = ANIMATION_ROLES.includes(input.userRole);
+  const isAnimationTeam = isAnimationTeamRole(input.userRole);
   const posterType = isAnimationTeam ? "Animasyon ekibi üyesi" : "Otel misafiri";
 
   // Activity name — use activityName field first, fall back to userCaption

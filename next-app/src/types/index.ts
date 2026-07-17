@@ -212,7 +212,7 @@ export const COLLECTIONS = {
   chatMessages: "chat_messages",
 } as const;
 
-/** Firebase'deki gerçek role değerleri */
+/** Canonical + legacy English role values used in Firestore team queries. */
 export const TEAM_ROLES = [
   "Animation Team",
   "Porty Club Animation Team",

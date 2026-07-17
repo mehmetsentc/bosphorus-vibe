@@ -9,12 +9,15 @@ import {
   type AdminUserRow,
 } from "@/lib/admin/client-ops";
 import {
+  CANONICAL_ANIMATION_TEAM,
   getRoleBadgeClass,
   getRoleDisplayLabel,
   isAdminRole,
   isAnimationTeamRole,
   matchesAdminRoleFilter,
+  normalizeRole,
   roleSelectOptions,
+  roleSelectValue,
   type AdminUserRoleFilter,
 } from "@/lib/utils/roles";
 
@@ -48,6 +51,23 @@ export function AdminUsers() {
       ]);
       setUsers(rows);
       setTotalCount(stats.users);
+
+      // Heal TR/legacy aliases → canonical "Animation Team" so /team queries find everyone.
+      const toHeal = rows.filter(
+        (u) => isAnimationTeamRole(u.role) && u.role !== CANONICAL_ANIMATION_TEAM,
+      );
+      if (toHeal.length > 0) {
+        await Promise.all(
+          toHeal.map((u) => updateUserRoleClient(u.uid, CANONICAL_ANIMATION_TEAM)),
+        );
+        setUsers((prev) =>
+          prev.map((u) =>
+            isAnimationTeamRole(u.role)
+              ? { ...u, role: CANONICAL_ANIMATION_TEAM }
+              : u,
+          ),
+        );
+      }
     } catch {
       setUsers([]);
       setTotalCount(null);
@@ -74,11 +94,12 @@ export function AdminUsers() {
 
     setBusy(uid);
     try {
-      await updateUserRoleClient(uid, role);
+      const canonical = normalizeRole(role);
+      await updateUserRoleClient(uid, canonical);
       setUsers((prev) =>
-        prev.map((u) => (u.uid === uid ? { ...u, role } : u)),
+        prev.map((u) => (u.uid === uid ? { ...u, role: canonical } : u)),
       );
-      flash(`Rol güncellendi → ${getRoleDisplayLabel(role)} ✓`);
+      flash(`Rol güncellendi → ${getRoleDisplayLabel(canonical)} ✓`);
     } catch {
       flash("Güncelleme başarısız");
     } finally {
@@ -232,7 +253,7 @@ export function AdminUsers() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <select
-                      value={u.role}
+                      value={roleSelectValue(u.role)}
                       disabled={busy === u.uid}
                       onChange={(e) => void changeRole(u.uid, e.target.value)}
                       className="rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none hover:bg-white/5 disabled:opacity-50"

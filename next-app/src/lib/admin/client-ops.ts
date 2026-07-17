@@ -27,7 +27,7 @@ import { clientApiUrl } from "@/lib/client-api-url";
 import { getFirebaseEnv } from "@/lib/firebase/config";
 import { httpsCallable } from "firebase/functions";
 import { COLLECTIONS } from "@/types";
-import { isAnimationTeamRole } from "@/lib/utils/roles";
+import { normalizeRole } from "@/lib/utils/roles";
 import { useAppStore } from "@/store/appStore";
 
 const PAGE_SIZE = 100;
@@ -112,10 +112,10 @@ export async function fetchAdminUsersClient(): Promise<AdminUserRow[]> {
 }
 
 export async function updateUserRoleClient(uid: string, role: string): Promise<void> {
-  await updateDoc(doc(getFirebaseDb(), COLLECTIONS.users, uid), { role });
-  if (isAnimationTeamRole(role) || role === "Hotel Guest" || role === "Others" || role === "user") {
-    useAppStore.getState().clearTeamCache();
-  }
+  const canonical = normalizeRole(role);
+  await updateDoc(doc(getFirebaseDb(), COLLECTIONS.users, uid), { role: canonical });
+  // Any role change can affect the public team page roster.
+  useAppStore.getState().clearTeamCache();
 }
 
 export async function fetchAdminEventsClient(): Promise<AdminEventRow[]> {
