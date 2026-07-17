@@ -15,9 +15,15 @@ const TimelineFeed = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="space-y-8 py-4">
+      <div>
         {[0, 1].map((i) => (
-          <div key={i} className="h-48 animate-pulse rounded-2xl bg-surface-overlay" />
+          <div key={i} className="border-b border-border/70 pb-3">
+            <div className="flex items-center gap-3 px-3 py-3">
+              <div className="h-9 w-9 animate-pulse rounded-full bg-surface-overlay" />
+              <div className="h-3 w-28 animate-pulse rounded bg-surface-overlay" />
+            </div>
+            <div className="aspect-[4/5] animate-pulse bg-surface-overlay" />
+          </div>
         ))}
       </div>
     ),

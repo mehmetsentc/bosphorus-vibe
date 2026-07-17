@@ -64,7 +64,7 @@ export function MessagesDock() {
   if (hidden || !user) return null;
 
   return (
-    <div className="fixed bottom-20 right-4 z-40 md:bottom-6 md:right-8">
+    <div className="fixed bottom-24 right-3 z-40 md:bottom-6 md:right-8">
       {open && (
         <div className="mb-3 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -99,12 +99,13 @@ export function MessagesDock() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2.5 rounded-full border border-border bg-surface-card px-4 py-2.5 shadow-lg transition hover:bg-surface-overlay"
+        aria-label={t("navMessages")}
+        className="relative flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface-card shadow-lg transition hover:bg-surface-overlay md:h-auto md:w-auto md:gap-2.5 md:px-4 md:py-2.5"
       >
         <IconMessage size={22} />
-        <span className="text-sm font-semibold">{t("navMessages")}</span>
+        <span className="hidden text-sm font-semibold md:inline">{t("navMessages")}</span>
         {recentAvatars.length > 0 && (
-          <span className="flex -space-x-2">
+          <span className="hidden -space-x-2 md:flex">
             {recentAvatars.map((photo, i) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -117,7 +118,7 @@ export function MessagesDock() {
           </span>
         )}
         {unreadCount > 0 && (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-bold text-black">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-bold text-black md:static md:ml-0">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}

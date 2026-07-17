@@ -68,3 +68,27 @@ export function formatTimelineClock(date: Date, locale: string): string {
     minute: "2-digit",
   }).format(date);
 }
+
+/** Compact relative time for feed headers (e.g. now, 5m, 3h, Yesterday). */
+export function formatFeedRelativeTime(
+  date: Date,
+  locale: string,
+  t: (key: MessageKey, vars?: Record<string, string>) => string,
+): string {
+  const now = Date.now();
+  const diffSec = Math.max(0, Math.floor((now - date.getTime()) / 1000));
+
+  if (diffSec < 60) return t("timelineJustNow");
+  if (diffSec < 3600) {
+    return t("timelineMinutesAgo", { n: String(Math.floor(diffSec / 60)) });
+  }
+  if (diffSec < 86400) {
+    return t("timelineHoursAgo", { n: String(Math.floor(diffSec / 3600)) });
+  }
+  if (diffSec < 172800) return t("timelineYesterday");
+
+  return new Intl.DateTimeFormat(locale === "tr" ? "tr-TR" : "en-GB", {
+    day: "numeric",
+    month: "short",
+  }).format(date);
+}

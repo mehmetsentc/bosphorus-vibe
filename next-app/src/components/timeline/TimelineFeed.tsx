@@ -9,22 +9,20 @@ import { useI18n, useT } from "@/components/providers/I18nProvider";
 
 function TimelineSkeleton() {
   return (
-    <div className="space-y-8">
+    <div>
       {[0, 1, 2].map((i) => (
-        <div key={i} className="grid grid-cols-[2.75rem_1fr] gap-x-3 sm:grid-cols-[3.25rem_1fr]">
-          <div className="flex flex-col items-center gap-2 pt-1">
-            <div className="h-3 w-3 animate-pulse rounded-full bg-surface-overlay" />
-            <div className="h-16 w-px animate-pulse bg-surface-overlay" />
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface-card">
-            <div className="flex gap-3 px-4 py-3">
-              <div className="h-11 w-11 animate-pulse rounded-full bg-surface-overlay" />
-              <div className="flex-1 space-y-2 py-1">
-                <div className="h-3 w-32 animate-pulse rounded bg-surface-overlay" />
-                <div className="h-2.5 w-20 animate-pulse rounded bg-surface-overlay" />
-              </div>
+        <div key={i} className="border-b border-border/70 pb-3">
+          <div className="flex items-center gap-3 px-3 py-3">
+            <div className="h-9 w-9 animate-pulse rounded-full bg-surface-overlay" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-28 animate-pulse rounded bg-surface-overlay" />
+              <div className="h-2.5 w-16 animate-pulse rounded bg-surface-overlay" />
             </div>
-            <div className="aspect-[4/5] animate-pulse bg-surface-overlay" />
+          </div>
+          <div className="aspect-[4/5] animate-pulse bg-surface-overlay" />
+          <div className="space-y-2 px-3 pt-3">
+            <div className="h-4 w-32 animate-pulse rounded bg-surface-overlay" />
+            <div className="h-3 w-3/4 animate-pulse rounded bg-surface-overlay" />
           </div>
         </div>
       ))}
@@ -85,7 +83,7 @@ export function TimelineFeed() {
 
   if (!posts.length && !hasMore) {
     return (
-      <section className="rounded-2xl border border-dashed border-border px-6 py-16 text-center">
+      <section className="px-6 py-16 text-center">
         <p className="font-display text-lg font-semibold">{t("timelineEmptyTitle")}</p>
         <p className="mt-2 text-sm text-muted">{t("noPostsInFeed")}</p>
       </section>
@@ -94,23 +92,17 @@ export function TimelineFeed() {
 
   return (
     <PullToRefresh onRefresh={handleRefresh} refreshing={refreshing}>
-      <section className="relative">
+      <section className="pb-8">
         {groups.map((group) => (
-          <div key={group.key} className="mb-2">
-            <div className="relative z-10 mb-6 flex items-center gap-3 pl-[2.75rem] sm:pl-[3.25rem]">
-              <span className="h-px flex-1 bg-border/80" />
-              <span className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <div key={group.key}>
+            <div className="sticky top-[57px] z-20 flex justify-center bg-background/85 py-2 backdrop-blur-md">
+              <span className="rounded-full bg-surface-overlay/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
                 {group.label}
               </span>
-              <span className="h-px flex-1 bg-border/80" />
             </div>
 
-            {group.posts.map((post, index) => (
-              <TimelinePostCard
-                key={post.id}
-                post={post}
-                isLastInGroup={index === group.posts.length - 1}
-              />
+            {group.posts.map((post) => (
+              <TimelinePostCard key={post.id} post={post} />
             ))}
           </div>
         ))}
@@ -118,13 +110,13 @@ export function TimelineFeed() {
         <div ref={sentinelRef} className="h-1" aria-hidden />
 
         {loadingMore && (
-          <div className="flex justify-center py-10">
-            <div className="h-7 w-7 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+          <div className="flex justify-center py-8">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
           </div>
         )}
 
         {!hasMore && posts.length > 0 && (
-          <p className="pb-6 text-center text-sm text-muted">{t("timelineEnd")}</p>
+          <p className="pb-4 pt-2 text-center text-sm text-muted">{t("timelineEnd")}</p>
         )}
       </section>
     </PullToRefresh>
