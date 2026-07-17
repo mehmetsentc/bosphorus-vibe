@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isCacheExpired } from "@/lib/cache/constants";
 import { useStoreHydration } from "@/lib/hooks/useStoreHydration";
 import { getTeamMembers } from "@/lib/services/firestore";
 import { useAppStore } from "@/store/appStore";
@@ -10,49 +9,48 @@ import type { TeamMemberDoc } from "@/types";
 export function useTeamMembers() {
   const hydrated = useStoreHydration();
   const team = useAppStore((s) => s.team);
-  const lastFetched = useAppStore((s) => s.lastFetched.team);
   const setTeamCache = useAppStore((s) => s.setTeamCache);
   const clearTeamCache = useAppStore((s) => s.clearTeamCache);
 
   const fetchRef = useRef(0);
   const [fetching, setFetching] = useState(false);
+  const [error, setError] = useState(false);
 
-  const hasValidCache =
-    hydrated && team !== null && !isCacheExpired(lastFetched);
+  const fetchTeam = useCallback(async () => {
+    const requestId = ++fetchRef.current;
+    setFetching(true);
+    setError(false);
 
-  const fetchTeam = useCallback(
-    async (force = false) => {
-      if (!force && team && !isCacheExpired(lastFetched)) return;
+    try {
+      const members = await getTeamMembers();
+      if (requestId !== fetchRef.current) return;
+      setTeamCache(members);
+    } catch {
+      if (requestId !== fetchRef.current) return;
+      setError(true);
+    } finally {
+      if (requestId === fetchRef.current) setFetching(false);
+    }
+  }, [setTeamCache]);
 
-      const requestId = ++fetchRef.current;
-      const isInitial = !team;
-      if (isInitial) setFetching(true);
-
-      try {
-        const members = await getTeamMembers();
-        if (requestId !== fetchRef.current) return;
-        setTeamCache(members);
-      } finally {
-        if (requestId === fetchRef.current) setFetching(false);
-      }
-    },
-    [team, lastFetched, setTeamCache],
-  );
-
+  // Always refetch on mount so admin role changes show up immediately
+  // (do not trust the 30-minute persisted team cache).
   useEffect(() => {
     if (!hydrated) return;
-    void fetchTeam(false);
-  }, [hydrated, fetchTeam]);
+    clearTeamCache();
+    void fetchTeam();
+  }, [hydrated, clearTeamCache, fetchTeam]);
 
   const refresh = useCallback(async () => {
     clearTeamCache();
-    await fetchTeam(true);
+    await fetchTeam();
   }, [clearTeamCache, fetchTeam]);
 
   return {
     team: team ?? ([] as TeamMemberDoc[]),
-    loading: hydrated && !hasValidCache && fetching,
-    hasCache: hasValidCache,
+    loading: hydrated && (fetching || team === null) && !error,
+    error,
+    hasCache: team !== null,
     refresh,
   };
 }

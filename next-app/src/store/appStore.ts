@@ -232,8 +232,11 @@ export const useAppStore = create<AppStoreState>()(
               })),
             }
           : null,
-        team: state.team,
-        lastFetched: state.lastFetched,
+        // Intentionally omit `team` — roster must stay fresh after admin role edits.
+        lastFetched: {
+          ...state.lastFetched,
+          team: 0,
+        },
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;

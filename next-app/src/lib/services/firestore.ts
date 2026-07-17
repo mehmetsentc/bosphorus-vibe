@@ -46,9 +46,9 @@ import {
   type PostCommentDoc,
 } from "@/types";
 import {
-  ANIMATION_TEAM_ALIASES,
   CANONICAL_ANIMATION_TEAM,
   isAnimationTeamRole,
+  isExactAnimationTeamAlias,
 } from "@/lib/utils/roles";
 
 function mapEvent(id: string, data: Record<string, unknown>): EventDoc {
@@ -684,28 +684,30 @@ export async function addPostComment(
 export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
   const results: TeamMemberDoc[] = [];
   const seen = new Set<string>();
+  const db = getFirebaseDb();
+  const usersCol = collection(db, COLLECTIONS.users);
+  const PAGE = 100;
 
   function pushMember(d: QueryDocumentSnapshot<DocumentData>) {
     if (seen.has(d.id)) return;
     const data = d.data();
-    if (data.isAnonymous === true) return;
+    const storedRole = String(data.role ?? "").trim();
+    const bio = String(data.bio ?? "").trim();
+    const title = String(data.title ?? "").trim();
+    const isTeam =
+      isAnimationTeamRole(storedRole) ||
+      isExactAnimationTeamAlias(bio) ||
+      isExactAnimationTeamAlias(title);
+    if (!isTeam) return;
+    // Keep animation staff even if the anonymous flag was left on by mistake.
     seen.add(d.id);
     const lastActive = data.last_active_time
       ? toDate(data.last_active_time)
       : undefined;
-    const storedRole = (data.role as string) || "";
-    const legacyBioRole = inferLegacyProfileRole(
-      storedRole,
-      (data.bio as string) ?? "",
-      (data.title as string) ?? "",
-    );
-    const resolved = legacyBioRole || storedRole;
     results.push({
       id: d.id,
       name: (data.display_name as string) || (data.userName as string) || "",
-      role: isAnimationTeamRole(resolved)
-        ? CANONICAL_ANIMATION_TEAM
-        : resolved,
+      role: CANONICAL_ANIMATION_TEAM,
       photo: (data.photo_url as string) ?? "",
       bio: (data.bio as string) ?? "",
       title: (data.title as string) ?? "",
@@ -713,37 +715,21 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
     });
   }
 
-  const db = getFirebaseDb();
-  const usersCol = collection(db, COLLECTIONS.users);
-  const aliasList = [...ANIMATION_TEAM_ALIASES];
+  // Match admin panel logic: page all users, filter client-side.
+  // Firestore `where role ==` misses whitespace / casing / odd TR spellings.
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | undefined;
+  for (;;) {
+    const constraints: QueryConstraint[] = [limit(PAGE)];
+    if (lastDoc) constraints.push(startAfter(lastDoc));
+    const snap = await getDocs(query(usersCol, ...constraints));
+    if (snap.empty) break;
+    for (const d of snap.docs) pushMember(d);
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < PAGE) break;
+  }
 
-  // Single `in` query covers EN + TR + legacy spellings (max 30 values).
-  const roleSnap = await getDocs(
-    query(usersCol, where("role", "in", aliasList)),
-  );
-  for (const d of roleSnap.docs) pushMember(d);
-
-  // Legacy: role was sometimes stored in bio/title before dedicated role field worked.
-  const [bioSnap, titleSnap] = await Promise.all([
-    getDocs(query(usersCol, where("bio", "in", aliasList))),
-    getDocs(query(usersCol, where("title", "in", aliasList))),
-  ]);
-  for (const d of bioSnap.docs) pushMember(d);
-  for (const d of titleSnap.docs) pushMember(d);
-
+  results.sort((a, b) => a.name.localeCompare(b.name, "tr"));
   return results;
-}
-
-/** Old app builds stored profile role in bio/title when role field was locked. */
-function inferLegacyProfileRole(
-  role: string,
-  bio: string,
-  title: string,
-): string {
-  if (isAnimationTeamRole(role)) return CANONICAL_ANIMATION_TEAM;
-  if (isAnimationTeamRole(bio)) return CANONICAL_ANIMATION_TEAM;
-  if (isAnimationTeamRole(title)) return CANONICAL_ANIMATION_TEAM;
-  return role;
 }
 
 const USER_BATCH_SIZE = 10;

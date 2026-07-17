@@ -64,10 +64,31 @@ const ALIAS_LOOKUP = new Map(
   ANIMATION_TEAM_ALIASES.map((a) => [a.toLowerCase(), a] as const),
 );
 
-export function isAnimationTeamRole(role?: string | null): boolean {
+export function isExactAnimationTeamAlias(role?: string | null): boolean {
   if (!role) return false;
-  if ((TEAM_ROLES as readonly string[]).includes(role)) return true;
-  return ALIAS_LOOKUP.has(role.trim().toLowerCase());
+  const trimmed = role.trim();
+  if (!trimmed) return false;
+  if ((TEAM_ROLES as readonly string[]).includes(trimmed)) return true;
+  const key = trimmed.toLowerCase().replace(/\s+/g, " ");
+  return ALIAS_LOOKUP.has(trimmed.toLowerCase()) || ALIAS_LOOKUP.has(key);
+}
+
+export function isAnimationTeamRole(role?: string | null): boolean {
+  if (isExactAnimationTeamAlias(role)) return true;
+  if (!role) return false;
+  const loose = role
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/\s+/g, " ");
+  // Only treat short role-like strings as animation (avoid matching long bios).
+  if (loose.length > 48) return false;
+  return (
+    (loose.includes("animasyon") || loose.includes("animation")) &&
+    (loose.includes("takim") || loose.includes("team") || loose.includes("ekip"))
+  );
 }
 
 /** Map any known alias to the canonical Firestore role value. */
