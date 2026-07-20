@@ -18,11 +18,12 @@ import { isImmersiveVideoRoute } from "@/lib/utils/immersive-routes";
 export function MessagesDock() {
   const t = useT();
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [open, setOpen] = useState(false);
   const [chats, setChats] = useState<ChatPreview[]>([]);
   const [subscribeReady, setSubscribeReady] = useState(false);
 
+  const isAnonymous = Boolean(user?.isAnonymous || profile?.isAnonymous);
   const hidden =
     pathname.startsWith("/messages") ||
     isImmersiveVideoRoute(pathname) ||
@@ -33,19 +34,19 @@ export function MessagesDock() {
   }, [open]);
 
   useEffect(() => {
-    if (!user || hidden || subscribeReady) return;
+    if (!user || hidden || isAnonymous || subscribeReady) return;
     const id = window.setTimeout(() => setSubscribeReady(true), MESSAGES_DOCK_DEFER_MS);
     return () => window.clearTimeout(id);
-  }, [user, hidden, subscribeReady]);
+  }, [user, hidden, isAnonymous, subscribeReady]);
 
   useEffect(() => {
-    if (!user || hidden || !subscribeReady) return;
+    if (!user || hidden || isAnonymous || !subscribeReady) return;
     const unsub = subscribeChats(user.uid, async (raw) => {
       const enriched = await enrichChatPreviews(raw, user.uid);
       setChats(enriched.slice(0, 5));
     });
     return unsub;
-  }, [user, hidden, subscribeReady]);
+  }, [user, hidden, isAnonymous, subscribeReady]);
 
   const unreadCount = useMemo(
     () => chats.filter((c) => c.unread).length,
@@ -61,7 +62,8 @@ export function MessagesDock() {
     [chats],
   );
 
-  if (hidden || !user) return null;
+  // Guests / anonymous: no floating Mesajlar button on public pages.
+  if (hidden || !user || isAnonymous) return null;
 
   return (
     <div className="fixed bottom-24 right-3 z-40 md:bottom-6 md:right-8">

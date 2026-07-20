@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,12 +8,14 @@ import { PostActionsBar } from "@/components/post/PostActionsBar";
 import { FeedMediaImage } from "@/components/post/FeedMediaImage";
 import { PostTaggedPeople } from "@/components/post/PostTaggedPeople";
 import { IconPlay } from "@/components/icons/Icons";
+import { useFeedVideoVisibility } from "@/lib/hooks/useFeedVideoVisibility";
 import {
   getPostCaption,
   getPostImageUrl,
   getPostVideoUrl,
 } from "@/lib/services/firestore";
 import {
+  getFastFlowPlaybackUrl,
   getPostFeedImageCandidates,
   getPostFeedThumbnailCandidates,
 } from "@/lib/utils/video-sources";
@@ -39,6 +41,9 @@ export function TimelinePostCard({ post }: TimelinePostCardProps) {
   const router = useRouter();
   const [commentOpen, setCommentOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [showPoster, setShowPoster] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { ref, isActive, isNear } = useFeedVideoVisibility<HTMLDivElement>(post.id);
 
   const video = getPostVideoUrl(post);
   const imageUrl = getPostImageUrl(post);
@@ -53,6 +58,35 @@ export function TimelinePostCard({ post }: TimelinePostCardProps) {
   }, [post, video, imageUrl]);
 
   const imageCandidates = useMemo(() => getPostFeedImageCandidates(post), [post]);
+
+  const playbackUrl = useMemo(() => {
+    if (!video || (!isActive && !isNear)) return "";
+    return getFastFlowPlaybackUrl(post);
+  }, [video, isActive, isNear, post]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !playbackUrl) return;
+
+    if (isActive) {
+      el.muted = true;
+      el.setAttribute("muted", "");
+      el.play().catch(() => {
+        el.muted = true;
+        el.setAttribute("muted", "");
+        el.play().catch(() => {});
+      });
+      return;
+    }
+
+    el.pause();
+    try {
+      el.currentTime = 0;
+    } catch {
+      /* ignore seek before metadata */
+    }
+    setShowPoster(true);
+  }, [isActive, playbackUrl]);
 
   const openMedia = useCallback(() => {
     if (video) router.push(`/feed/${post.id}`);
@@ -105,36 +139,75 @@ export function TimelinePostCard({ post }: TimelinePostCardProps) {
       </header>
 
       {(video || imageUrl || imageCandidates.length > 0) && (
-        <button
-          type="button"
+        <div
+          ref={ref}
+          role="button"
+          tabIndex={0}
           onClick={openMedia}
-          className="group relative block w-full overflow-hidden bg-surface-overlay text-left"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openMedia();
+            }
+          }}
+          className="group relative block w-full cursor-pointer overflow-hidden bg-surface-overlay text-left"
         >
           {video ? (
             <>
-              {poster ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={poster}
-                  alt=""
-                  className="max-h-[min(70vh,560px)] w-full object-cover"
-                />
-              ) : imageCandidates.length > 0 ? (
-                <div className="max-h-[min(70vh,560px)] w-full">
+              <div className="relative max-h-[min(70vh,560px)] w-full overflow-hidden bg-surface-overlay">
+                {poster ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={poster}
+                    alt=""
+                    className={`max-h-[min(70vh,560px)] w-full object-cover transition-opacity duration-150 ${
+                      isActive && !showPoster ? "opacity-0" : "opacity-100"
+                    }`}
+                  />
+                ) : imageCandidates.length > 0 ? (
                   <FeedMediaImage
                     candidates={imageCandidates}
                     alt={caption || post.userName || "post"}
                     mode="auto"
-                    className="object-cover"
+                    className="max-h-[min(70vh,560px)] object-cover"
                   />
-                </div>
-              ) : (
-                <div className="aspect-[4/5] w-full bg-surface-overlay" />
+                ) : (
+                  <div className="aspect-[4/5] w-full bg-surface-overlay" />
+                )}
+
+                {playbackUrl ? (
+                  <video
+                    ref={videoRef}
+                    data-feed-video-id={post.id}
+                    src={playbackUrl}
+                    poster={poster ?? undefined}
+                    muted
+                    playsInline
+                    loop
+                    preload="metadata"
+                    {...({ webkitPlaysinline: "true" } as Record<string, string>)}
+                    className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${
+                      isActive && !showPoster ? "opacity-100" : "opacity-0"
+                    }`}
+                    onPlaying={() => setShowPoster(false)}
+                    onTimeUpdate={(e) => {
+                      if (showPoster && e.currentTarget.currentTime > 0.05) {
+                        setShowPoster(false);
+                      }
+                    }}
+                    onPause={() => {
+                      if (!isActive) setShowPoster(true);
+                    }}
+                  />
+                ) : null}
+              </div>
+
+              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+              {(!isActive || showPoster) && (
+                <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-white/25 backdrop-blur-sm transition group-active:scale-95">
+                  <IconPlay size={22} className="ml-0.5" />
+                </span>
               )}
-              <span className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
-              <span className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-white/25 backdrop-blur-sm transition group-active:scale-95">
-                <IconPlay size={22} className="ml-0.5" />
-              </span>
             </>
           ) : (
             <div className="max-h-[min(70vh,560px)] w-full">
@@ -146,7 +219,7 @@ export function TimelinePostCard({ post }: TimelinePostCardProps) {
               />
             </div>
           )}
-        </button>
+        </div>
       )}
 
       <PostActionsBar

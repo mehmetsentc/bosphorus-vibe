@@ -46,7 +46,9 @@ import {
   type PostCommentDoc,
 } from "@/types";
 import {
+  ANIMATION_TEAM_ALIASES,
   CANONICAL_ANIMATION_TEAM,
+  isAdminRole,
   isAnimationTeamRole,
   isExactAnimationTeamAlias,
 } from "@/lib/utils/roles";
@@ -692,8 +694,14 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
     if (seen.has(d.id)) return;
     const data = d.data();
     const storedRole = String(data.role ?? "").trim();
+    // Never list admins on the public Animation Team page.
+    if (isAdminRole(storedRole) || data.role === "admin") return;
     const bio = String(data.bio ?? "").trim();
     const title = String(data.title ?? "").trim();
+    const name =
+      (data.display_name as string) || (data.userName as string) || "";
+    // Brand/system accounts are not listed as animation staff.
+    if (/^bosphorus\s*vibe$/i.test(name.trim())) return;
     const isTeam =
       isAnimationTeamRole(storedRole) ||
       isExactAnimationTeamAlias(bio) ||
@@ -706,7 +714,7 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
       : undefined;
     results.push({
       id: d.id,
-      name: (data.display_name as string) || (data.userName as string) || "",
+      name,
       role: CANONICAL_ANIMATION_TEAM,
       photo: (data.photo_url as string) ?? "",
       bio: (data.bio as string) ?? "",
@@ -715,17 +723,34 @@ export async function getTeamMembers(): Promise<TeamMemberDoc[]> {
     });
   }
 
-  // Match admin panel logic: page all users, filter client-side.
-  // Firestore `where role ==` misses whitespace / casing / odd TR spellings.
-  let lastDoc: QueryDocumentSnapshot<DocumentData> | undefined;
-  for (;;) {
-    const constraints: QueryConstraint[] = [limit(PAGE)];
-    if (lastDoc) constraints.push(startAfter(lastDoc));
-    const snap = await getDocs(query(usersCol, ...constraints));
-    if (snap.empty) break;
+  async function scanAllUsersFallback() {
+    // Fallback when `in` query is empty or unavailable (odd spellings / index gaps).
+    let lastDoc: QueryDocumentSnapshot<DocumentData> | undefined;
+    for (;;) {
+      const constraints: QueryConstraint[] = [limit(PAGE)];
+      if (lastDoc) constraints.push(startAfter(lastDoc));
+      const snap = await getDocs(query(usersCol, ...constraints));
+      if (snap.empty) break;
+      for (const d of snap.docs) pushMember(d);
+      lastDoc = snap.docs[snap.docs.length - 1];
+      if (snap.size < PAGE) break;
+    }
+  }
+
+  // Primary: indexed `in` query on known Animation Team role aliases.
+  let needFallback = false;
+  try {
+    const snap = await getDocs(
+      query(usersCol, where("role", "in", [...ANIMATION_TEAM_ALIASES])),
+    );
     for (const d of snap.docs) pushMember(d);
-    lastDoc = snap.docs[snap.docs.length - 1];
-    if (snap.size < PAGE) break;
+    if (results.length === 0) needFallback = true;
+  } catch {
+    needFallback = true;
+  }
+
+  if (needFallback) {
+    await scanAllUsersFallback();
   }
 
   results.sort((a, b) => a.name.localeCompare(b.name, "tr"));

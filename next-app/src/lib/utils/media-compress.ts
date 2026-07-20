@@ -326,11 +326,10 @@ export async function createPlaybackPreviewBlob(
     const mimeCandidates = [
       'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
       "video/mp4",
-      'video/webm;codecs="vp9,opus"',
-      "video/webm",
     ];
     const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m));
-    if (!mimeType) return null;
+    // Never emit WebM labeled as preview.mp4 — Safari/iOS cannot decode it.
+    if (!mimeType || !mimeType.startsWith("video/mp4")) return null;
 
     const recorder = new MediaRecorder(stream, {
       mimeType,

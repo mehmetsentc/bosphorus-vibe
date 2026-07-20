@@ -314,20 +314,95 @@ async function transcodeVideoForPost(postId, data, docRef) {
 
 async function processPendingBatch(limit = BATCH_SIZE) {
   const db = admin.firestore();
-  const snap = await db
+  const results = [];
+
+  // 1) Normal pending queue
+  const pendingSnap = await db
     .collection("userPosts")
     .where("videoTranscodeStatus", "==", "pending")
     .limit(limit)
     .get();
 
-  const results = [];
-  for (const doc of snap.docs) {
+  for (const doc of pendingSnap.docs) {
     const result = await transcodeVideoForPost(doc.id, doc.data(), doc.ref);
     results.push({ postId: doc.id, ...result });
   }
 
+  // 2) Recover stuck "processing" older than 20 minutes (OOM/timeout orphans)
+  const remaining = Math.max(0, limit - pendingSnap.size);
+  if (remaining > 0) {
+    const cutoff = admin.firestore.Timestamp.fromMillis(
+      Date.now() - 20 * 60 * 1000,
+    );
+    try {
+      const stuckSnap = await db
+        .collection("userPosts")
+        .where("videoTranscodeStatus", "==", "processing")
+        .where("videoTranscodeUpdatedAt", "<", cutoff)
+        .limit(remaining)
+        .get();
+
+      for (const doc of stuckSnap.docs) {
+        await doc.ref.update({
+          videoTranscodeStatus: "pending",
+          videoTranscodeError: "requeued_stale_processing",
+          videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const result = await transcodeVideoForPost(doc.id, doc.data(), doc.ref);
+        results.push({ postId: doc.id, recovered: true, ...result });
+      }
+    } catch (err) {
+      // Composite index may be missing — fall back to status-only + client filter
+      functions.logger.warn("stuck processing query failed, using fallback", err);
+      const stuckSnap = await db
+        .collection("userPosts")
+        .where("videoTranscodeStatus", "==", "processing")
+        .limit(20)
+        .get();
+      const cutoffMs = Date.now() - 20 * 60 * 1000;
+      let recovered = 0;
+      for (const doc of stuckSnap.docs) {
+        if (recovered >= remaining) break;
+        const updated = doc.data().videoTranscodeUpdatedAt;
+        const ms = updated?.toMillis?.() ?? 0;
+        if (ms && ms > cutoffMs) continue;
+        await doc.ref.update({
+          videoTranscodeStatus: "pending",
+          videoTranscodeError: "requeued_stale_processing",
+          videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const result = await transcodeVideoForPost(doc.id, doc.data(), doc.ref);
+        results.push({ postId: doc.id, recovered: true, ...result });
+        recovered += 1;
+      }
+    }
+  }
+
+  // 3) Soft-retry a few failed encodes each batch
+  const failedRemaining = Math.max(0, limit - results.length);
+  if (failedRemaining > 0) {
+    try {
+      const failedSnap = await db
+        .collection("userPosts")
+        .where("videoTranscodeStatus", "==", "failed")
+        .limit(Math.min(3, failedRemaining))
+        .get();
+      for (const doc of failedSnap.docs) {
+        await doc.ref.update({
+          videoTranscodeStatus: "pending",
+          videoTranscodeError: admin.firestore.FieldValue.delete(),
+          videoTranscodeUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const result = await transcodeVideoForPost(doc.id, doc.data(), doc.ref);
+        results.push({ postId: doc.id, retried: true, ...result });
+      }
+    } catch (err) {
+      functions.logger.warn("failed retry query error", err);
+    }
+  }
+
   return {
-    processed: snap.size,
+    processed: results.length,
     succeeded: results.filter((r) => r.ok).length,
     failed: results.filter((r) => !r.ok).length,
     results,

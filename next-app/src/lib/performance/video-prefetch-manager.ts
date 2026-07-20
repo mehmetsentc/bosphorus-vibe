@@ -1,9 +1,10 @@
 /**
  * Centralized video/image prefetch with cancellation.
- * Only one "next" clip should download at a time — stale requests abort on fast scroll.
+ * Keeps up to 2 concurrent lead-byte fetches (active + next).
  */
 
 const activeLeadBytePrefetches = new Map<string, AbortController>();
+const MAX_CONCURRENT_PREFETCH = 2;
 
 let allowedPrefetchPostIds = new Set<string>();
 
@@ -22,7 +23,7 @@ export function cancelVideoPrefetchesExcept(keepUrls: string[] = []): void {
   }
 }
 
-/** Range-fetch first ~512KB for +faststart MP4 — aborts previous lead-byte fetches. */
+/** Range-fetch first ~512KB for +faststart MP4 — keeps up to 2 URLs warm. */
 export function prefetchVideoLeadingBytesManaged(
   url: string,
   postId?: string,
@@ -37,10 +38,13 @@ export function prefetchVideoLeadingBytesManaged(
     return;
   }
 
-  for (const [existingUrl, controller] of activeLeadBytePrefetches) {
-    if (existingUrl === url) return;
-    controller.abort();
-    activeLeadBytePrefetches.delete(existingUrl);
+  if (activeLeadBytePrefetches.has(url)) return;
+
+  while (activeLeadBytePrefetches.size >= MAX_CONCURRENT_PREFETCH) {
+    const oldest = activeLeadBytePrefetches.keys().next().value as string | undefined;
+    if (!oldest) break;
+    activeLeadBytePrefetches.get(oldest)?.abort();
+    activeLeadBytePrefetches.delete(oldest);
   }
 
   const controller = new AbortController();

@@ -9,8 +9,8 @@ export const PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
 /** How many reel slides keep a mounted <video> (active ± radius). iOS caps ~4 decoders. */
 export const REELS_VIDEO_WINDOW_RADIUS = 1;
 
-/** Reels: switch to next URL tier if first URL has not decoded by this time. */
-export const REELS_DECODE_TIMEOUT_MS = 1_500;
+/** Reels: only advance tier on hard error — slow nets need more than 1.5s to decode MOV. */
+export const REELS_DECODE_TIMEOUT_MS = 8_000;
 
 /** iOS keeps radius 1; Android/desktop preloads one slide further ahead. */
 export function getReelsVideoWindowRadius(): number {

@@ -140,7 +140,7 @@ export function getPostVideoPoster(post: UserPostDoc): string | undefined {
   return getPostFeedThumbnailCandidates(post)[0] ?? getRawPosterCandidates(post).find((u) => !isVideoMediaUrl(u));
 }
 
-/** Guess sibling asset beside original.mov/mp4 in Firebase Storage URLs. */
+/** Guess sibling asset beside original.mov/mp4 in Firebase Storage URLs (thumbs only). */
 function inferSiblingAssetUrl(
   videoUrl: string,
   filename: string,
@@ -149,17 +149,7 @@ function inferSiblingAssetUrl(
   return videoUrl.replace(/original\.[a-z0-9]+/i, filename);
 }
 
-function inferTranscodedTierUrl(
-  original: string,
-  filename: string,
-  firestoreUrl: string | undefined,
-): string {
-  if (firestoreUrl) return firestoreUrl;
-  if (!original) return "";
-  return inferSiblingAssetUrl(original, filename) || "";
-}
-
-/** Firestore URLs first; sibling-path inference when transcode tiers missing. */
+/** Firestore URLs only — never invent sibling paths with the original's download token. */
 export function getTrustedVideoUrls(post: UserPostDoc): {
   original: string;
   preview: string;
@@ -174,30 +164,16 @@ export function getTrustedVideoUrls(post: UserPostDoc): {
     "";
   const primary = post.postVideoURL || "";
   const canonicalOriginal = original || primary;
-  const preview = inferTranscodedTierUrl(
-    canonicalOriginal,
-    "preview.mp4",
-    post.postVideoURL_preview,
-  );
-  const medium = inferTranscodedTierUrl(
-    canonicalOriginal,
-    "medium.mp4",
-    post.postVideoURL_medium,
-  );
-  const lowRaw = inferTranscodedTierUrl(
-    canonicalOriginal,
-    "low.mp4",
-    post.postVideoURL_low,
-  );
+
+  const preview = post.postVideoURL_preview || "";
+  const medium = post.postVideoURL_medium || "";
+  const lowRaw = post.postVideoURL_low || "";
   const low =
-    lowRaw && lowRaw !== canonicalOriginal ? lowRaw : "";
-  const highRaw = inferTranscodedTierUrl(
-    canonicalOriginal,
-    "high.mp4",
-    post.postVideoURL_high,
-  );
+    lowRaw && lowRaw !== canonicalOriginal && lowRaw !== primary ? lowRaw : "";
+  const highRaw = post.postVideoURL_high || "";
   const high =
-    highRaw && highRaw !== canonicalOriginal ? highRaw : "";
+    highRaw && highRaw !== canonicalOriginal && highRaw !== primary ? highRaw : "";
+
   return {
     original: canonicalOriginal,
     preview,
@@ -220,27 +196,25 @@ export function getCanonicalVideoPlaybackUrl(post: UserPostDoc): string {
 }
 
 /**
- * Fast-flow ladder — smallest tokenized Firestore URL first (preview → low → … → original).
- * Used for feed, reels, and prewarm so playback starts on lightweight MP4s.
+ * Fast-flow ladder — real Firestore tier URLs only (preview → low → … → original).
+ * Never invents sibling paths; phantom tokens caused black screens.
  */
 export function getFastFlowPlaybackUrls(post: UserPostDoc): string[] {
   const { original, preview, medium, low, high, primary } = getTrustedVideoUrls(post);
+  const status = (post as { videoTranscodeStatus?: string }).videoTranscodeStatus;
+  const tiersReady = status === "done" || Boolean(preview || (low && low !== original));
+
+  const ladder = tiersReady
+    ? [preview, low, medium, high, primary, original]
+    : [
+        // Until server encode finishes: only real client preview or original
+        preview,
+        primary !== original ? primary : "",
+        original,
+      ];
+
   return orderUrlsTokenizedFirst(
-    uniqueUrls(
-      preview,
-      low,
-      medium,
-      high,
-      primary,
-      post.postVideoURL_preview,
-      post.postVideoURL_low,
-      post.postVideoURL_medium,
-      post.postVideoURL_high,
-      post.postVideoURL,
-      post.postVideoURL_original,
-      post.postVideo,
-      original,
-    ).filter((u) => u && !isImageMediaUrl(u)),
+    uniqueUrls(...ladder).filter((u) => u && !isImageMediaUrl(u)),
   );
 }
 

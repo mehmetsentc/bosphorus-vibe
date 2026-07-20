@@ -325,7 +325,7 @@ export function LandingPage() {
                     className={`mt-3 ${outlineBtnClass}`}
                   >
                     <GuestIcon />
-                    {busy ? t("loginSigningIn") : "Misafir olarak devam et"}
+                    {busy ? t("loginSigningIn") : t("continueAsGuest")}
                   </button>
                   <p className="mt-6 text-sm text-muted">
                     {t("authNoAccount")}{" "}

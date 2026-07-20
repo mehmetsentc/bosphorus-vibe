@@ -74,10 +74,13 @@ export function isExactAnimationTeamAlias(role?: string | null): boolean {
 }
 
 export function isAnimationTeamRole(role?: string | null): boolean {
-  if (isExactAnimationTeamAlias(role)) return true;
   if (!role) return false;
-  const loose = role
-    .trim()
+  const trimmed = role.trim();
+  if (!trimmed) return false;
+  // Admin never counts as animation team (check before alias / loose match).
+  if (trimmed === "admin" || trimmed === "Admin") return false;
+  if (isExactAnimationTeamAlias(trimmed)) return true;
+  const loose = trimmed
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -95,10 +98,11 @@ export function isAnimationTeamRole(role?: string | null): boolean {
 export function normalizeRole(role?: string | null): string {
   if (!role) return "user";
   const trimmed = role.trim();
+  // Admin before animation so isAnimationTeamRole can rely on admin never matching.
+  if (trimmed === "admin" || trimmed === "Admin") return "admin";
   if (isAnimationTeamRole(trimmed)) return CANONICAL_ANIMATION_TEAM;
   if (trimmed === "Hotel Guest" || trimmed === "Otel Misafiri") return "Hotel Guest";
   if (trimmed === "Others" || trimmed === "Diğer" || trimmed === "Diger") return "Others";
-  if (trimmed === "admin" || trimmed === "Admin") return "admin";
   if (trimmed === "user" || trimmed === "Üye" || trimmed === "Uye") return "user";
   return trimmed;
 }

@@ -68,10 +68,18 @@ function postNeedsVideoTranscode(data, postId) {
   const originalUrl = getOriginalVideoUrl(data);
   if (!originalUrl) return false;
   if (data.videoTranscodeStatus === "skipped") return false;
-  if (data.videoTranscodeStatus === "failed") return false;
-  if (data.videoTranscodeStatus === "processing") return false;
   if (hasServerEncodedVariants(data, postId)) return false;
   if (data.videoTranscodeStatus === "done") return false;
+
+  // Allow re-queue of stuck processing / failed (scheduler recovers these)
+  if (data.videoTranscodeStatus === "processing") {
+    const updated = data.videoTranscodeUpdatedAt;
+    const ms = updated?.toMillis?.() ?? 0;
+    if (ms && Date.now() - ms < 20 * 60 * 1000) return false;
+    return true;
+  }
+  if (data.videoTranscodeStatus === "failed") return true;
+
   return true;
 }
 

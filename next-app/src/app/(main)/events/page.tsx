@@ -143,32 +143,32 @@ export default function EventsPage() {
               </div>
             )}
 
-            {/* ── Tab Switcher ── */}
-            <div className="mt-6 flex gap-2">
+            {/* ── Tab Switcher — timeline is the primary surface ── */}
+            <div className="mt-6 flex gap-2 rounded-2xl border border-border/60 bg-surface-card/40 p-1.5">
               <button
                 type="button"
                 onClick={() => {
                   setActiveTab("timeline");
                   setSelectedDate(null); // ← reset date when switching to today view
                 }}
-                className={`flex-1 rounded-2xl py-3 text-sm font-bold transition ${
+                className={`flex-[1.15] rounded-xl py-3 text-sm font-bold transition ${
                   activeTab === "timeline"
                     ? "gold-gradient text-black shadow-md shadow-gold/20"
-                    : "border border-border bg-surface-card text-muted hover:border-gold/30 hover:text-foreground"
+                    : "text-muted hover:text-foreground"
                 }`}
               >
-                📅 Bugünün Programı
+                Bugün
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("all")}
-                className={`flex-1 rounded-2xl py-3 text-sm font-bold transition ${
+                className={`flex-1 rounded-xl py-3 text-sm font-bold transition ${
                   activeTab === "all"
                     ? "gold-gradient text-black shadow-md shadow-gold/20"
-                    : "border border-border bg-surface-card text-muted hover:border-gold/30 hover:text-foreground"
+                    : "text-muted hover:text-foreground"
                 }`}
               >
-                🎭 Tüm Etkinlikler
+                Tüm Program
               </button>
             </div>
 
@@ -186,7 +186,15 @@ export default function EventsPage() {
             {/* ── Tab Content ── */}
             {activeTab === "timeline" ? (
               /* Timeline Tab */
-              <section className="mt-6">
+              <section className="mt-5">
+                <div className="mb-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-subtle">
+                    Program
+                  </p>
+                  <h2 className="mt-0.5 text-lg font-bold text-foreground">
+                    Bugünün akışı
+                  </h2>
+                </div>
                 {showTimeline && (dailyEvents.length > 0 || showTimeEvents.length > 0 || weeklyEvents.length > 0) ? (
                   <TodayTimeline
                     dailyEvents={dailyEvents}

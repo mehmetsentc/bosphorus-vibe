@@ -51,7 +51,7 @@ export const ReelSlideVideo = memo(function ReelSlideVideo({
     // eslint-disable-next-line jsx-a11y/media-has-caption
     <video
       ref={videoRef}
-      key={`${post.id}-${srcIndex}-${src}`}
+      key={post.id}
       data-reel-id={post.id}
       src={src}
       poster={poster}

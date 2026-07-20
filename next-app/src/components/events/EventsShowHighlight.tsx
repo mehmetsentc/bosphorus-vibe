@@ -42,8 +42,9 @@ export function EventsShowHighlight({ event }: EventsShowHighlightProps) {
         <div className="absolute inset-0 bg-gradient-to-br from-gold/25 to-vibe/15" />
       )}
 
-      {/* Gradient — lighter at top, heavier at bottom */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+      {/* Soft vignette for readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/10" />
+      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent" />
 
       {/* Countdown — top right, clearly visible */}
       {occurrence && (

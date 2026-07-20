@@ -15,7 +15,7 @@ export function GuestBanner() {
       <p className="text-xs text-foreground sm:text-sm">
         {t("guestBannerText")}{" "}
         <Link
-          href="/welcome?reason=auth-required"
+          href="/welcome?reason=guest-limited"
           className="font-semibold text-gold underline-offset-2 hover:underline"
         >
           {t("guestBannerCta")}
