@@ -3,9 +3,6 @@ const admin = require("firebase-admin");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
-const ffmpeg = require("fluent-ffmpeg");
-const ffmpegStatic = require("ffmpeg-static");
-const axios = require("axios");
 
 const {
   VIDEO_ENCODE_PROFILE,
@@ -20,7 +17,20 @@ const {
 
 admin.initializeApp();
 
-ffmpeg.setFfmpegPath(ffmpegStatic);
+/** Lazy — ffmpeg-static binary load times out Firebase discovery if required at import. */
+let ffmpegReady = false;
+function ensureFfmpeg() {
+  if (ffmpegReady) return require("fluent-ffmpeg");
+  const ffmpeg = require("fluent-ffmpeg");
+  const ffmpegStatic = require("ffmpeg-static");
+  if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
+  ffmpegReady = true;
+  return ffmpeg;
+}
+
+function getAxios() {
+  return require("axios");
+}
 
 const REGION = "europe-central2";
 const TRANSCODE_RUN_OPTS = { memory: "2GB", timeoutSeconds: 540 };
@@ -703,7 +713,7 @@ async function regenerateThumbnailForPost(postId, data, docRef) {
   });
 
   try {
-    const response = await axios.get(originalUrl, {
+    const response = await getAxios().get(originalUrl, {
       responseType: "arraybuffer",
       timeout: 120000,
       maxContentLength: 500 * 1024 * 1024,
@@ -711,7 +721,7 @@ async function regenerateThumbnailForPost(postId, data, docRef) {
     fs.writeFileSync(tmpInput, Buffer.from(response.data));
 
     await new Promise((resolve, reject) => {
-      ffmpeg(tmpInput)
+      ensureFfmpeg()(tmpInput)
         .seekInput(0.5)
         .frames(1)
         .outputOptions(["-q:v", "4"])

@@ -89,6 +89,8 @@ function applyH264Profile(command, tier) {
 
 function runFfmpeg(inputPath, outputPath, tier) {
   const ffmpeg = require("fluent-ffmpeg");
+  const ffmpegStatic = require("ffmpeg-static");
+  if (ffmpegStatic) ffmpeg.setFfmpegPath(ffmpegStatic);
   return new Promise((resolve, reject) => {
     applyH264Profile(ffmpeg(inputPath), tier)
       .on("end", resolve)
