@@ -33,7 +33,13 @@ function getAxios() {
 }
 
 const REGION = "europe-central2";
-const TRANSCODE_RUN_OPTS = { memory: "2GB", timeoutSeconds: 540 };
+
+// Used by Firestore triggers and manual HTTP/callable endpoints (need full memory for 4×FFmpeg)
+const TRANSCODE_RUN_OPTS = { memory: "2GB", timeoutSeconds: 300 };
+// Thumbnail extraction — single FFmpeg frame grab, needs less memory
+const THUMBNAIL_RUN_OPTS = { memory: "512MB", timeoutSeconds: 180 };
+
+
 const BATCH_SIZE = 15;
 const MAX_BATCH_LIMIT = 15;
 const STORAGE_MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -456,16 +462,9 @@ exports.transcodeVideoPostOnUpdate = functions
     return null;
   });
 
-/** Every 5 minutes — process queued video encodes. */
-exports.processPendingVideoTranscodes = functions
-  .region(REGION)
-  .runWith(TRANSCODE_RUN_OPTS)
-  .pubsub.schedule("every 5 minutes")
-  .onRun(async () => {
-    const summary = await processPendingBatch(BATCH_SIZE);
-    functions.logger.info("processPendingVideoTranscodes", summary);
-    return null;
-  });
+// processPendingVideoTranscodes scheduled cron REMOVED — cost optimization.
+// Firestore onCreate/onUpdate triggers handle new videos in real time.
+// For manual backfill use: adminRunTranscodeBatch (callable) or runVideoTranscodeBatch (HTTP).
 
 /** Manual batch trigger — secured with TRANSCODE_BACKFILL_SECRET. */
 exports.runVideoTranscodeBatch = functions
@@ -618,23 +617,12 @@ exports.adminConfigureAllVideoStorage = functions
     return runConfigureAllVideoStorage(data ?? {});
   });
 
-/** Every 10 minutes — sync tiers, enqueue stragglers, process a small encode batch. */
-exports.autoMaintainVideoStorage = functions
-  .region(REGION)
-  .runWith(TRANSCODE_RUN_OPTS)
-  .pubsub.schedule("every 10 minutes")
-  .onRun(async () => {
-    const sync = await syncStorageBatch(20);
-    const enqueue = await enqueueTranscodeBatch(30);
-    const transcode = await processPendingBatch(3);
-    functions.logger.info("autoMaintainVideoStorage", { sync, enqueue, transcode });
-    return null;
-  });
+// autoMaintainVideoStorage scheduled cron REMOVED — cost optimization.
+// Use adminConfigureAllVideoStorage (callable) for manual maintenance.
 
 // --- Video thumbnail backfill (cover frame from video) ---
 
 const THUMBNAIL_BATCH_SIZE = 5;
-const THUMBNAIL_RUN_OPTS = { memory: "1GB", timeoutSeconds: 540 };
 
 function decodeStoragePathFromUrl(url) {
   try {
@@ -784,16 +772,8 @@ async function processPendingThumbnailBatch(limit = THUMBNAIL_BATCH_SIZE) {
   };
 }
 
-/** Every 30 minutes — regenerate broken/missing video thumbnails. */
-exports.processPendingVideoThumbnails = functions
-  .region(REGION)
-  .runWith(THUMBNAIL_RUN_OPTS)
-  .pubsub.schedule("every 30 minutes")
-  .onRun(async () => {
-    const summary = await processPendingThumbnailBatch(THUMBNAIL_BATCH_SIZE);
-    functions.logger.info("processPendingVideoThumbnails", summary);
-    return null;
-  });
+// processPendingVideoThumbnails scheduled cron REMOVED — cost optimization.
+// Use adminRunThumbnailBatch (callable) for manual thumbnail regeneration.
 
 /** Manual thumbnail batch — secured with TRANSCODE_BACKFILL_SECRET. */
 exports.runVideoThumbnailBatch = functions
