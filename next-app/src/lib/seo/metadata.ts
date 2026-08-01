@@ -46,6 +46,7 @@ export function buildPageMetadata(input: PageMetaInput): Metadata {
   const description = truncateDescription(
     input.description ?? SEO_DEFAULT_DESCRIPTION,
   );
+  // Absolute title — root layout uses `%s | Brand`; avoid "Brand | Brand".
   const title = input.title.includes(BRAND_NAME)
     ? input.title
     : `${input.title} | ${BRAND_NAME}`;
@@ -53,7 +54,7 @@ export function buildPageMetadata(input: PageMetaInput): Metadata {
   const imageAlt = input.imageAlt ?? `${BRAND_NAME} — ${input.title}`;
 
   return {
-    title,
+    title: { absolute: title },
     description,
     keywords: mergeKeywords(input.keywords),
     authors: [{ name: BRAND_NAME, url: siteUrl("/welcome") }],
@@ -62,10 +63,7 @@ export function buildPageMetadata(input: PageMetaInput): Metadata {
     applicationName: BRAND_NAME,
     alternates: {
       canonical: url,
-      languages: {
-        "tr-TR": url,
-        "en-US": url,
-      },
+      // Real locale URLs don't exist yet — omit fake hreflang.
     },
     robots: input.noIndex
       ? { index: false, follow: false, googleBot: { index: false, follow: false } }

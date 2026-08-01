@@ -314,11 +314,16 @@ export function useReelsPosts() {
       setInitialized(true);
     }
 
-    if (useAppStore.persist.hasHydrated()) {
+    const persistApi = useAppStore.persist;
+    if (!persistApi?.hasHydrated) {
       restoreFromPersist();
       return;
     }
-    return useAppStore.persist.onFinishHydration(restoreFromPersist);
+    if (persistApi.hasHydrated()) {
+      restoreFromPersist();
+      return;
+    }
+    return persistApi.onFinishHydration(restoreFromPersist);
   }, []);
 
   useLayoutEffect(() => {

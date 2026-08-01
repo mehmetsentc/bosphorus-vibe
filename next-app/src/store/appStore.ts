@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { dedupePostsById } from "@/lib/utils/dedupe-posts";
 import { SESSION_POSTS_MAX } from "@/lib/performance/app-state";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { createSSRSafeLocalStorage } from "@/lib/cache/ssr-safe-storage";
 import {
   PERSIST_POSTS_MAX,
   slimPostsCache,
@@ -212,7 +213,7 @@ export const useAppStore = create<AppStoreState>()(
     }),
     {
       name: "bv-app-cache-v1",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(createSSRSafeLocalStorage),
       partialize: (state) => ({
         profileData: state.profileData
           ? {
@@ -280,7 +281,7 @@ export const useAppStore = create<AppStoreState>()(
 /** Call on logout to wipe persisted cache */
 export function resetAppStore(): void {
   useAppStore.getState().resetStore();
-  void useAppStore.persist.clearStorage();
+  void useAppStore.persist?.clearStorage();
   useVideoSoundStore.setState({ feedMuted: true, reelsMuted: false });
-  void useVideoSoundStore.persist.clearStorage();
+  void useVideoSoundStore.persist?.clearStorage();
 }

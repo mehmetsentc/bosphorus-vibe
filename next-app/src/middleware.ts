@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session/constants";
+import { ACCESS_COOKIE, ACCESS_MAX_AGE_DAYS, SESSION_COOKIE } from "@/lib/session/constants";
 import { SECURITY_HEADERS } from "@/lib/security/headers";
 
 const PUBLIC_PATHS = [
@@ -12,17 +12,38 @@ const PUBLIC_PATHS = [
   "/cookie-policy",
 ];
 
+/** Metadata / social images — must never hit the auth wall. */
+const PUBLIC_ASSET_PATHS = [
+  "/opengraph-image",
+  "/twitter-image",
+  "/icon",
+  "/apple-icon",
+  "/manifest.json",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/favicon.ico",
+];
+
 const AUTH_ONLY_PREFIXES = ["/profile", "/upload", "/favorites", "/admin"];
 
-/** Routes anonymous / guest users may open (matches AuthGuard + GuestBanner UX). */
-const GUEST_ALLOWED_PREFIXES = [
+/**
+ * Browseable without prior cookie. Middleware issues a guest cookie so AuthGuard
+ * and subsequent navigations work; crawlers also get real HTML.
+ */
+const SOFT_PUBLIC_PREFIXES = [
   "/home",
   "/events",
   "/feed",
   "/reels",
   "/team",
   "/members",
+  "/brand",
   "/post",
+];
+
+/** Routes anonymous / guest users may open (matches AuthGuard + GuestBanner UX). */
+const GUEST_ALLOWED_PREFIXES = [
+  ...SOFT_PUBLIC_PREFIXES,
 ];
 
 const PRIVATE_ROBOTS = [
@@ -51,6 +72,12 @@ function isPublicPath(pathname: string): boolean {
   );
 }
 
+function isPublicAsset(pathname: string): boolean {
+  return PUBLIC_ASSET_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+}
+
 function withHeaders(response: NextResponse): NextResponse {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(key, value);
@@ -65,6 +92,16 @@ function withPrivateRobots(response: NextResponse, pathname: string): NextRespon
   return response;
 }
 
+function setGuestCookie(response: NextResponse): void {
+  response.cookies.set({
+    name: ACCESS_COOKIE,
+    value: "guest",
+    path: "/",
+    maxAge: ACCESS_MAX_AGE_DAYS * 24 * 60 * 60,
+    sameSite: "lax",
+  });
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -73,9 +110,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/api") ||
     pathname.startsWith("/__/auth") ||
     pathname.includes(".") ||
-    pathname === "/manifest.json" ||
-    pathname === "/robots.txt" ||
-    pathname === "/sitemap.xml"
+    isPublicAsset(pathname)
   ) {
     return withHeaders(NextResponse.next());
   }
@@ -88,8 +123,6 @@ export function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     if (!hasAccess) {
       url.pathname = "/welcome";
-    } else if (access === "guest") {
-      url.pathname = "/home";
     } else {
       url.pathname = "/home";
     }
@@ -115,6 +148,13 @@ export function middleware(request: NextRequest) {
       return withHeaders(NextResponse.redirect(url));
     }
     const response = NextResponse.next();
+    return withHeaders(withPrivateRobots(response, pathname));
+  }
+
+  // Deep links + SEO: open soft-public routes and mint guest access once.
+  if (!hasAccess && matchesPrefix(pathname, SOFT_PUBLIC_PREFIXES)) {
+    const response = NextResponse.next();
+    setGuestCookie(response);
     return withHeaders(withPrivateRobots(response, pathname));
   }
 

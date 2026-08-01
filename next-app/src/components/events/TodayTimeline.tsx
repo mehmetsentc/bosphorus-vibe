@@ -161,7 +161,18 @@ export function TodayTimeline({ dailyEvents, showTimeEvents, weeklyEvents, now =
     };
   }, [visibleEntries, nowMinutes]);
 
-  if (!visibleEntries.length) return null;
+  if (!visibleEntries.length) {
+    return (
+      <div className="rounded-2xl border border-border/60 bg-surface-card/40 px-5 py-10 text-center">
+        <p className="text-sm font-semibold text-foreground">
+          Bugünün programı tamamlandı
+        </p>
+        <p className="mt-1.5 text-xs text-muted">
+          Yarınki etkinlikler için Tüm Program sekmesine bakın.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>

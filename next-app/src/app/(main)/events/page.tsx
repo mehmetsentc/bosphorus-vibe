@@ -16,6 +16,7 @@ import { isSunday } from "@/lib/utils/firestore-helpers";
 import {
   getDateStrip,
   isSameCalendarDay,
+  parseEventTimeMinutes,
   startOfDay,
 } from "@/lib/utils/event-dates";
 import { isAnimationTeamRole } from "@/lib/utils/roles";
@@ -34,11 +35,23 @@ type ListedEvent = {
 type ActiveTab = "timeline" | "all";
 
 function pickShowHighlight(showTimeEvents: EventDoc[]): EventDoc | null {
-  const today = startOfDay(new Date());
-  const todaysShows = showTimeEvents.filter((e) =>
-    isSameCalendarDay(e.eventDate, today),
-  );
-  return todaysShows[0] ?? showTimeEvents[0] ?? null;
+  const now = new Date();
+  const today = startOfDay(now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const todaysShows = showTimeEvents
+    .filter((e) => isSameCalendarDay(e.eventDate, today))
+    .sort(
+      (a, b) =>
+        parseEventTimeMinutes(a.eventTimeLabel) -
+        parseEventTimeMinutes(b.eventTimeLabel),
+    );
+
+  const upcoming =
+    todaysShows.find((e) => parseEventTimeMinutes(e.eventTimeLabel) >= nowMinutes) ??
+    null;
+
+  return upcoming ?? todaysShows[todaysShows.length - 1] ?? showTimeEvents[0] ?? null;
 }
 
 function buildProgramList(

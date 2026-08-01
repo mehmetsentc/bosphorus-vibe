@@ -5,20 +5,27 @@ import { useRouter } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { getAccessCookie } from "@/lib/session/cookies";
+import type { AccessLevel } from "@/lib/session/constants";
 
-export function AuthGuard({ children }: { children: React.ReactNode }) {
+type AuthGuardProps = {
+  children: React.ReactNode;
+  /** Cookie value from the server request (document.cookie is empty during SSR). */
+  initialAccess?: AccessLevel | null;
+};
+
+export function AuthGuard({ children, initialAccess = null }: AuthGuardProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
-    const access = getAccessCookie();
+    const access = getAccessCookie() ?? initialAccess;
     const allowed = Boolean(user) || access === "guest" || access === "auth";
     if (!allowed) router.replace("/welcome");
-  }, [user, loading, router]);
+  }, [user, loading, router, initialAccess]);
 
   if (loading) {
-    const access = getAccessCookie();
+    const access = getAccessCookie() ?? initialAccess;
     if (access === "auth" || access === "guest") {
       return <>{children}</>;
     }
@@ -30,7 +37,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const access = getAccessCookie();
+  const access = getAccessCookie() ?? initialAccess;
   const allowed = Boolean(user) || access === "guest" || access === "auth";
   if (!allowed) return null;
 
