@@ -1,5 +1,8 @@
 const en = {
   navHome: "Home",
+  navAkis: "Feed",
+  akisOpenPost: "Open post",
+  akisMobileOnly: "This feed is available on mobile.",
   navBrand: "Brand",
   navEvents: "Events",
   navReels: "Reels",

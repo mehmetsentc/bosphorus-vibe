@@ -2,6 +2,9 @@ import type { Messages } from "./en";
 
 const sq: Messages = {
   navHome: "Kryefaqja",
+  navAkis: "Rrjedha",
+  akisOpenPost: "Hap postimin",
+  akisMobileOnly: "Kjo rrjedhë hapet në telefon.",
   navBrand: "Marka",
   navEvents: "Eventet",
   navReels: "Reels",

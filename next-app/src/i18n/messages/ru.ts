@@ -2,6 +2,9 @@ import type { Messages } from "./en";
 
 const ru: Messages = {
   navHome: "Главная",
+  navAkis: "Лента",
+  akisOpenPost: "Открыть публикацию",
+  akisMobileOnly: "Эта лента доступна на телефоне.",
   navBrand: "Бренд",
   navEvents: "События",
   navReels: "Reels",

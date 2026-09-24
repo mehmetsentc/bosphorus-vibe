@@ -2,6 +2,9 @@ import type { Messages } from "./en";
 
 const tr: Messages = {
   navHome: "Ana Sayfa",
+  navAkis: "Akış",
+  akisOpenPost: "Paylaşımı aç",
+  akisMobileOnly: "Bu akış telefonda açılır.",
   navBrand: "Marka",
   navEvents: "Etkinlik",
   navReels: "Reels",

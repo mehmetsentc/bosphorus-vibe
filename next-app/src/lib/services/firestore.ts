@@ -227,6 +227,32 @@ export async function getFeedPostsPage(
   };
 }
 
+/** Akış — one userPosts page, newest first. Same index as the home feed. */
+export async function getAkisPostsPage(
+  pageSize = 8,
+  cursor?: QueryDocumentSnapshot<DocumentData> | null,
+): Promise<PostsPage> {
+  const constraints: QueryConstraint[] = [
+    orderBy("timePosted", "desc"),
+    limit(pageSize),
+  ];
+  if (cursor) constraints.push(startAfter(cursor));
+
+  const snap = await getDocs(
+    query(collection(getFirebaseDb(), COLLECTIONS.userPosts), ...constraints),
+  );
+  const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
+  const posts = snap.docs
+    .map((d) => mapPost(d.id, d.data()))
+    .filter(hasPostMedia);
+
+  return {
+    posts,
+    lastDoc,
+    hasMore: snap.docs.length === pageSize,
+  };
+}
+
 export async function getPostById(id: string): Promise<UserPostDoc | null> {
   const snap = await getDoc(doc(getFirebaseDb(), COLLECTIONS.userPosts, id));
   if (!snap.exists()) return null;

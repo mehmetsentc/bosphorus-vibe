@@ -2,6 +2,9 @@ import type { Messages } from "./en";
 
 const uk: Messages = {
   navHome: "Головна",
+  navAkis: "Стрічка",
+  akisOpenPost: "Відкрити допис",
+  akisMobileOnly: "Ця стрічка доступна на телефоні.",
   navBrand: "Бренд",
   navEvents: "Події",
   navReels: "Reels",

@@ -2,6 +2,9 @@ import type { Messages } from "./en";
 
 const ro: Messages = {
   navHome: "Acasă",
+  navAkis: "Flux",
+  akisOpenPost: "Deschide postarea",
+  akisMobileOnly: "Acest flux este disponibil pe telefon.",
   navBrand: "Brand",
   navEvents: "Evenimente",
   navReels: "Reels",

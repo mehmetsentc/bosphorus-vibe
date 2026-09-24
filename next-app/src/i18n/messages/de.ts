@@ -2,6 +2,9 @@ import type { Messages } from "./en";
 
 const de: Messages = {
   navHome: "Startseite",
+  navAkis: "Feed",
+  akisOpenPost: "Beitrag öffnen",
+  akisMobileOnly: "Dieser Feed ist auf dem Handy verfügbar.",
   navBrand: "Marke",
   navEvents: "Veranstaltungen",
   navReels: "Reels",

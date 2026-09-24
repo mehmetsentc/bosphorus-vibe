@@ -76,6 +76,24 @@ export function ReelsIcon({ active }: { active: boolean }) {
   );
 }
 
+export function AkisIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      className={`h-7 w-7 ${iconClass(active)}`}
+      fill={active ? "currentColor" : "none"}
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h10.5"
+      />
+    </svg>
+  );
+}
+
 export function ProfileIcon({ active }: { active: boolean }) {
   return (
     <svg

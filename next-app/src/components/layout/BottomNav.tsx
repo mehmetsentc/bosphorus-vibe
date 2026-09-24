@@ -3,7 +3,8 @@
 import { usePathname } from "next/navigation";
 import { NavLink } from "@/components/layout/NavLink";
 import { useNavigationOptional } from "@/components/layout/NavigationProvider";
-import { NavIcon } from "@/components/layout/NavIcons";
+import { AkisIcon, NavIcon } from "@/components/layout/NavIcons";
+import { useT } from "@/components/providers/I18nProvider";
 import { useAccess } from "@/lib/hooks/useAccess";
 import { isImmersiveVideoRoute } from "@/lib/utils/immersive-routes";
 
@@ -24,6 +25,7 @@ export function BottomNav() {
   const navigation = useNavigationOptional();
   const pending = navigation?.pendingHref ?? null;
   const { isGuest } = useAccess();
+  const t = useT();
 
   const active = (href: string) => isNavActive(pathname, href, pending);
   const profileHref = isGuest ? "/welcome?reason=auth-required" : "/profile";
@@ -32,6 +34,7 @@ export function BottomNav() {
 
   const items = [
     { href: "/home" },
+    { href: "/akis" },
     { href: "/events" },
     { href: "/team" },
     { href: "/profile", overrideHref: profileHref },
@@ -49,9 +52,14 @@ export function BottomNav() {
             key={href}
             href={overrideHref ?? href}
             aria-current={active(href) ? "page" : undefined}
+            aria-label={href === "/akis" ? t("navAkis") : undefined}
             className="flex flex-1 items-center justify-center py-3 transition-transform active:scale-90"
           >
-            <NavIcon index={ICON_INDEX[href]} active={active(href)} />
+            {href === "/akis" ? (
+              <AkisIcon active={active(href)} />
+            ) : (
+              <NavIcon index={ICON_INDEX[href]} active={active(href)} />
+            )}
           </NavLink>
         ))}
       </div>
