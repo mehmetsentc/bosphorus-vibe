@@ -57,26 +57,39 @@ export function AkisFeed() {
 
   useEffect(() => {
     const root = scrollerRef.current;
-    if (!root) return;
+    if (!root || posts.length === 0) return;
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting || entry.intersectionRatio < 0.6) continue;
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.55) continue;
           const id = (entry.target as HTMLElement).dataset.postId;
           if (id) setActiveId(id);
         }
       },
-      { root, threshold: [0.6] },
+      { root, threshold: [0.55, 0.8] },
     );
-    for (const child of root.children) observer.observe(child);
+    for (const child of root.querySelectorAll("[data-post-id]")) observer.observe(child);
     return () => observer.disconnect();
   }, [posts]);
 
   useEffect(() => {
-    if (!activeId || !hasMore) return;
+    if (!posts.length) return;
+    setActiveId((current) => current ?? posts[0]?.id ?? null);
+  }, [posts]);
+
+  const maybeLoadMore = useCallback(() => {
+    const root = scrollerRef.current;
+    if (!root || !hasMore) return;
     const index = posts.findIndex((post) => post.id === activeId);
-    if (index >= posts.length - 2) void loadMore();
-  }, [activeId, hasMore, posts, loadMore]);
+    const nearIndex = index >= 0 && index >= posts.length - 3;
+    const nearScroll =
+      root.scrollTop + root.clientHeight >= root.scrollHeight - root.clientHeight * 0.8;
+    if (nearIndex || nearScroll || posts.length < 4) void loadMore();
+  }, [activeId, hasMore, loadMore, posts]);
+
+  useEffect(() => {
+    maybeLoadMore();
+  }, [maybeLoadMore]);
 
   return (
     <>
@@ -88,6 +101,7 @@ export function AkisFeed() {
         ref={scrollerRef}
         className="h-[100dvh] snap-y snap-mandatory overflow-y-scroll overscroll-y-contain md:hidden"
         style={{ touchAction: "pan-y" }}
+        onScroll={maybeLoadMore}
       >
         {loading && posts.length === 0 && (
           <div className="h-[100dvh] snap-start bg-black" />

@@ -104,10 +104,10 @@ function PostDetailContent({ id }: { id: string }) {
         {backHref ? (
           <Link
             href={backHref}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-overlay text-lg transition hover:bg-surface-card"
-            aria-label={t("back")}
+            className="inline-flex items-center gap-2 rounded-full bg-surface-overlay px-3 py-2 text-sm font-semibold transition hover:bg-surface-card"
+            aria-label={backHref === "/home" ? t("homeStoryBack") : t("back")}
           >
-            ←
+            ← {backHref === "/home" ? t("homeStoryBack") : t("back")}
           </Link>
         ) : (
           <button

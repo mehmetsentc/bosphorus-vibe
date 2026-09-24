@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { FeedPageLayout } from "@/components/feed/FeedPageLayout";
 import { StoriesStrip } from "@/components/stories/StoriesStrip";
+import { HomeStoryFeed } from "@/components/home/HomeStoryFeed";
 import { TimelineFeedHeader } from "@/components/timeline/TimelineFeedHeader";
 import { TimelinePageLayout } from "@/components/timeline/TimelinePageLayout";
 import { PageShell } from "@/components/layout/PageShell";
@@ -35,9 +36,15 @@ export default function HomePage() {
     <PageShell className="px-0 py-0 md:px-4">
       <FeedPageLayout>
         <TimelinePageLayout>
-          <TimelineFeedHeader />
-          <StoriesStrip />
-          <TimelineFeed />
+          <div className="md:hidden pt-[max(64px,env(safe-area-inset-top,0px))]">
+            <StoriesStrip />
+            <HomeStoryFeed />
+          </div>
+          <div className="hidden md:block">
+            <TimelineFeedHeader />
+            <StoriesStrip />
+            <TimelineFeed />
+          </div>
         </TimelinePageLayout>
       </FeedPageLayout>
     </PageShell>
